@@ -36,6 +36,15 @@ credential helpers / SSH configuration handle private GitHub and Azure DevOps ac
   - `Repository.clone(url: str, destination: str) -> Path`: safe argv, credential
     redaction and noninteractive prompt policy, returns worktree root.
   - `GitError` has human-readable, redacted `str(error)`.
+- `graph.py`: pure `render_history(history, style)` returns `GraphRow` values with
+  Rich text, the original commit identity, and physical width/height. Smooth mode
+  lays out real `Commit.parents` in topological order with stable active lane slots,
+  lane colors, rounded connectors and multiline commit rows. Secondary-parent
+  forks precede first-parent coalescing; joins into existing secondary-parent lanes
+  use separate fork/join rows so unrelated ancestry cannot leak through a junction.
+  Crossings use `╴│╶` underpasses, never connected four-way junctions. Dotted tails
+  retain unloaded parents. Compact mode preserves every native Git graph row and
+  its ANSI colors. No Git I/O, widget state, topology clipping, or new dependencies.
 - `app.py`, `dialogs.py`, `app.tcss`: Textual UI. `GitKraikenApp(path: str | Path)`.
   Synchronous Git calls run via `asyncio.to_thread`, not on the UI loop; serialize
   mutation/refresh work and ignore stale selection detail results. No UI-to-shell
@@ -54,8 +63,12 @@ credential helpers / SSH configuration handle private GitHub and Azure DevOps ac
 GitKraken-inspired, original terminal implementation: dark blue/charcoal palette,
 teal active branch, colored graph lanes, compact toolbar, left refs tree, center
 scrollable graph, right selected commit details / staging. Ref tree: local, remotes,
-tags, stashes. Center: WIP, native merge connectors, badges, subjects, author, date,
-SHA; filter/search, load-more. Branch selection filters history, explicit checkout
+tags, stashes. Center: WIP, Smooth/Compact graph, badges, subjects and SHA;
+filter/search, load-more. Smooth is the default; `g`, the visible graph-style button,
+and Actions switch styles without losing selection or search. Cache graph layout
+across resize/search; preserve lane colors under selection. Multiline Smooth rows
+remain one keyboard/click target per commit. Never cap graph column width: allow
+horizontal scrolling for wide histories. Branch selection filters history, explicit checkout
 is separate. Worktree has staged/unstaged files, diff and commit composer. Include
 context actions for commits/refs/stashes, quick command picker, shortcuts/help,
 visible pending-operation and conflict controls. At narrow sizes allow panel toggles;
@@ -71,5 +84,8 @@ never terminal password prompts; timeout and helpful auth failure instructions.
 No automatic fetch/push and no force push, hard reset or clean. Poll status locally
 when idle. UI confirms checkout, history rewrites, merges/rebases, stash pop/drop,
 discard and remote writes. Tests use disposable real repositories and local bare
-remotes, plus Textual pilot tests and isolated tmux smoke tests. Never mutate any
-user repo during testing.
+remotes, plus Textual pilot tests and isolated tmux smoke tests. Trace rendered
+Smooth glyphs (including underpasses) to check actual visible parent relationships,
+not just a copy of input metadata. Cover crossing and octopus merges, disconnected
+histories, history limits, lane reuse, randomized DAGs, and style/selection behavior.
+Never mutate any user repo during testing.

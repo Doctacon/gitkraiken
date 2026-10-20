@@ -68,7 +68,7 @@ class Commit:
 
 @dataclass(frozen=True)
 class HistoryLine:
-    graph: str  # Git's own graph, with ANSI color; render with rich.Text.from_ansi.
+    graph: str  # Git's native ANSI graph, retained for Compact rendering.
     commit: Commit | None = None  # Connector-only rows are not actionable commits.
 
 

@@ -25,7 +25,10 @@ async def settle(app, pilot):
         if not app.busy:
             await app.workers.wait_for_complete()
             await pilot.pause()
-            return
+            # Detail workers and queued selection events can spawn diff workers
+            # after wait_for_complete took its snapshot of the worker set.
+            if not app.busy and not app.workers:
+                return
     raise AssertionError("UI did not become idle")
 
 
@@ -37,7 +40,7 @@ async def test_real_repository_mount_and_commit_diff(demo_repo):
         assert app.snapshot_data.branch == "feature/workspace"
         assert len(app._commits) >= 12
         table = app.query_one("#graph-table", DataTable)
-        assert table.row_count > len(app._commits)  # WIP + native merge connectors
+        assert table.row_count == len(app._commits) + 1  # WIP + one multiline row per commit
         oid = next(iter(app._commits))
         app.jump_to(oid)
         await settle(app, pilot)
@@ -248,3 +251,150 @@ async def test_branch_creation_confirmation_is_wired(demo_repo):
         await pilot.click("#confirm")
         await settle(app, pilot)
         assert app.snapshot_data.branch == "feature/from-ui"
+
+
+async def test_smooth_graph_toggle_preserves_selection_search_and_navigation(demo_repo):
+    from textual.widgets import Button
+
+    app = GitKraikenApp(demo_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        table = app.query_one("#graph-table", DataTable)
+        commits = list(app._commits)
+        assert app.graph_style == "smooth"
+        assert table.cursor_foreground_priority == "renderable"
+        assert table.row_count == len(commits) + 1
+        assert "crossing, not a join" in str(app.query_one("#history-heading", Static).render())
+        assert any(row.height > 1 for row in app._graph_rows)
+        assert any("╮" in row.graph.plain or "╯" in row.graph.plain for row in app._graph_rows)
+        assert all(
+            "╱" not in row.graph.plain and "╲" not in row.graph.plain for row in app._graph_rows
+        )
+        for row in app._graph_rows:
+            assert table.rows[row.commit.oid].height == row.height
+
+        app.jump_to(commits[0])
+        await settle(app, pilot)
+        table.focus()
+        await pilot.press("down")
+        await settle(app, pilot)
+        assert app._history_key == commits[1]
+        await pilot.press("j")
+        await settle(app, pilot)
+        assert app._history_key == commits[2]
+
+        graph_rows = app._graph_rows
+        app.query_one("#graph-filter", Input).value = "credential"
+        await settle(app, pilot)
+        selected = app._history_key
+        matches = app._search_matches.copy()
+        assert matches
+        assert app._graph_rows is graph_rows
+        table.focus()
+        await pilot.press("g")
+        await settle(app, pilot)
+        assert app.graph_style == "compact"
+        assert app.query_one("#graph-style", Button).label.plain == "Compact [g]"
+        assert "crossing" not in str(app.query_one("#history-heading", Static).render())
+        assert all(row.height == 1 for row in app._graph_rows)
+        assert table.row_count == len(app.snapshot_data.history) + 1
+        assert app._history_key == selected
+        assert app._search_matches == matches
+        assert app._selected_commit.oid == selected
+
+        await pilot.click("#graph-style")
+        await settle(app, pilot)
+        assert app.graph_style == "smooth"
+        assert app._history_key == selected
+        assert app._search_matches == matches
+        assert table.row_count == len(commits) + 1
+        graph_rows = app._graph_rows
+        await pilot.resize_terminal(120, 45)
+        await settle(app, pilot)
+        assert app._graph_rows is graph_rows  # Resizing does not recompute topology.
+        assert app._history_key == selected
+        assert "crossing, not a join" in str(app.query_one("#history-heading", Static).render())
+
+
+async def test_graph_shortcut_does_not_steal_text_input_or_escape_dialog(demo_repo):
+    app = GitKraikenApp(demo_repo)
+    async with app.run_test(size=(160, 48)) as pilot:
+        await settle(app, pilot)
+        search = app.query_one("#graph-filter", Input)
+        search.focus()
+        await pilot.press("g")
+        await settle(app, pilot)
+        assert search.value == "g"
+        assert app.graph_style == "smooth"
+
+        app.jump_to("wip")
+        await settle(app, pilot)
+        message = app.query_one("#commit-message", TextArea)
+        message.focus()
+        await pilot.press("g")
+        assert message.text == "g"
+        assert app.graph_style == "smooth"
+
+        app.action_help()
+        await pilot.pause()
+        app.action_toggle_graph_style()
+        await pilot.press("g")
+        assert len(app.screen_stack) == 2
+        assert app.graph_style == "smooth"
+        await pilot.press("escape")
+
+
+async def test_wide_graph_retains_all_lanes_and_scrolls_instead_of_clipping(tmp_path):
+    from dataclasses import replace
+
+    from gitkraiken.models import Commit, HistoryLine
+
+    subprocess.run(["git", "init", "-b", "main", str(tmp_path)], check=True, capture_output=True)
+    app = GitKraikenApp(tmp_path)
+    async with app.run_test(size=(120, 45)) as pilot:
+        await settle(app, pilot)
+        history = tuple(
+            HistoryLine(
+                "* ",
+                Commit(
+                    oid=f"{prefix}{i}",
+                    parents=(f"parent{i}",) if prefix == "tip" else (),
+                    author="Demo",
+                    email="demo@example.invalid",
+                    date="",
+                    subject=f"{prefix} {i}",
+                ),
+            )
+            for prefix in ("tip", "parent")
+            for i in range(12)
+        )
+        await app.apply_snapshot(replace(app.snapshot_data, history=history))
+        await pilot.pause()
+        table = app.query_one("#graph-table", DataTable)
+        required_width = max(row.width for row in app._graph_rows)
+        assert required_width > 36
+        assert table.ordered_columns[0].width >= required_width
+        assert table.virtual_size.width > table.size.width
+        table.scroll_to(x=table.max_scroll_x, animate=False)
+        await pilot.pause()
+        assert table.scroll_x > 0
+
+
+async def test_commit_selection_waits_for_chained_diff_workers(demo_repo, monkeypatch):
+    import time
+
+    app = GitKraikenApp(demo_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        original_diff = app.repo.diff
+
+        def slow_diff(*args, **kwargs):
+            time.sleep(0.5)  # Model slower Git I/O; detail creates this worker later.
+            return original_diff(*args, **kwargs)
+
+        monkeypatch.setattr(app.repo, "diff", slow_diff)
+        app.jump_to(next(iter(app._commits)))
+        await settle(app, pilot)
+        assert "diff --git" in str(app.query_one("#commit-diff", Static).render()), [
+            worker.group for worker in app.workers
+        ]

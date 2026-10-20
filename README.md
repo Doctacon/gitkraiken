@@ -34,6 +34,10 @@ uv tool install .
 gitkraiken ~/work/repo
 ```
 
+To update a checkout-based tool installation, quit any running GitKraiken workspace
+with `Ctrl+Q`, then run `git pull --ff-only` and `uv tool install --force --reinstall .`
+in this checkout. Reopen it normally (or with your existing tmux hotkey).
+
 `uv run main.py [path]` and `uv run python -m gitkraiken [path]` also work. A path
 inside a worktree is enough; GitKraiken discovers its root. Bare repositories are
 intentionally rejected.
@@ -43,10 +47,11 @@ intentionally rejected.
 - **Left:** local and remote branches, current branch, tags, stashes, and hosting
   provider. Select a ref to focus its ancestry; selecting never checks it out.
   Full names remain available in tooltips and the action menu.
-- **Center:** Git's real colored commit graph, merge connectors, branch/tag labels,
-  subjects and SHAs. Search by message, author, ref or SHA and jump between matches
-  **without removing graph connections**. Load history in batches of 300, up to
-  5,000 commits; focus a branch to narrow large histories.
+- **Center:** a colored commit graph with rounded bends, branch/tag labels,
+  subjects and SHAs. Smooth mode draws Git's actual parent relationships; Compact
+  mode retains Git's native lane layout. Search by message, author, ref or SHA and
+  jump between matches **without removing graph connections**. Load history in
+  batches of 300, up to 5,000 commits; focus a branch to narrow large histories.
 - **Right:** selected commit's complete message, author/date/SHA, changed files,
   and a syntax-colored unified diff. Merge commits are compared to their first
   parent. The **Working directory** tab has separate staged/unstaged entries,
@@ -62,6 +67,29 @@ Local state refreshes every five seconds while no dialog or operation is active.
 Network requests happen **only when you ask**. Large patches are clipped with a
 visible notice; binary files have a summary, not a binary-patch dump.
 
+### Graph styles
+
+Press **g** or click **Smooth [g] / Compact [g]** above the graph to switch:
+
+- **Smooth** (default): rounded Unicode bends, separated lanes, consistent colors
+  along each active lane, and more space between commits. Active lanes do not
+  shuffle sideways just because a neighboring branch ends. Each commit and its
+  outgoing connectors form one selectable row, so arrows / `j` / `k` move directly
+  between commits rather than stopping on empty connector lines.
+- **Compact**: the original, denser native Git graph with diagonal connectors.
+  Useful when you want to see more commits at once.
+
+In Smooth mode, `─╴│╶─` is a crossing: the horizontal line passes **behind** the
+vertical lane without joining it; a reminder appears above graphs with crossings.
+Rounded forks/joins represent real parent connections. Dotted tails (`┊`) continue
+beyond the loaded history, not to an
+invented root. Wide graphs scroll horizontally rather than clipping away lanes.
+
+This uses ordinary terminal characters, not image protocols or a special font,
+so it works in tmux and Windows Terminal/WSL. It is smoother routing, not a
+pixel-rendered Bézier graph. The choice lasts for the running workspace, including
+when its tmux popup is detached.
+
 ### Controls
 
 | Key | Action |
@@ -69,6 +97,7 @@ visible notice; binary files have a summary, not a binary-patch dump.
 | Click / arrows / `j`, `k` | Select history or files |
 | `/` or `f` | Search history |
 | Enter in search / **Next** | Next matching commit |
+| `g` | Switch Smooth / Compact graph (not tmux prefix + g) |
 | `Esc` | Clear search and return to all branches; cancel a dialog |
 | `Ctrl+P` or `x` | Actions appropriate to the selected ref/commit/stash |
 | `Ctrl+O` | Open a local repository |
@@ -241,6 +270,7 @@ For visual inspection:
 
 ```sh
 uv run python scripts/capture_demo.py /tmp/workspace.svg --width 170 --height 48
+# Add --compact to compare the original denser graph.
 # Optional: rsvg-convert -o /tmp/workspace.png /tmp/workspace.svg
 ```
 

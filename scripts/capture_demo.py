@@ -15,13 +15,16 @@ from gitkraiken.app import GitKraikenApp
 from gitkraiken.demo import create_demo
 
 
-async def capture(output: Path, width: int, height: int, wip: bool) -> None:
+async def capture(output: Path, width: int, height: int, wip: bool, compact: bool = False) -> None:
     with tempfile.TemporaryDirectory(prefix="gitkraiken-preview-") as temp:
         app = GitKraikenApp(create_demo(Path(temp)))
         app.title = "GitKraiken · DEMO"
         async with app.run_test(size=(width, height)) as pilot:
             await pilot.pause(1)
             await app.workers.wait_for_complete()
+            if compact:
+                app.action_toggle_graph_style()
+                await pilot.pause()
             if not wip:
                 app.jump_to(app.snapshot_data.head)
                 await pilot.pause(0.5)
@@ -37,5 +40,6 @@ if __name__ == "__main__":
     parser.add_argument("--width", type=int, default=170)
     parser.add_argument("--height", type=int, default=48)
     parser.add_argument("--wip", action="store_true")
+    parser.add_argument("--compact", action="store_true", help="Capture the original compact graph")
     args = parser.parse_args()
-    asyncio.run(capture(args.output, args.width, args.height, args.wip))
+    asyncio.run(capture(args.output, args.width, args.height, args.wip, args.compact))

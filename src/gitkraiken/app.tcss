@@ -1,4 +1,4 @@
-/* GitKraiken — dark, deliberately quiet framing for a dense native Git graph. */
+/* GitKraiken — dark, deliberately quiet framing for colored commit lanes. */
 Screen {
     background: #0c131c;
     color: #d6e2e5;
@@ -63,6 +63,17 @@ Button:focus { text-style: bold; }
     background: #1a303d;
     color: #8bd9cf;
 }
+
+#graph-style {
+    width: 13;
+    min-width: 13;
+    height: 1;
+    margin-left: 1;
+    padding: 0;
+    background: #1a303d;
+    color: #8bd9cf;
+}
+#graph-style:hover, #graph-style:focus { background: #28515a; color: #f3ffff; }
 
 /* Pending work deserves colour, but never the entire screen. */
 #operation-banner {
@@ -133,7 +144,7 @@ Button:focus { text-style: bold; }
 .ref-button.active-ref { background: #1b3c48; color: #9ce9db; }
 .empty-refs { padding: 1; color: #6f8790; }
 
-/* The graph has a nearly-black canvas, making native ANSI lanes read cleanly. */
+/* A quiet canvas keeps lane colors readable, including on the selected row. */
 #graph-table {
     height: 1fr;
     border: none;

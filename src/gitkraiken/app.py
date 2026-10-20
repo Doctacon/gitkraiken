@@ -23,7 +23,8 @@ from textual.widgets import (
 
 from .dialogs import ActionPicker, ConfirmDialog, HelpDialog, PromptDialog
 from .git import Repository
-from .models import Action, Commit, FileChange, Snapshot
+from .graph import GraphRow, GraphStyle, render_history
+from .models import Action, Commit, FileChange, HistoryLine, Snapshot
 
 TEAL = "#62d6c5"
 MUTED = "#7e91a4"
@@ -59,6 +60,7 @@ class GitKraikenApp(App[None]):
         Binding("f,slash", "focus_filter", "Search"),
         Binding("r", "refresh", "Refresh"),
         Binding("x", "command_picker", "Actions"),
+        Binding("g", "toggle_graph_style", "Graph style"),
         Binding("question_mark", "help", "Help"),
         Binding("j", "next_row", "Next", show=False),
         Binding("k", "previous_row", "Previous", show=False),
@@ -91,6 +93,9 @@ class GitKraikenApp(App[None]):
         self._ref_labels: dict[str, str] = {}
         self._rebuilding = False
         self._history_key = "wip"
+        self.graph_style: GraphStyle = "smooth"
+        self._graph_rows: tuple[GraphRow, ...] = ()
+        self._graph_cache_key: tuple[tuple[HistoryLine, ...], GraphStyle] | None = None
         self._search_matches: list[str] = []
         self._last_error = ""
 
@@ -127,8 +132,19 @@ class GitKraikenApp(App[None]):
                         placeholder="Search commits, authors, refs or SHA…", id="graph-filter"
                     )
                     yield Button("Next", id="search-next", classes="tool")
+                    yield Button(
+                        Text("Smooth [g]"),
+                        id="graph-style",
+                        tooltip="Switch Smooth / Compact graph (g). Smooth uses rounded bends; "
+                        "broken horizontal lines pass behind vertical lanes without joining them.",
+                    )
                 yield Static("All branches · newest first", id="history-caption")
-                yield DataTable(id="graph-table", cursor_type="row", zebra_stripes=False)
+                yield DataTable(
+                    id="graph-table",
+                    cursor_type="row",
+                    zebra_stripes=False,
+                    cursor_foreground_priority="renderable",
+                )
                 yield Button("Load 300 more commits", id="load-more")
             with Vertical(id="inspector-panel"):
                 with TabbedContent(id="inspector-tabs"):
@@ -156,7 +172,8 @@ class GitKraikenApp(App[None]):
                         yield Button("Commit staged changes", id="commit", variant="primary")
         yield Static("Ready", id="status-line")
         yield Static(
-            "Ctrl+P actions   / search   Ctrl+R refresh   ? help   Ctrl+Q quit", id="key-hint"
+            "Ctrl+P actions   / search   g graph   Ctrl+R refresh   ? help   Ctrl+Q quit",
+            id="key-hint",
         )
 
     def on_mount(self) -> None:
@@ -172,13 +189,8 @@ class GitKraikenApp(App[None]):
     def _configure_history_columns(self) -> None:
         table = self.query_one("#graph-table", DataTable)
         table.clear(columns=True)
-        # Graph uses only the lane width needed by Git, leaving room for the subject.
-        graph_width = (
-            max((Text.from_ansi(x.graph).cell_len for x in self.snapshot_data.history), default=3)
-            if self.snapshot_data
-            else 3
-        )
-        graph_width = min(max(graph_width, 5), 36)
+        # Never crop away graph lanes: wide histories scroll horizontally instead.
+        graph_width = max(5, max((row.width for row in self._graph_rows), default=3) + 1)
         available = max(36, table.size.width)
         ref_width = min(23, max(12, available // 5))
         self._show_sha = available >= 80
@@ -352,12 +364,20 @@ class GitKraikenApp(App[None]):
         if not self.snapshot_data:
             return
         self._rebuilding = True
+        cache_key = (self.snapshot_data.history, self.graph_style)
+        if cache_key != self._graph_cache_key:
+            self._graph_rows = render_history(self.snapshot_data.history, self.graph_style)
+            self._graph_cache_key = cache_key
+        heading = Text("COMMIT GRAPH", no_wrap=True, overflow="ellipsis")
+        if self.graph_style == "smooth" and any("╴" in row.graph.plain for row in self._graph_rows):
+            heading.append("   ╴│╶ crossing, not a join", style=MUTED)
+        self.query_one("#history-heading", Static).update(heading)
         self._configure_history_columns()
         table = self.query_one("#graph-table", DataTable)
         self._commits = {}
         dirty = len(self.snapshot_data.files)
         wip_cells = [
-            Text("◉", style=TEAL),
+            Text(" ◉" if self.graph_style == "smooth" else "◉", style=TEAL),
             Text("WIP", style=TEAL),
             Text(
                 f"Working directory · {dirty} changed files"
@@ -366,29 +386,30 @@ class GitKraikenApp(App[None]):
                 style=f"bold {TEAL}",
             ),
         ]
-        table.add_row(*wip_cells, *([""] if self._show_sha else []), key="wip")
-        for index, line in enumerate(self.snapshot_data.history):
-            graph = Text.from_ansi(
-                line.graph.translate(
-                    str.maketrans({"*": "●", "|": "│", "/": "╱", "\\": "╲", "_": "─"})
-                )
-            )
-            if not line.commit:
+        table.add_row(
+            *wip_cells,
+            *([""] if self._show_sha else []),
+            height=2 if self.graph_style == "smooth" else 1,
+            key="wip",
+        )
+        for index, row in enumerate(self._graph_rows):
+            if not row.commit:
                 table.add_row(
-                    graph, "", "", *([""] if self._show_sha else []), key=f"connector-{index}"
+                    row.graph, "", "", *([""] if self._show_sha else []), key=f"connector-{index}"
                 )
                 continue
-            commit = line.commit
+            commit = row.commit
             self._commits[commit.oid] = commit
             refs = Text(
                 " · ".join(commit.refs), style="bold #83d9ca", no_wrap=True, overflow="ellipsis"
             )
             message = Text(commit.subject, style="#dce3ed", no_wrap=True, overflow="ellipsis")
             table.add_row(
-                graph,
+                row.graph,
                 refs,
                 message,
                 *([Text(commit.short_id, style=MUTED)] if self._show_sha else []),
+                height=row.height,
                 key=commit.oid,
             )
         key = self._history_key if self._history_key in table.rows else "wip"
@@ -590,6 +611,8 @@ class GitKraikenApp(App[None]):
             self.action_open_repository()
         elif ident == "search-next":
             self.next_match()
+        elif ident == "graph-style":
+            self.action_toggle_graph_style()
         elif ident == "actions":
             self.action_command_picker()
         elif ident == "refresh":
@@ -702,7 +725,13 @@ class GitKraikenApp(App[None]):
             actions.extend(
                 [("continue", "Continue current operation"), ("abort", "Abort current operation")]
             )
-        actions.extend([("all", "Show all branches"), ("help", "Keyboard shortcuts and help")])
+        actions.extend(
+            [
+                ("all", "Show all branches"),
+                ("graph-style", "Switch Smooth / Compact commit graph"),
+                ("help", "Keyboard shortcuts and help"),
+            ]
+        )
         self.push_screen(ActionPicker("REPOSITORY ACTIONS", actions), self.handle_picked_action)
 
     def handle_picked_action(self, operation: str | None) -> None:
@@ -716,6 +745,8 @@ class GitKraikenApp(App[None]):
             self.action_clear_filter()
         elif operation == "help":
             self.action_help()
+        elif operation == "graph-style":
+            self.action_toggle_graph_style()
         elif operation in {"fetch", "pull", "push"}:
             self.network_action(operation)
         elif operation in {"create-branch", "tag", "rename-branch"}:
@@ -939,7 +970,7 @@ class GitKraikenApp(App[None]):
         if not self.is_mounted:
             return
         for button in self.query(Button):
-            button.disabled = self.busy and button.id not in {"help", "search-next"}
+            button.disabled = self.busy and button.id not in {"help", "search-next", "graph-style"}
         if self.snapshot_data:
             files = self.snapshot_data.files
             selected = self._selected_file
@@ -1045,6 +1076,14 @@ class GitKraikenApp(App[None]):
     def action_toggle_inspector(self) -> None:
         self.query_one("#inspector-panel").toggle_class("collapsed")
         self.call_after_refresh(self.repaint_history)
+
+    def action_toggle_graph_style(self) -> None:
+        if len(self.screen_stack) > 1:
+            return
+        self.graph_style = "compact" if self.graph_style == "smooth" else "smooth"
+        self.query_one("#graph-style", Button).label = Text(f"{self.graph_style.title()} [g]")
+        self.repaint_history()
+        self.status(f"{self.graph_style.title()} graph · g to switch")
 
     def action_help(self) -> None:
         if len(self.screen_stack) == 1:
