@@ -49,18 +49,23 @@ intentionally rejected.
   their carets. Tags and Stashes also collapse. Search reveals matching paths;
   clearing it restores your folds. Full names remain available in tooltips.
   **Single-click selects action context without moving or filtering the graph.**
-  **Double-click a local/remote branch label to request confirmed checkout.**
+  **Double-click a local/remote branch label to check it out immediately.**
+  **Right-click a branch to rebase the currently checked-out branch onto it.**
 - **Center:** a colored commit graph with rounded bends, branch/tag labels,
-  date/time, subjects and SHAs. Dates show `YYYY-MM-DD HH:MM` in the author's
-  recorded timezone; hover for the full timestamp including seconds and offset.
+  date/time, subjects and SHAs. Dates show `YYYY-MM-DD HH:MM` in your computer's
+  local timezone, including daylight-saving rules for that date; hover for seconds,
+  timezone abbreviation and offset.
   Working changes and connector-only rows have no date. Smooth mode draws Git's
   actual parent relationships; Compact mode retains Git's native lane layout.
   Search by message, author, ref or SHA and
   jump between matches **without removing graph connections**. Load history in
   batches of 300, up to 5,000 commits. History stays unified across branch
   selections and checkouts; sidebar search never changes graph topology.
-- **Right:** selected commit's complete message, author/date/SHA, changed files,
-  and a syntax-colored unified diff. Merge commits are compared to their first
+- **Right:** selected commit's title and compact author/date/SHA, an expanded
+  changed-file tree, and a syntax-colored unified diff. Fold directories with a
+  click or Space; file labels show just the filename, with full paths (including
+  rename origins) on hover. Commit descriptions no longer consume the file list's
+  space; hover the header for full metadata. Merge commits are compared to their first
   parent. The **Working directory** tab has separate staged/unstaged entries,
   file/all staging, safe discard, diff preview, and a multiline commit composer.
 - **Toolbar / Actions:** fetch, fast-forward-only pull, push/publish branch,
@@ -89,15 +94,30 @@ Use **Actions → Locate … in unified graph** to navigate to a selected tip.
 If it is not loaded, the caption says so; **Load more** can reveal it explicitly.
 Selecting a branch never automatically loads more history.
 
-Double-click a commit row (including its graph node) to request checkout. A branch
-at that commit is preferred over detached HEAD, with local branches preferred over
-remote-tracking refs. If several branches qualify, choose one before confirming.
-For a commit without a branch tip, confirmation explicitly says **detached HEAD**.
-Single-click and Enter still only inspect; cancelling leaves the repository unchanged.
+Double-click a commit row (including its graph node) to check it out immediately.
+A branch at that commit is preferred over detached HEAD, with local branches
+preferred over remote-tracking refs. If several branches qualify, choose one from
+a picker (Escape cancels). A commit without a branch tip checks out **detached HEAD**.
+Single-click and Enter still only inspect.
 
 Remote checkout uses the exact selected remote ref. An existing same-named local
 branch is reused only if its upstream is that exact ref on that remote; a branch tracking another
 remote (or no upstream) is not silently substituted.
+
+### Rebase your feature branch onto an updated base
+
+While on your feature branch, right-click `test` (or another local/remote branch)
+and choose **Rebase feature/your-branch onto test**. Your feature commits are
+replayed on top of that branch; the clicked branch is not checked out or moved.
+There is no additional confirmation. Escape or clicking outside dismisses the menu
+without changing Git state.
+
+The target is the local branch or last-fetched remote-tracking branch you clicked.
+Update `test` first, or Fetch and choose `origin/test`, when you need newer server
+commits; rebase does not fetch or stash automatically. Commit or stash working
+changes first. If conflicts occur, resolve and stage them, then use Continue, or
+Abort to restore the pre-rebase state. If the branch or target changes while the
+menu is open, refresh and choose the action again.
 
 ### Graph styles
 
@@ -131,9 +151,10 @@ when its tmux popup is detached.
 | Enter in search / **Next** | Next matching commit |
 | `g` | Switch Smooth / Compact graph (not tmux prefix + g) |
 | Sidebar click / Enter | Select a reference without moving the graph |
-| Sidebar double-click | Confirm checkout of a local/remote branch |
-| Graph row double-click | Confirm checkout of a branch at that commit, or detached HEAD |
-| Sidebar caret / Space | Collapse or expand a section or namespace |
+| Sidebar double-click | Check out a local/remote branch immediately |
+| Sidebar right-click | Rebase the current branch onto the clicked branch |
+| Graph row double-click | Check out a branch at that commit, or detached HEAD |
+| Tree caret / Space | Collapse or expand references or changed-file directories |
 | `Esc` | Clear focused sidebar search; otherwise clear graph search/ref selection; cancel a dialog |
 | `Ctrl+P` or `x` | Actions appropriate to the selected ref/commit/stash |
 | `Ctrl+O` | Open a local repository |
@@ -145,8 +166,10 @@ when its tmux popup is detached.
 
 Ordinary letter shortcuts do not steal input while you search or write a commit message.
 Folds and sidebar search survive local refreshes; opening another repository resets them.
-Consequential actions show a confirmation naming the repository and target.
-Staging and committing are explicit button actions. Only staged changes are committed.
+Git actions run as soon as you select them, without a **Confirm Git Action** screen.
+Name/message prompts and destination pickers remain where input is needed.
+Discard immediately removes the selected file's unstaged edits. Only staged changes
+are committed.
 
 ## tmux
 
@@ -272,10 +295,12 @@ are redacted in the interface. Git itself owns its credential storage/configurat
   unmerged branches. Discard only affects explicitly selected tracked worktree
   changes and preserves the index; untracked/intent-to-add content is protected.
 - Push sends only the current branch with an explicit non-force refspec, not Git's
-  potentially broad configured push defaults. Its confirmation identifies the
-  push destination. Multiple configured push URLs are refused.
-- Confirmations cannot be carried over to a different repository. Git operations
+  potentially broad configured push defaults. Destination pickers show redacted
+  push URLs. Multiple configured push URLs are refused.
+- Actions require an explicit selection, but no second confirmation. Git operations
   are serialized; changing selection/refresh cannot cancel a running mutation.
+  Repository switching is blocked while a picker or operation is active; context
+  rebases also reject a changed source branch, HEAD, or target.
 - This is a **terminal adaptation of the main repository screen**, not an official
   GitKraken product or a pixel-identical clone. No proprietary assets were copied.
   It intentionally omits hosted PR/issue browsing, OAuth/account management,
@@ -299,7 +324,8 @@ uv build
 
 Tests use disposable repositories and local bare remotes; they never write to a
 real private repository. Textual pilot tests exercise actual staging/committing,
-selection, double-click checkout, fold/search persistence, unified graph geometry,
+selection, immediate double-click checkout, right-click rebase and conflicts,
+local-time dates, changed-file folders, fold/search persistence, unified graph geometry,
 local/remote pointers, diffs, dialogs, branch creation, refresh and narrow layouts.
 Checkout and notification regressions enable toast rendering explicitly; Textual
 otherwise disables notifications in tests. Popup smoke checks exercise real Git

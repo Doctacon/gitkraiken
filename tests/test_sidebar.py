@@ -15,6 +15,7 @@ class SidebarApp(App[None]):
         super().__init__()
         self.selections = []
         self.checkouts = []
+        self.contexts = []
 
     def compose(self) -> ComposeResult:
         yield ReferenceSidebar()
@@ -24,6 +25,9 @@ class SidebarApp(App[None]):
 
     def on_reference_sidebar_checkout_requested(self, event):
         self.checkouts.append(event)
+
+    def on_reference_sidebar_context_requested(self, event):
+        self.contexts.append(event)
 
 
 async def hit_point(sidebar, pilot, key, *, caret=False):
@@ -141,6 +145,73 @@ async def test_real_mouse_selection_checkout_and_carets_are_separate():
         assert sidebar._tree_nodes["group:local"].is_collapsed
         assert len(app.checkouts) == 1
         assert len(app.selections) == 2
+
+
+async def test_right_click_branch_label_requests_context_with_screen_position_and_full_target():
+    app = SidebarApp()
+    async with app.run_test(size=(40, 25)) as pilot:
+        sidebar = app.query_one(ReferenceSidebar)
+        sidebar.update_snapshot(snapshot(), None)
+        tree, point = await hit_point(
+            sidebar, pilot, "remote:refs/remotes/origin/feature/jlott/demo"
+        )
+        await post_click(pilot, tree, point, button=3)
+        assert len(app.contexts) == 1
+        request = app.contexts[0]
+        assert request.selection.target == "refs/remotes/origin/feature/jlott/demo"
+        assert request.selection.remote == "origin"
+        assert request.root == Path("/repo")
+        assert (request.screen_x, request.screen_y) == (
+            tree.region.x + point[0],
+            tree.region.y + point[1],
+        )
+        assert not app.selections
+        assert not app.checkouts
+
+
+async def test_right_click_inert_nodes_and_carets_never_request_context():
+    app = SidebarApp()
+    async with app.run_test(size=(40, 25)) as pilot:
+        sidebar = app.query_one(ReferenceSidebar)
+        data = replace(
+            snapshot(),
+            refs=snapshot().refs
+            + (
+                Ref("feature", "refs/heads/feature", "e" * 40, "local"),
+                Ref("feature/child", "refs/heads/feature/child", "f" * 40, "local"),
+                Ref("v1", "refs/tags/v1", "0" * 40, "tag"),
+            ),
+        )
+        sidebar.update_snapshot(data, None)
+        inert = (
+            ("group:local", False),
+            ("group:remote:origin", True),
+            ("local:refs/heads/feature", True),
+            ("worktree:worktree", False),
+            ("all:all", False),
+            ("tag:refs/tags/v1", False),
+            ("stash:" + "d" * 40, False),
+        )
+        for key, caret in inert:
+            tree, point = await hit_point(sidebar, pilot, key, caret=caret)
+            await post_click(pilot, tree, point, button=3)
+        assert not app.contexts
+        assert not app.selections
+        assert not app.checkouts
+
+
+async def test_right_click_clears_pending_checkout_double_click_latch():
+    app = SidebarApp()
+    async with app.run_test(size=(40, 25)) as pilot:
+        sidebar = app.query_one(ReferenceSidebar)
+        sidebar.update_snapshot(snapshot(), None)
+        tree, point = await hit_point(sidebar, pilot, "local:refs/heads/main")
+        await post_click(pilot, tree, point)
+        await post_click(pilot, tree, point, button=3)
+        await post_click(pilot, tree, point, chain=2)
+        assert len(app.selections) == 1
+        assert len(app.contexts) == 1
+        assert not app.checkouts
 
 
 async def test_remote_label_double_click_uses_exact_owner_and_full_target():

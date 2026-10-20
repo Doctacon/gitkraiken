@@ -119,4 +119,6 @@ class Action:
     message: str = ""
     paths: tuple[str, ...] = field(default_factory=tuple)
     remote: str = ""  # Network destination, or exact owner of a remote checkout target.
-    expected_oid: str = ""  # Guard mutable stash selectors across a confirmation dialog.
+    expected_oid: str = ""  # Guard a stash selector or rebase target while a menu is open.
+    expected_branch: str = ""  # Rebase only the branch named when the action was chosen.
+    expected_head: str = ""  # Reject a rebase if that branch has moved since selection.

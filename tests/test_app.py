@@ -8,8 +8,9 @@ from textual.widgets._toast import Toast
 from ui_helpers import click, post_click
 
 from gitkraiken.app import GitKraikenApp
+from gitkraiken.commit_files import CommitFileTree
 from gitkraiken.demo import create_demo
-from gitkraiken.dialogs import ActionPicker, ConfirmDialog
+from gitkraiken.dialogs import ActionPicker, BranchContextMenu
 from gitkraiken.sidebar import ReferenceSidebar, SidebarSelection
 
 
@@ -46,7 +47,7 @@ def reference_node(app, target):
     raise AssertionError(f"Missing reference node: {target}")
 
 
-async def click_reference(app, pilot, target, *, times=1):
+async def click_reference(app, pilot, target, *, times=1, button=1):
     tree = app.query_one("#refs-tree", Tree)
     node = reference_node(app, target)
     parent = node.parent
@@ -60,7 +61,10 @@ async def click_reference(app, pilot, target, *, times=1):
     await pilot.pause()
     x = min(tree.size.width - 2, depth * tree.guide_depth + 3)
     y = node.line - int(tree.scroll_y)
-    await click(pilot, tree, (x, y), times=times)
+    if button == 1:
+        await click(pilot, tree, (x, y), times=times)
+    else:
+        await post_click(pilot, tree, (x, y), button=button)
     return node
 
 
@@ -109,14 +113,15 @@ async def test_real_repository_mount_and_commit_diff(demo_repo):
         app.jump_to(oid)
         await settle(app, pilot)
         assert app.query_one("#inspector-tabs", TabbedContent).active == "details-tab"
-        assert app._commit_files
+        assert app.query_one(CommitFileTree).selected_file
         assert "diff --git" in str(app.query_one("#commit-diff", Static).render())
 
 
 @pytest.mark.parametrize("width", [120, 170])
 async def test_history_date_time_column_survives_style_and_size_changes(
-    demo_repo, git_run, monkeypatch, width
+    demo_repo, git_run, monkeypatch, local_timezone, width
 ):
+    local_timezone("America/Denver")
     monkeypatch.setenv("GIT_AUTHOR_DATE", "2024-02-03T04:05:06+05:30")
     git_run(demo_repo, "commit", "--allow-empty", "-m", "Known author timestamp")
     tip = git(demo_repo, "rev-parse", "HEAD")
@@ -129,10 +134,10 @@ async def test_history_date_time_column_survives_style_and_size_changes(
             assert columns[:4] == ["graph", "refs", "date", "subject"]
             assert ("sha" in columns) == app._show_sha
             cell = table.get_cell(tip, "date")
-            assert cell.plain == "2024-02-03 04:05"
+            assert cell.plain == "2024-02-02 15:35"
             assert (
                 cell.get_style_at_offset(app.console, 0).meta["commit_date"]
-                == "2024-02-03T04:05:06+05:30"
+                == "2024-02-02 15:35:06 MST (-0700)"
             )
             assert table.columns["date"].width >= len(cell.plain)
             assert str(table.get_cell("wip", "date")) == ""
@@ -143,7 +148,13 @@ async def test_history_date_time_column_survives_style_and_size_changes(
             await settle(app, pilot)
         await pilot.resize_terminal(width + 20, 50)
         await settle(app, pilot)
-        assert table.get_cell(tip, "date").plain == "2024-02-03 04:05"
+        assert table.get_cell(tip, "date").plain == "2024-02-02 15:35"
+        app.jump_to(tip)
+        await settle(app, pilot)
+        detail = app.query_one("#commit-detail", Static)
+        assert "2024-02-02 15:35" in str(detail.render())
+        assert "2024-02-02 15:35:06 MST (-0700)" in detail.tooltip.plain
+        assert app._selected_commit.date == "2024-02-03T04:05:06+05:30"
 
 
 async def test_stage_commit_and_refresh(demo_repo):
@@ -197,19 +208,20 @@ async def test_search_and_branch_selection_preserve_unified_history(demo_repo):
         assert table.row_count == count
 
 
-async def test_destructive_action_cancel_is_noop(demo_repo):
+async def test_discard_runs_without_confirmation_and_preserves_index(demo_repo):
     app = GitKraikenApp(demo_repo)
     async with app.run_test(size=(150, 45)) as pilot:
         await settle(app, pilot)
         file = next(f for f in app.snapshot_data.files if f.path == "README.md")
         original = (demo_repo / file.path).read_text()
+        staged = git(demo_repo, "show", f":{file.path}")
         app.inspect_worktree_file(file, False)
         app.wip_action("discard")
-        await pilot.pause()
-        assert isinstance(app.screen, ConfirmDialog)
-        await pilot.press("escape")
         await settle(app, pilot)
-        assert (demo_repo / file.path).read_text() == original
+        assert len(app.screen_stack) == 1
+        assert (demo_repo / file.path).read_text() != original
+        assert (demo_repo / file.path).read_text().strip() == staged
+        assert git(demo_repo, "show", f":{file.path}") == staged
 
 
 async def test_mixed_index_worktree_file_has_two_diff_choices(demo_repo):
@@ -286,21 +298,19 @@ async def test_open_repository_replaces_state_without_touching_original(demo_rep
         assert "does not exist" in app._last_error
 
 
-async def test_global_shortcuts_cannot_replace_repository_under_confirmation(demo_repo, tmp_path):
+async def test_global_shortcuts_cannot_replace_repository_under_action_picker(demo_repo, tmp_path):
     second = tmp_path / "second"
     subprocess.run(["git", "init", "-b", "main", str(second)], check=True, capture_output=True)
     app = GitKraikenApp(demo_repo)
     async with app.run_test(size=(160, 45)) as pilot:
         await settle(app, pilot)
-        file = next(f for f in app.snapshot_data.files if f.path == "README.md")
-        app.inspect_worktree_file(file, False)
-        app.wip_action("discard")
+        app.action_command_picker()
         await pilot.pause()
-        assert isinstance(app.screen, ConfirmDialog)
+        assert isinstance(app.screen, ActionPicker)
         await pilot.press("ctrl+o", "ctrl+b", "ctrl+r")
         await pilot.pause()
         assert len(app.screen_stack) == 2
-        assert isinstance(app.screen, ConfirmDialog)
+        assert isinstance(app.screen, ActionPicker)
         app.open_repository(str(second))
         assert app.repo.root == demo_repo
         await pilot.press("escape")
@@ -342,7 +352,7 @@ async def test_hierarchical_sidebar_fits_and_graph_starts_near_top(demo_repo, wi
         assert reference_node(app, "refs/heads/feature/workspace").data.label
 
 
-async def test_branch_creation_confirmation_is_wired(demo_repo):
+async def test_branch_creation_runs_on_name_submission(demo_repo):
     from gitkraiken.dialogs import PromptDialog
 
     app = GitKraikenApp(demo_repo)
@@ -353,10 +363,8 @@ async def test_branch_creation_confirmation_is_wired(demo_repo):
         assert isinstance(app.screen, PromptDialog)
         app.screen.query_one(Input).value = "feature/from-ui"
         await pilot.click("#confirm")
-        await pilot.pause()
-        assert isinstance(app.screen, ConfirmDialog)
-        await pilot.click("#confirm")
         await settle(app, pilot)
+        assert len(app.screen_stack) == 1
         assert app.snapshot_data.branch == "feature/from-ui"
 
 
@@ -487,7 +495,7 @@ async def test_wide_graph_retains_all_lanes_and_scrolls_instead_of_clipping(tmp_
         assert table.scroll_x > 0
 
 
-async def test_double_click_checkout_requires_confirmation_and_keeps_graph_unified(branch_repo):
+async def test_double_click_checkout_runs_immediately_and_keeps_graph_unified(branch_repo):
     app = GitKraikenApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
@@ -501,17 +509,6 @@ async def test_double_click_checkout_requires_confirmation_and_keeps_graph_unifi
         assert [(row.commit.oid, row.graph.plain) for row in app._graph_rows] == before
 
         await click_reference(app, pilot, "refs/heads/test", times=2)
-        await pilot.pause()
-        assert isinstance(app.screen, ConfirmDialog)
-        assert git(branch_repo, "branch", "--show-current") == "main"
-        await pilot.press("escape")
-        await settle(app, pilot)
-        assert git(branch_repo, "branch", "--show-current") == "main"
-
-        await click_reference(app, pilot, "refs/heads/test", times=2)
-        await pilot.pause()
-        assert isinstance(app.screen, ConfirmDialog)
-        await pilot.click("#confirm")
         await settle(app, pilot)
         assert git(branch_repo, "branch", "--show-current") == "test"
         assert app._history_key == cursor
@@ -536,15 +533,6 @@ async def test_graph_node_double_click_requests_branch_checkout(branch_repo, sty
         assert len(app.screen_stack) == 1
         assert git(branch_repo, "branch", "--show-current") == "main"
         await click(pilot, table, point, times=2)
-        await pilot.pause()
-        assert isinstance(app.screen, ConfirmDialog)
-        assert "refs/heads/test" in app.screen.detail  # Prefer local over its tracking ref.
-        assert git(branch_repo, "branch", "--show-current") == "main"
-        await pilot.press("escape")
-        await settle(app, pilot)
-        assert git(branch_repo, "branch", "--show-current") == "main"
-        await click(pilot, table, point, times=2)
-        await pilot.click("#confirm")
         await settle(app, pilot)
         assert git(branch_repo, "branch", "--show-current") == "test"
         assert app.snapshot_data.branch == "test"
@@ -569,9 +557,8 @@ async def test_graph_double_click_chooses_between_local_branches(branch_repo, gi
         assert options.option_count == 2  # No redundant remote option.
         options.highlighted = options.get_option_index("refs/heads/test")
         await pilot.press("enter")
-        assert isinstance(app.screen, ConfirmDialog)
-        await pilot.click("#confirm")
         await settle(app, pilot)
+        assert len(app.screen_stack) == 1
         assert app.snapshot_data.branch == "test"
         assert app.is_running
 
@@ -596,15 +583,14 @@ async def test_graph_double_click_remote_only_tip_uses_exact_owner(
         monkeypatch.setattr(app.repo, "execute", execute)
         table, point = await graph_point(app, pilot, tip)
         await click(pilot, table, point, times=2)
-        assert isinstance(app.screen, ConfirmDialog)
-        await pilot.click("#confirm")
         await settle(app, pilot)
+        assert len(app.screen_stack) == 1
         assert calls == [Action("checkout", target="refs/remotes/origin/test", remote="origin")]
         assert app.snapshot_data.branch == "test"
         assert app.snapshot_data.upstream == "origin/test"
 
 
-async def test_graph_double_click_non_tip_explicitly_confirms_detached_head(branch_repo, git_run):
+async def test_graph_double_click_non_tip_checks_out_detached_head(branch_repo, git_run):
     base = git(branch_repo, "rev-parse", "main")
     git_run(branch_repo, "commit", "--allow-empty", "-m", "Advance main")
     git_run(branch_repo, "push", "origin", "main")
@@ -613,10 +599,8 @@ async def test_graph_double_click_non_tip_explicitly_confirms_detached_head(bran
         await settle(app, pilot)
         table, point = await graph_point(app, pilot, base)
         await click(pilot, table, point, times=2)
-        assert isinstance(app.screen, ConfirmDialog)
-        assert "detached HEAD" in app.screen.detail
-        await pilot.click("#confirm")
         await settle(app, pilot)
+        assert len(app.screen_stack) == 1
         assert not app.snapshot_data.branch
         assert app.snapshot_data.head == base
         assert app.is_running
@@ -660,9 +644,6 @@ async def test_checkout_selected_commit_keeps_workspace_running(branch_repo, git
         options = app.screen.query_one(OptionList)
         options.highlighted = options.get_option_index("checkout-commit")
         await pilot.press("enter")
-        await pilot.pause()
-        assert isinstance(app.screen, ConfirmDialog)
-        await pilot.click("#confirm")
         await settle(app, pilot)
         assert git(branch_repo, "rev-parse", "HEAD") == tip
         assert app.snapshot_data.head == tip
@@ -709,11 +690,8 @@ async def test_remote_double_click_uses_full_ref_and_exact_owner(branch_repo, mo
 
         monkeypatch.setattr(app.repo, "execute", execute)
         await click_reference(app, pilot, "refs/remotes/origin/test", times=2)
-        await pilot.pause()
-        assert isinstance(app.screen, ConfirmDialog)
-        assert not calls
-        await pilot.click("#confirm")
         await settle(app, pilot)
+        assert len(app.screen_stack) == 1
         assert calls == [Action("checkout", target="refs/remotes/origin/test", remote="origin")]
         assert app.snapshot_data.branch == "test"
         assert len(app._commits) == 2
@@ -851,7 +829,6 @@ async def test_single_click_and_checkout_preserve_scrolled_graph_viewport(branch
         assert table.cursor_coordinate == cursor
         assert table.scroll_offset == position
         await click_reference(app, pilot, "refs/heads/test", times=2)
-        await pilot.click("#confirm")
         await settle(app, pilot)
         assert app.snapshot_data.branch == "test"
         assert [(row.commit.oid, row.graph.plain) for row in app._graph_rows] == geometry
@@ -898,6 +875,225 @@ async def test_hidden_selection_survives_refresh_and_stale_checkout_messages_are
         assert search.value == "origin"
         assert app.is_running
         assert "test is no longer available." in app.query_one(Toast).render().plain
+
+
+@pytest.mark.parametrize("size", [(120, 40), (170, 48), (100, 32)])
+async def test_compact_commit_header_gives_space_to_file_tree(git_repo, git_run, size):
+    title = "Finance model changes"
+    body = "Long commit description that should not occupy the pane.\n" * 25
+    paths = [f"models/marts/finance/fact_metric_{index:02}.sql" for index in range(12)]
+    for index, path in enumerate(paths):
+        file = git_repo / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(f"select {index} as metric;\n")
+    git_run(git_repo, "add", ".")
+    git_run(git_repo, "commit", "-m", title, "-m", body)
+    app = GitKraikenApp(git_repo)
+    async with app.run_test(size=size) as pilot:
+        await settle(app, pilot)
+        app.jump_to(app.snapshot_data.head)
+        await settle(app, pilot)
+        header = app.query_one("#commit-detail", Static)
+        assert title in str(header.render())
+        assert "Long commit description" not in str(header.render())
+        assert header.region.height <= 4
+        tree = app.query_one(CommitFileTree)
+        assert tree.content_size.height >= 8
+        diff = app.query_one("#commit-diff-scroll")
+        assert diff.region.height >= 5
+        assert diff.region.bottom <= app.query_one("#workspace").region.bottom
+        assert tree.root.label.plain == "CHANGED FILES (12)"
+        assert tree.selected_file.path == paths[0]
+        assert "select 0 as metric" in str(app.query_one("#commit-diff", Static).render())
+        nodes = [
+            node for node in tree._path_nodes.values() if getattr(node.data, "path", "") == paths[1]
+        ]
+        assert len(nodes) == 1
+        assert nodes[0].label.plain == "A fact_metric_01.sql"
+        tree.focus()
+        await pilot.press("j")
+        await settle(app, pilot)
+        assert tree.selected_file.path == paths[1]
+        assert "select 1 as metric" in str(app.query_one("#commit-diff", Static).render())
+        parent = nodes[0].parent
+        parent.collapse()
+        await pilot.pause()
+        git_run(git_repo, "tag", "extra-pointer")
+        app.action_refresh()
+        await settle(app, pilot)
+        assert tree.selected_file.path == paths[1]
+        assert tree._path_nodes[parent.data.key].is_collapsed
+        assert "select 1 as metric" in str(app.query_one("#commit-diff", Static).render())
+
+
+@pytest.mark.parametrize("operation", ["fetch", "pull", "push"])
+async def test_network_toolbar_actions_run_without_confirmation(branch_repo, operation):
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        await pilot.click(f"#{operation}")
+        await settle(app, pilot)
+        assert len(app.screen_stack) == 1
+        assert not app._last_error
+        assert app.snapshot_data.branch == "main"
+
+
+@pytest.fixture
+def rebase_repo(branch_repo, git_run):
+    git_run(branch_repo, "switch", "-c", "feature/payments", "test")
+    (branch_repo / "feature.txt").write_text("my feature\n")
+    git_run(branch_repo, "add", ".")
+    git_run(branch_repo, "commit", "-m", "Feature work")
+    git_run(branch_repo, "switch", "test")
+    (branch_repo / "teammate.txt").write_text("teammate's new test commit\n")
+    git_run(branch_repo, "add", ".")
+    git_run(branch_repo, "commit", "-m", "Teammate work")
+    git_run(branch_repo, "push", "origin", "test")
+    git_run(branch_repo, "switch", "feature/payments")
+    return branch_repo
+
+
+@pytest.mark.parametrize("target", ["refs/heads/test", "refs/remotes/origin/test"])
+async def test_right_click_rebases_current_feature_onto_clicked_branch(
+    rebase_repo, target, monkeypatch
+):
+    before = git(rebase_repo, "rev-parse", "HEAD")
+    base = git(rebase_repo, "rev-parse", target)
+    app = GitKraikenApp(rebase_repo)
+    async with app.run_test(size=(170, 50), notifications=True) as pilot:
+        await settle(app, pilot)
+        calls = []
+        execute = app.repo.execute
+
+        def recorded(action):
+            calls.append(action)
+            return execute(action)
+
+        monkeypatch.setattr(app.repo, "execute", recorded)
+        # Neither opening nor dismissing the dropdown changes Git state.
+        await click_reference(app, pilot, target, button=3)
+        assert isinstance(app.screen, BranchContextMenu)
+        menu = app.screen.query_one("#branch-context-menu", OptionList)
+        assert app.screen.styles.background.a == 0
+        assert menu.region.right <= app.screen.size.width
+        assert menu.region.bottom <= app.screen.size.height
+        label = menu.get_option_at_index(0).prompt.plain
+        assert label == "Rebase feature/payments onto " + (
+            "origin/test" if "remotes" in target else "test"
+        )
+        assert not calls
+        await pilot.press("escape")
+        assert git(rebase_repo, "rev-parse", "HEAD") == before
+        await click_reference(app, pilot, target, button=3)
+        await pilot.press("enter")
+        await settle(app, pilot)
+        assert len(app.screen_stack) == 1
+        assert len(calls) == 1
+        assert calls[0].operation == "rebase" and calls[0].target == target
+        assert app.snapshot_data.branch == "feature/payments"
+        assert app.snapshot_data.head != before
+        assert git(rebase_repo, "rev-parse", "HEAD^") == base
+        assert git(rebase_repo, "rev-parse", target) == base  # The base branch never moves.
+        assert (rebase_repo / "feature.txt").read_text() == "my feature\n"
+        assert (rebase_repo / "teammate.txt").exists()
+        assert not app.snapshot_data.operation
+        assert app.is_running and not app._last_error
+
+
+async def test_rebase_menu_rejects_external_checkout_while_open(rebase_repo, git_run):
+    before = git(rebase_repo, "rev-parse", "feature/payments")
+    app = GitKraikenApp(rebase_repo)
+    async with app.run_test(size=(170, 50), notifications=True) as pilot:
+        await settle(app, pilot)
+        await click_reference(app, pilot, "refs/heads/test", button=3)
+        assert isinstance(app.screen, BranchContextMenu)
+        git_run(rebase_repo, "switch", "main")
+        main = git(rebase_repo, "rev-parse", "HEAD")
+        await pilot.press("enter")
+        await settle(app, pilot)
+        assert "Branch changed" in app._last_error
+        assert app.snapshot_data.branch == "main"
+        assert app.snapshot_data.head == main
+        assert git(rebase_repo, "rev-parse", "feature/payments") == before
+        assert not app.snapshot_data.operation
+
+
+@pytest.mark.parametrize("state", ["current", "detached", "busy"])
+async def test_right_click_does_not_offer_invalid_rebase(rebase_repo, git_run, state):
+    if state == "detached":
+        git_run(rebase_repo, "switch", "--detach")
+    app = GitKraikenApp(rebase_repo)
+    async with app.run_test(size=(170, 50), notifications=True) as pilot:
+        await settle(app, pilot)
+        before = git(rebase_repo, "rev-parse", "HEAD")
+        if state == "busy":
+            app.set_busy(True)
+        target = "refs/heads/feature/payments" if state == "current" else "refs/heads/test"
+        await click_reference(app, pilot, target, button=3)
+        assert len(app.screen_stack) == 1
+        assert git(rebase_repo, "rev-parse", "HEAD") == before
+        app.set_busy(False)
+
+
+async def test_rebase_dirty_worktree_error_keeps_changes_and_refreshes(rebase_repo):
+    before = git(rebase_repo, "rev-parse", "HEAD")
+    (rebase_repo / "feature.txt").write_text("uncommitted edits\n")
+    app = GitKraikenApp(rebase_repo)
+    async with app.run_test(size=(170, 50), notifications=True) as pilot:
+        await settle(app, pilot)
+        await click_reference(app, pilot, "refs/heads/test", button=3)
+        await pilot.press("enter")
+        await settle(app, pilot)
+        assert len(app.screen_stack) == 1
+        assert app._last_error
+        assert app.snapshot_data.branch == "feature/payments"
+        assert app.snapshot_data.head == before
+        assert not app.snapshot_data.operation
+        assert (rebase_repo / "feature.txt").read_text() == "uncommitted edits\n"
+        assert app.snapshot_data.files and not app.busy and app.is_running
+
+
+@pytest.mark.parametrize("finish", ["abort", "continue"])
+async def test_right_click_rebase_conflicts_can_abort_or_continue(rebase_repo, git_run, finish):
+    from gitkraiken.models import Action
+
+    (rebase_repo / "base.txt").write_text("feature version\n")
+    git_run(rebase_repo, "add", ".")
+    git_run(rebase_repo, "commit", "-m", "Feature changes base")
+    before = git(rebase_repo, "rev-parse", "HEAD")
+    git_run(rebase_repo, "switch", "test")
+    (rebase_repo / "base.txt").write_text("test version\n")
+    git_run(rebase_repo, "add", ".")
+    git_run(rebase_repo, "commit", "-m", "Teammate changes base")
+    git_run(rebase_repo, "switch", "feature/payments")
+    app = GitKraikenApp(rebase_repo)
+    async with app.run_test(size=(170, 50), notifications=True) as pilot:
+        await settle(app, pilot)
+        await click_reference(app, pilot, "refs/heads/test", button=3)
+        await pilot.press("enter")
+        await settle(app, pilot)
+        assert app.snapshot_data.operation == "rebase"
+        assert app.snapshot_data.conflicts
+        assert app.query_one("#operation-banner").display
+        assert app._last_error
+        if finish == "continue":
+            (rebase_repo / "base.txt").write_text("resolved together\n")
+            app.run_mutation(Action("stage", paths=("base.txt",)))
+            await settle(app, pilot)
+            assert not app.snapshot_data.conflicts
+        await pilot.click(f"#{finish}")
+        await settle(app, pilot)
+        assert len(app.screen_stack) == 1
+        assert app.snapshot_data.branch == "feature/payments"
+        assert not app.snapshot_data.operation
+        assert not app.query_one("#operation-banner").display
+        if finish == "abort":
+            assert app.snapshot_data.head == before
+            assert (rebase_repo / "base.txt").read_text() == "feature version\n"
+        else:
+            assert app.snapshot_data.head != before
+            assert (rebase_repo / "base.txt").read_text() == "resolved together\n"
+            git_run(rebase_repo, "merge-base", "--is-ancestor", "test", "HEAD")
 
 
 async def test_commit_selection_waits_for_chained_diff_workers(demo_repo, monkeypatch):

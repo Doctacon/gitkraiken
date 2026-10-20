@@ -19,13 +19,13 @@ credential helpers / SSH configuration handle private GitHub and Azure DevOps ac
     patch for worktree/index or first-parent diff of commit. Handles untracked files,
     binary files, root commits, bounded large output, literal paths and renames.
   - `execute(action: Action) -> str`: allowlisted mutations only; success text,
-    `GitError` on failure. Destructive actions are confirmed by the UI. stage and
+    `GitError` on failure. Explicitly selected actions run without a second confirmation. stage and
     unstage with empty paths mean all; discard REQUIRES explicit tracked file paths,
     only worktree edits (never deletes untracked files or resets the index). Commit
     only staged changes. reset-soft targets a commit and preserves working changes.
     pull = ff-only; push never force. Push with no upstream sets it on selected
     remote (`action.remote`, else sole remote; ambiguous remotes must error).
-    Remotes expose a redacted push_url for confirmation; multiple push URLs are
+    Remotes expose a redacted push_url for destination pickers; multiple push URLs are
     rejected. Explicit refspecs override broad or forceful user push defaults.
     Checkout local, remote tracking (creates local tracking branch when needed),
     or commit/tag detached. `Ref.remote` is the longest matching configured remote
@@ -44,7 +44,9 @@ credential helpers / SSH configuration handle private GitHub and Azure DevOps ac
     uses name + target. Stash includes untracked. Stash actions target exact ref.
     Continue/abort inspect current operation (including an external git am) and
     never invent one. UI stash requests include expected_oid to reject selectors
-    that moved while the user was confirming.
+    that moved while a picker was open. Context rebase actions include expected_branch,
+    expected_head and expected_oid; the engine revalidates source branch/HEAD and
+    target OID before rebasing, refusing stale menu context without changing Git.
   - `Repository.clone(url: str, destination: str) -> Path`: safe argv, credential
     redaction and noninteractive prompt policy, returns worktree root.
   - `GitError` has human-readable, redacted `str(error)`.
@@ -63,13 +65,20 @@ credential helpers / SSH configuration handle private GitHub and Azure DevOps ac
   selection index is independent of search visibility. Stash identity uses OID.
   Search temporarily exposes matching ancestors without overwriting normal folds;
   refresh preserves the query and viewport, while a new repository resets them.
-  Actual Click chains distinguish selection from confirmed checkout; only two
+  Actual Click chains distinguish selection from immediate checkout; only two
   primary-button label clicks on the same branch qualify. Rebuilds invalidate
-  pending double-clicks. Carets, categories, Enter, and navigation never check out.
+  pending double-clicks. Right-click branch labels emit ContextRequested with an
+  exact ref, repository root and screen position; other nodes/carets are inert.
+  Carets, categories, Enter, and navigation never check out.
 - `ref_badges.py`: pure typed pointer grouping by OID from refs, remotes, and stashes,
   not ambiguous `Commit.refs` strings. Local/HEAD and provider markers precede
   potentially truncated names. Hover text and commit details retain full refs.
   Remote markers describe local last-fetched state, never live server state.
+- `dates.py`: presentation-only conversion of offset-aware Git timestamps to the
+  OS local timezone at the commit instant (including DST). Raw model dates stay intact.
+- `commit_files.py`: presentation-only changed-file tree. Compacted directory
+  chains, basename/status leaves, literal full-path/rename tooltips, and typed
+  FileSelected messages. Same-commit refresh preserves folds and selection.
 - `app.py`, `dialogs.py`, `app.tcss`: Textual UI. `GitKraikenApp(path: str | Path)`.
   Synchronous Git calls run via `asyncio.to_thread`, not on the UI loop; serialize
   mutation/refresh work and ignore stale selection detail results. No UI-to-shell
@@ -95,15 +104,20 @@ across resize/search; preserve lane colors under selection. Multiline Smooth row
 remain one keyboard/click target per commit. Never cap graph column width: allow
 horizontal scrolling for wide histories. Branch single-click only changes action
 context and badge emphasis; it preserves graph data, cursor, inspected commit,
-and viewport. Explicit Locate navigates to its tip. Double-click requests the
-existing checkout confirmation; cancellation does nothing. Checkout updates refs
+and viewport. Explicit Locate navigates to its tip. Double-click checks out immediately
+(or offers a branch picker for ambiguous tips). Right-click opens a small anchored
+rebase menu naming current and target branches; choosing it rebases without another
+confirmation. Escape/outside click only dismiss the menu. Checkout updates refs
 and HEAD, not the scope of history. Unloaded tips have an explicit caption and do
 not trigger filtering or automatic loading; Load more may reveal them, within the
 5,000-commit cap. New pointers at an existing OID do not invent a graph divergence.
-Worktree has staged/unstaged files, diff and commit composer. Include
-context actions for commits/refs/stashes, quick command picker, shortcuts/help,
-visible pending-operation and conflict controls. At narrow sizes allow panel toggles;
-never silently perform a destructive operation. All repo data is plain text, not
+The inspector shows a commit title and compact local-time metadata, not the commit
+body or multiline stat; that space belongs to the collapsible changed-file tree.
+Full metadata remains in the header tooltip. Worktree has staged/unstaged files,
+diff and commit composer. Include context actions for commits/refs/stashes, quick
+command picker, shortcuts/help, visible pending-operation and conflict controls.
+At narrow sizes allow panel toggles. Actions require explicit invocation but no
+second confirmation. All repo data is plain text, not
 Rich markup. Keep controls actually wired; omit unsupported feature promises.
 
 ## Safety / verification
@@ -113,8 +127,10 @@ literal pathspecs. Never use remote URLs as display text without redacting
 userinfo/query secrets. Network uses existing credential helpers and SSH agent,
 never terminal password prompts; timeout and helpful auth failure instructions.
 No automatic fetch/push and no force push, hard reset or clean. Poll status locally
-when idle. UI confirms checkout, history rewrites, merges/rebases, stash pop/drop,
-discard and remote writes. Tests use disposable real repositories and local bare
+when idle. UI executes selected Git actions immediately, preserving prompts only
+for required input and choices. Busy/modal guards prevent overlapping actions;
+rebase menus capture their repository and exact source/target context. Tests use
+disposable real repositories and local bare
 remotes, plus Textual pilot tests and isolated tmux smoke tests. Trace rendered
 Smooth glyphs (including underpasses) to check actual visible parent relationships,
 not just a copy of input metadata. Cover crossing and octopus merges, disconnected

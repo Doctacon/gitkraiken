@@ -158,22 +158,35 @@ TabbedContent { height: 1fr; background: #101a24; }
 TabbedContent ContentTab { color: #8fa5ad; background: #142531; }
 TabbedContent ContentTab.-active { color: #baf1e9; background: #1b3540; text-style: bold; }
 TabPane { padding: 1; }
+/* Commit metadata stays scannable; its complete value belongs in a tooltip. */
 #commit-detail {
-    height: 8;
-    min-height: 3;
-    max-height: 9;
-    overflow-y: auto;
+    height: 4;
+    min-height: 4;
+    max-height: 4;
+    overflow-y: hidden;
     padding: 0 1;
     color: #dce9ec;
 }
-#commit-files, #commit-file-table {
-    height: 7;
-    min-height: 4;
+/* Root header plus eight file rows fit in the normal inspector. */
+#commit-file-tree {
+    height: 11;
+    min-height: 11;
     margin-top: 1;
+    padding: 0 1;
     border: round #294653;
     background: #0c141c;
+    color: #b9d5d5;
+    scrollbar-size-vertical: 1;
+    scrollbar-size-horizontal: 1;
 }
-#commit-files { padding: 0 1; overflow-y: auto; color: #8fc9c0; }
+#commit-file-tree > .tree--guides { color: #21455b; }
+#commit-file-tree > .tree--guides-hover { color: #347087; }
+#commit-file-tree > .tree--guides-selected { color: #62d6c5; }
+#commit-file-tree:focus > .tree--cursor {
+    background: #16465a;
+    color: #f2fbfc;
+    text-style: none;
+}
 #diff-title { height: 1; min-height: 1; margin-top: 1; color: #82a8ae; text-style: bold; }
 /* Scroll containers own the flexible height; their Static child stays content-sized. */
 #commit-diff-scroll, #diff-scroll {
@@ -212,12 +225,12 @@ TabPane { padding: 1; }
     border: round #294653;
     background: #0d151d;
 }
-#wip-table > .datatable--header, #commit-file-table > .datatable--header {
+#wip-table > .datatable--header {
     background: #172b36;
     color: #85a8ae;
     text-style: bold;
 }
-#wip-table > .datatable--cursor, #commit-file-table > .datatable--cursor {
+#wip-table > .datatable--cursor {
     background: #1a4750;
     color: #f1ffff;
 }
@@ -260,7 +273,9 @@ TabPane { padding: 1; }
 .narrow #graph-filter { min-width: 12; }
 
 ModalScreen { align: center middle; background: #000000 65%; }
-#action-picker, #prompt-dialog, #confirm-dialog {
+/* A branch context menu is a small dropdown, not a dimmed confirmation screen. */
+BranchContextMenu { align: left top; background: transparent; }
+#action-picker, #prompt-dialog {
     width: 54;
     height: auto;
     max-height: 22;

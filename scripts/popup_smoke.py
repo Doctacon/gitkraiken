@@ -238,14 +238,6 @@ def main(*, use_hotkey: bool = False) -> None:
                     assert row is not None, f"Could not find {text!r} in the popup"
                     return lines[row].index(text) + 1, row + 1
 
-                def confirm_checkout(description: str) -> None:
-                    wait_for(
-                        lambda: "CONFIRM GIT ACTION" in capture(target),
-                        f"{description} did not open confirmation",
-                        timeout=3,
-                    )
-                    tmux("send-keys", "-t", target, "Tab", "Enter")
-
                 def wait_for_header(text: str, context: str) -> None:
                     def rendered() -> bool:
                         assert tmux("display-message", "-p", "-t", target, "#{pane_dead}") == "0", (
@@ -269,7 +261,6 @@ def main(*, use_hotkey: bool = False) -> None:
                         "Ctrl+P did not open checkout actions for the selected commit",
                     )
                     tmux("send-keys", "-t", target, "Down", "Down", "Down", "Enter")
-                    confirm_checkout("Selected-commit Actions checkout")
                     wait_for(
                         lambda: git("branch", "--show-current") == "",
                         "Selected-commit Actions checkout did not detach HEAD",
@@ -279,13 +270,12 @@ def main(*, use_hotkey: bool = False) -> None:
                     assert_alive("Selected-commit Actions checkout")
 
                     # The same commit also owns branch test. A graph double-click
-                    # must offer that branch and switch back from detached HEAD.
+                    # must immediately switch back to that branch from detached HEAD.
                     graph_x, graph_y = point_for("●", contains="Popup checkout target")
                     send_mouse(target, graph_x, graph_y, times=2)
-                    confirm_checkout("Double-clicking the test branch graph node")
                     wait_for(
                         lambda: git("branch", "--show-current") == "test",
-                        "Confirmed graph checkout did not switch to branch test",
+                        "Graph double-click did not immediately switch to branch test",
                     )
                     assert git("rev-parse", "HEAD") == checkout_oid
                     wait_for_header("⑂ test", "Graph double-click checkout")
@@ -314,7 +304,6 @@ def main(*, use_hotkey: bool = False) -> None:
                         "Ctrl+P did not open checkout actions for the selected sidebar branch",
                     )
                     tmux("send-keys", "-t", target, "Down", "Down", "Down", "Down", "Enter")
-                    confirm_checkout("Sidebar branch Actions checkout")
                     wait_for(
                         lambda: git("branch", "--show-current") == "main",
                         "Sidebar Actions checkout did not switch to branch main",

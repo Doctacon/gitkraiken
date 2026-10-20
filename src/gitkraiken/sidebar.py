@@ -58,15 +58,27 @@ class _ReferenceTree(Tree[SidebarSelection | _Group]):
         # ambiguous after a folder has moved rows.
         event.prevent_default()
         event.stop()
-        if event.button != 1:
+        if event.button not in {1, 3}:
             return
         meta = event.style.meta
         if "line" not in meta:
+            if event.button == 3:
+                self.owner._click_latch = None
             return
         node = self.get_node_at_line(meta["line"])
         if node is None:
+            if event.button == 3:
+                self.owner._click_latch = None
             return
         label_hit = not meta.get("toggle", False)
+        if event.button == 3:
+            self.owner._tree_context_requested(
+                node,
+                label_hit=label_hit,
+                screen_x=event.screen_x,
+                screen_y=event.screen_y,
+            )
+            return
         self.owner._tree_clicked(node, label_hit=label_hit, chain=event.chain)
 
     def on_mouse_move(self, event: events.MouseMove) -> None:
@@ -130,6 +142,20 @@ class ReferenceSidebar(Widget):
         def __init__(self, selection: SidebarSelection, root: Path) -> None:
             self.selection = selection
             self.root = root
+            super().__init__()
+
+    class ContextRequested(Message):
+        def __init__(
+            self,
+            selection: SidebarSelection,
+            root: Path,
+            screen_x: int,
+            screen_y: int,
+        ) -> None:
+            self.selection = selection
+            self.root = root
+            self.screen_x = screen_x
+            self.screen_y = screen_y
             super().__init__()
 
     def __init__(self, *, id: str | None = None) -> None:
@@ -265,6 +291,26 @@ class ReferenceSidebar(Widget):
                 node.toggle()
             return
         self._activate_node(node)
+
+    def _tree_context_requested(
+        self,
+        node: TreeNode[SidebarSelection | _Group],
+        *,
+        label_hit: bool,
+        screen_x: int,
+        screen_y: int,
+    ) -> None:
+        self._click_latch = None
+        data = node.data
+        if (
+            label_hit
+            and isinstance(data, SidebarSelection)
+            and data.kind in {"local", "remote"}
+            and self._root is not None
+        ):
+            self.post_message(
+                self.ContextRequested(data, self._root, screen_x=screen_x, screen_y=screen_y)
+            )
 
     def _activate_node(self, node: TreeNode[SidebarSelection | _Group]) -> None:
         if isinstance(node.data, _Group):

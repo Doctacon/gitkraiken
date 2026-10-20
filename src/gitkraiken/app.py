@@ -25,7 +25,9 @@ from textual.widgets import (
     TextArea,
 )
 
-from .dialogs import ActionPicker, ConfirmDialog, HelpDialog, PromptDialog
+from .commit_files import CommitFileTree
+from .dates import format_commit_date
+from .dialogs import ActionPicker, BranchContextMenu, HelpDialog, PromptDialog
 from .git import Repository
 from .graph import GraphRow, GraphStyle, render_history
 from .models import Action, Commit, FileChange, HistoryLine, Snapshot
@@ -133,7 +135,6 @@ class GitKraikenApp(App[None]):
         self._diff_tokens = {"worktree": 0, "commit": 0}
         self._commits: dict[str, Commit] = {}
         self._file_rows: dict[str, tuple[FileChange, bool]] = {}
-        self._commit_files: dict[str, FileChange] = {}
         self._selected_commit: Commit | None = None
         self._selected_file: tuple[FileChange, bool] | None = None
         self._sidebar_selection: SidebarSelection | None = None
@@ -204,7 +205,7 @@ class GitKraikenApp(App[None]):
                 with TabbedContent(id="inspector-tabs"):
                     with TabPane("Commit", id="details-tab"):
                         yield Static("Select a commit to inspect its changes.", id="commit-detail")
-                        yield DataTable(id="commit-file-table", cursor_type="row")
+                        yield CommitFileTree(id="commit-file-tree")
                         with VerticalScroll(id="commit-diff-scroll"):
                             yield Static(
                                 "Select a changed file to read its diff.", id="commit-diff"
@@ -234,7 +235,6 @@ class GitKraikenApp(App[None]):
         self.query_one("#operation-banner").display = False
         self.query_one("#load-more").display = False
         self.query_one("#wip-table", DataTable).add_columns("Area", "File")
-        self.query_one("#commit-file-table", DataTable).add_columns("Δ", "Changed file")
         self._configure_history_columns()
         self.query_one("#history-heading", Static).tooltip = Text(
             "💻 Local branch / HEAD · 🐙 GitHub · ☁ Azure DevOps · 🦊 GitLab · ↗ Other remote\n"
@@ -253,7 +253,7 @@ class GitKraikenApp(App[None]):
         available = max(36, table.size.width)
         ref_width = min(23, max(12, available // 5))
         self._show_sha = available >= 80
-        date_width = 16  # YYYY-MM-DD HH:MM, in the commit author's recorded timezone.
+        date_width = 16  # YYYY-MM-DD HH:MM, in the computer's local timezone.
         subject_width = max(
             24, available - graph_width - ref_width - date_width - (10 if self._show_sha else 0) - 9
         )
@@ -422,16 +422,70 @@ class GitKraikenApp(App[None]):
             return
         self._sidebar_selection = selection
         self.query_one(ReferenceSidebar).set_active(selection)
-        self._confirm_checkout(selection.target, remote=selection.remote)
+        self.run_mutation(Action("checkout", target=selection.target, remote=selection.remote))
 
-    def _confirm_checkout(self, target: str, *, remote: str = "", detached: bool = False) -> None:
-        self.confirm_action(
-            Action("checkout", target=target, remote=remote),
-            f"Check out {target}?\n"
-            f"Current branch: {self.snapshot_data.branch if self.snapshot_data else ''}\n"
-            + ("This checks out a commit in detached HEAD, not a branch.\n" if detached else "")
-            + "Git will refuse a checkout that would overwrite local changes. "
-            "The graph stays unified.",
+    def on_reference_sidebar_context_requested(
+        self, event: ReferenceSidebar.ContextRequested
+    ) -> None:
+        event.stop()
+        selection = self._current_sidebar_selection(event.root, event.selection)
+        snapshot = self.snapshot_data
+        if (
+            self.busy
+            or selection is None
+            or selection.kind not in {"local", "remote"}
+            or not snapshot
+        ):
+            return
+        if not snapshot.branch:
+            self.notify("Check out a branch before rebasing.", severity="warning")
+            return
+        if selection.target == f"refs/heads/{snapshot.branch}":
+            self.notify(
+                "This is already the current branch. Choose a different base.", severity="warning"
+            )
+            return
+        if snapshot.operation or snapshot.conflicts:
+            self.notify(
+                "Finish or abort the current operation before rebasing.", severity="warning"
+            )
+            return
+        self._sidebar_selection = selection
+        self._reveal_ref_key = None
+        self.query_one(ReferenceSidebar).set_active(selection)
+        self._update_reference_badges()
+        self.update_search(jump=False)
+        repo = self.repo
+        action = Action(
+            "rebase",
+            target=selection.target,
+            expected_oid=selection.oid,
+            expected_branch=snapshot.branch,
+            expected_head=snapshot.head,
+        )
+
+        def selected(operation: str | None) -> None:
+            if operation != "rebase":
+                return
+            if (
+                self.repo is not repo
+                or self.snapshot_data is None
+                or self.snapshot_data.branch != snapshot.branch
+                or self.snapshot_data.head != snapshot.head
+                or self._current_sidebar_selection(event.root, selection) is None
+            ):
+                self.notify(
+                    "Repository or branch changed. Choose the rebase again.", severity="warning"
+                )
+                return
+            self.run_mutation(action)
+
+        target = selection.target.removeprefix("refs/heads/").removeprefix("refs/remotes/")
+        self.push_screen(
+            BranchContextMenu(
+                snapshot.branch, target, screen_x=event.screen_x, screen_y=event.screen_y
+            ),
+            selected,
         )
 
     def on_history_table_commit_activated(self, event: HistoryTable.CommitActivated) -> None:
@@ -451,7 +505,7 @@ class GitKraikenApp(App[None]):
             ref for ref in refs if ref.kind == "remote"
         ]
         if not candidates:
-            self._confirm_checkout(event.key, detached=True)
+            self.run_mutation(Action("checkout", target=event.key))
             return
         repo = self.repo
 
@@ -462,7 +516,7 @@ class GitKraikenApp(App[None]):
             if ref is None or not self.snapshot_data or ref not in self.snapshot_data.refs:
                 self.notify("Branch changed. Choose the checkout again.", severity="warning")
                 return
-            self._confirm_checkout(ref.full_name, remote=ref.remote)
+            self.run_mutation(Action("checkout", target=ref.full_name, remote=ref.remote))
 
         if len(candidates) == 1:
             selected(candidates[0].full_name)
@@ -535,8 +589,11 @@ class GitKraikenApp(App[None]):
                 row.graph,
                 refs,
                 Text(
-                    commit.date[:16].replace("T", " "),
-                    style=Style(color=MUTED, meta={"commit_date": commit.date}),
+                    format_commit_date(commit.date),
+                    style=Style(
+                        color=MUTED,
+                        meta={"commit_date": format_commit_date(commit.date, full=True)},
+                    ),
                     no_wrap=True,
                 ),
                 message,
@@ -610,18 +667,22 @@ class GitKraikenApp(App[None]):
                 self.inspect_commit(self._commits[key])
         elif table_id == "wip-table" and key in self._file_rows:
             self.inspect_worktree_file(*self._file_rows[key])
-        elif table_id == "commit-file-table" and key in self._commit_files:
-            self.inspect_commit_file(self._commit_files[key])
+
+    def on_commit_file_tree_file_selected(self, event: CommitFileTree.FileSelected) -> None:
+        event.stop()
+        if self._selected_commit and event.identity == self._selected_commit.oid:
+            self.inspect_commit_file(event.file)
 
     def inspect_commit(self, commit: Commit) -> None:
+        changed_commit = self._selected_commit is None or self._selected_commit.oid != commit.oid
         self._selected_commit = commit
         self._detail_token += 1
         self._diff_token += 1
         token, generation, repo = self._detail_token, self._generation, self.repo
         self.query_one("#inspector-tabs", TabbedContent).active = "details-tab"
         self.query_one("#commit-detail", Static).update(Text(f"{commit.subject}\nLoading commit…"))
-        self.query_one("#commit-file-table", DataTable).clear()
-        self._commit_files = {}
+        if changed_commit:
+            self.query_one(CommitFileTree).clear_files()
         self.query_one("#commit-diff", Static).update("Loading changes…")
 
         async def load() -> None:
@@ -636,26 +697,30 @@ class GitKraikenApp(App[None]):
                     detail = await asyncio.to_thread(repo.detail, commit.oid)
                 if token != self._detail_token or generation != self._generation:
                     return
-                text = Text(detail.message.strip() + "\n\n", style="bold #dce3ed")
-                text.append(
-                    f"{commit.author} <{commit.email}>\n{commit.date}\n{commit.oid}\n", style=MUTED
+                local_date = format_commit_date(commit.date, full=True)
+                text = Text(
+                    commit.subject + "\n", style="bold #dce3ed", no_wrap=True, overflow="ellipsis"
+                )
+                text.append(f"{commit.author} · {commit.short_id}\n{local_date}", style=MUTED)
+                metadata = Text(
+                    f"{commit.subject}\n{commit.author} <{commit.email}>\n{local_date}\n{commit.oid}"
                 )
                 badges = self._ref_badges.get(commit.oid)
                 if badges:
-                    text.append("\n")
-                    text.append(badges.description)
-                    text.append("\n\n")
-                text.append(detail.stat, style=MUTED)
-                self.query_one("#commit-detail", Static).update(text)
-                table = self.query_one("#commit-file-table", DataTable)
-                for number, file in enumerate(detail.files):
-                    self._commit_files[str(number)] = file
-                    table.add_row(Text(file.index, style=TEAL), Text(file.path), key=str(number))
+                    metadata.append("\n")
+                    metadata.append(badges.description)
+                header = self.query_one("#commit-detail", Static)
+                header.update(text)
+                header.tooltip = metadata
+                tree = self.query_one(CommitFileTree)
+                tree.set_files(detail.files, identity=commit.oid)
                 self.query_one("#commit-diff", Static).update(
                     "Select a changed file." if detail.files else "No file changes."
                 )
-                if detail.files:
-                    self.inspect_commit_file(detail.files[0])
+                if tree.selected_file:
+                    self.inspect_commit_file(tree.selected_file)
+                elif detail.files:
+                    tree.select_file(detail.files[0])
             except Exception as error:
                 if token == self._detail_token and generation == self._generation:
                     self.show_error(str(error))
@@ -789,12 +854,7 @@ class GitKraikenApp(App[None]):
             self.push_screen(
                 PromptDialog("Stash tracked and untracked changes", "Label", "Work in progress"),
                 lambda message: (
-                    self.confirm_action(
-                        Action("stash", message=message),
-                        "Save tracked and untracked changes in a stash?",
-                    )
-                    if message
-                    else None
+                    self.run_mutation(Action("stash", message=message)) if message else None
                 ),
             )
         elif ident == "pop":
@@ -806,10 +866,7 @@ class GitKraikenApp(App[None]):
         elif ident == "commit":
             self.commit_changes()
         elif ident in {"continue", "abort"}:
-            self.confirm_action(
-                Action(ident),
-                f"{ident.title()} the {self.snapshot_data.operation or 'current'} operation? Abort restores the state from before the operation.",
-            )
+            self.run_mutation(Action(ident))
 
     def action_command_picker(self) -> None:
         if self.busy or len(self.screen_stack) > 1:
@@ -910,10 +967,7 @@ class GitKraikenApp(App[None]):
                 lambda name: self.named_action(operation, name),
             )
         elif operation == "stash":
-            self.confirm_action(
-                Action("stash", message="Work in progress"),
-                "Stash all tracked and untracked changes?",
-            )
+            self.run_mutation(Action("stash", message="Work in progress"))
         elif operation.startswith("stash-"):
             self.choose_stash(operation)
         else:
@@ -930,15 +984,7 @@ class GitKraikenApp(App[None]):
                 if operation == "checkout" and not commit_op and self._sidebar_selection
                 else ""
             )
-            self.confirm_action(
-                Action(operation, target=target, remote=remote),
-                f"{operation.replace('-', ' ').title()} {target or 'current operation'}?\nCurrent branch: {self.snapshot_data.branch if self.snapshot_data else ''}\n"
-                + (
-                    "This moves the branch pointer; your files are preserved."
-                    if operation == "reset-soft"
-                    else "Review your working changes before continuing."
-                ),
-            )
+            self.run_mutation(Action(operation, target=target, remote=remote))
 
     def named_action(self, operation: str, name: str | None) -> None:
         if not name:
@@ -952,11 +998,7 @@ class GitKraikenApp(App[None]):
         )
         if operation == "rename-branch":
             target = self._selected_ref
-        self.confirm_action(
-            Action(operation, name=name, target=target),
-            f"{operation.replace('-', ' ').title()} '{name}'\nFrom: {target or 'HEAD'}\n"
-            + ("The new branch will be checked out." if operation == "create-branch" else ""),
-        )
+        self.run_mutation(Action(operation, name=name, target=target))
 
     def choose_stash(self, operation: str) -> None:
         if not self.snapshot_data or not self.snapshot_data.stashes:
@@ -968,15 +1010,7 @@ class GitKraikenApp(App[None]):
         def selected(target: str | None) -> None:
             if target and target in stashes:
                 stash = stashes[target]
-                self.confirm_action(
-                    Action(operation, target=target, expected_oid=stash.oid),
-                    f"{operation.replace('-', ' ').title()} {target}?\n{stash.subject}"
-                    + (
-                        "\nDropping a stash removes its saved changes."
-                        if operation == "stash-drop"
-                        else ""
-                    ),
-                )
+                self.run_mutation(Action(operation, target=target, expected_oid=stash.oid))
 
         if self._selected_kind == "stash" and self._selected_ref:
             selected(self._selected_ref)
@@ -999,32 +1033,7 @@ class GitKraikenApp(App[None]):
 
         def run(remote: str | None = "") -> None:
             if remote is not None:
-                action = Action(operation, remote=remote)
-                if operation == "fetch":
-                    self.run_mutation(action)
-                else:
-                    candidates = sorted(
-                        self.snapshot_data.remotes, key=lambda item: len(item.name), reverse=True
-                    )
-                    selected = next((item for item in candidates if item.name == remote), None)
-                    if selected is None:
-                        selected = next(
-                            (
-                                item
-                                for item in candidates
-                                if self.snapshot_data.upstream.startswith(item.name + "/")
-                            ),
-                            candidates[0],
-                        )
-                    destination = (
-                        (selected.push_url or selected.url) if operation == "push" else selected.url
-                    )
-                    description = (
-                        f"Push branch {self.snapshot_data.branch} to {selected.name}?\nDestination: {destination}\nThis publishes local commits. Force push is never used."
-                        if operation == "push"
-                        else f"Pull upstream from {destination} using fast-forward only?\nDiverged branches will be left unchanged."
-                    )
-                    self.confirm_action(action, description)
+                self.run_mutation(Action(operation, remote=remote))
 
         if (
             operation == "push"
@@ -1034,7 +1043,10 @@ class GitKraikenApp(App[None]):
             self.push_screen(
                 ActionPicker(
                     "PUBLISH BRANCH TO",
-                    [(r.name, f"{r.name} · {r.provider}") for r in self.snapshot_data.remotes],
+                    [
+                        (r.name, f"{r.name} · {r.provider} · {r.push_url or r.url}")
+                        for r in self.snapshot_data.remotes
+                    ],
                 ),
                 run,
             )
@@ -1048,14 +1060,7 @@ class GitKraikenApp(App[None]):
             self.notify("Select a file, or use Stage all / Unstage all.", severity="warning")
             return
         paths = () if all_files else (self._selected_file[0].path,)
-        action = Action(operation, paths=paths)
-        if operation == "discard":
-            self.confirm_action(
-                action,
-                f"Permanently discard unstaged changes to {paths[0]}?\nYour staged version is preserved. Untracked files are never deleted.",
-            )
-        else:
-            self.run_mutation(action)
+        self.run_mutation(Action(operation, paths=paths))
 
     def commit_changes(self) -> None:
         message = self.query_one("#commit-message", TextArea).text.strip()
@@ -1064,24 +1069,8 @@ class GitKraikenApp(App[None]):
             return
         self.run_mutation(Action("commit", message=message))
 
-    def confirm_action(self, action: Action, detail: str) -> None:
-        if self.busy or len(self.screen_stack) > 1:
-            return
-        repo = self.repo
-        root = str(repo.root) if repo else str(self.path)
-
-        def confirmed(ok: bool) -> None:
-            if ok and self.repo is repo:
-                self.run_mutation(action)
-            elif ok:
-                self.notify("Repository changed. Choose the action again.", severity="warning")
-
-        self.push_screen(
-            ConfirmDialog("CONFIRM GIT ACTION", f"Repository: {root}\n\n{detail}"), confirmed
-        )
-
     def run_mutation(self, action: Action) -> None:
-        if self.busy or not self.repo:
+        if self.busy or not self.repo or len(self.screen_stack) > 1:
             return
         self._detail_token += 1
         self._diff_token += 1
@@ -1252,9 +1241,9 @@ class GitKraikenApp(App[None]):
             self.push_screen(HelpDialog())
 
     def action_next_row(self) -> None:
-        if isinstance(self.focused, DataTable):
+        if isinstance(self.focused, (DataTable, CommitFileTree)):
             self.focused.action_cursor_down()
 
     def action_previous_row(self) -> None:
-        if isinstance(self.focused, DataTable):
+        if isinstance(self.focused, (DataTable, CommitFileTree)):
             self.focused.action_cursor_up()

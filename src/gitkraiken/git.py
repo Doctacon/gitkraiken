@@ -1322,9 +1322,24 @@ class Repository:
             result = self._git(["branch", "-d", "--", name], operation="delete branch")
         elif operation in {"merge", "rebase", "cherry-pick", "revert", "reset-soft"}:
             target = self._resolve_commit(action.target, label=f"{operation} target")
+            if operation == "rebase" and (
+                (action.expected_branch and self._branch() != action.expected_branch)
+                or (action.expected_head and self._head() != action.expected_head)
+                or (action.expected_oid and target != action.expected_oid)
+            ):
+                raise GitError("Branch changed. Refresh and choose the rebase again.")
             command = {
                 "merge": ["merge", "--no-edit", target],
-                "rebase": ["rebase", target],
+                # Rebase only this branch and never implicitly stash work, even
+                # when the user's Git defaults enable those broader behaviors.
+                "rebase": [
+                    "-c",
+                    "rebase.autoStash=false",
+                    "-c",
+                    "rebase.updateRefs=false",
+                    "rebase",
+                    target,
+                ],
                 "cherry-pick": ["cherry-pick", target],
                 "revert": ["revert", "--no-edit", target],
                 "reset-soft": ["reset", "--soft", target],

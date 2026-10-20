@@ -34,7 +34,7 @@ def test_discovers_root_and_rejects_non_repository_and_bare(
         Repository(bare_remote)
 
 
-def test_stash_confirmation_does_not_drop_a_newly_inserted_stash(git_repo, git_run):
+def test_stash_selection_does_not_drop_a_newly_inserted_stash(git_repo, git_run):
     commit_file(git_run, git_repo, "file.txt", "base\n", "base")
     repo = Repository(git_repo)
     (git_repo / "file.txt").write_text("original stash\n")
@@ -295,6 +295,60 @@ def test_merge_rebase_cherry_pick_and_revert_actions(git_repo: Path, git_run) ->
     repo.execute(Action("merge", target="onto"))
     assert (git_repo / "onto.txt").read_text() == "onto\n"
     assert len(repo.detail("HEAD").commit.parents) == 2
+
+
+def test_rebase_does_not_implicitly_stash_or_move_other_branches(git_repo, git_run):
+    commit_file(git_run, git_repo, "base.txt", "base\n", "Base")
+    git_run(git_repo, "switch", "-c", "feature")
+    original = commit_file(git_run, git_repo, "feature.txt", "feature\n", "Feature")
+    git_run(git_repo, "branch", "sibling")
+    git_run(git_repo, "switch", "main")
+    onto = commit_file(git_run, git_repo, "teammate.txt", "teammate\n", "New base work")
+    git_run(git_repo, "switch", "feature")
+    git_run(git_repo, "config", "rebase.autoStash", "true")
+    git_run(git_repo, "config", "rebase.updateRefs", "true")
+    repo = Repository(git_repo)
+    (git_repo / "feature.txt").write_text("uncommitted work\n")
+    with pytest.raises(GitError, match="unstaged changes"):
+        repo.execute(Action("rebase", target="refs/heads/main"))
+    assert repo.snapshot().head == original
+    assert not repo.snapshot().stashes
+    assert (git_repo / "feature.txt").read_text() == "uncommitted work\n"
+    (git_repo / "feature.txt").write_text("feature\n")
+    repo.execute(Action("rebase", target="refs/heads/main"))
+    assert repo.snapshot().head != original
+    assert repo.snapshot().branch == "feature"
+    assert git_run(git_repo, "rev-parse", "HEAD^").stdout.strip() == onto
+    assert git_run(git_repo, "rev-parse", "sibling").stdout.strip() == original
+    assert git_run(git_repo, "rev-parse", "main").stdout.strip() == onto
+
+
+@pytest.mark.parametrize("change", ["branch", "head", "target", "deleted-target"])
+def test_rebase_rejects_context_changed_since_menu_opened(git_repo, git_run, change):
+    base = commit_file(git_run, git_repo, "base.txt", "base\n", "Base")
+    git_run(git_repo, "branch", "test")
+    git_run(git_repo, "switch", "-c", "feature")
+    head = commit_file(git_run, git_repo, "feature.txt", "feature\n", "Feature")
+    repo = Repository(git_repo)
+    action = Action(
+        "rebase",
+        target="refs/heads/test",
+        expected_oid=base,
+        expected_branch="feature",
+        expected_head=head,
+    )
+    if change == "branch":
+        git_run(git_repo, "switch", "-c", "another")  # Same OID, different branch.
+    elif change == "head":
+        commit_file(git_run, git_repo, "extra.txt", "extra\n", "Extra feature work")
+    elif change == "target":
+        git_run(git_repo, "update-ref", "refs/heads/test", head)
+    else:
+        git_run(git_repo, "branch", "-d", "test")
+    before = repo.snapshot()
+    with pytest.raises(GitError, match="Branch changed|does not name a commit"):
+        repo.execute(action)
+    assert repo.snapshot() == before
 
 
 def test_stash_includes_untracked_apply_and_drop(git_repo: Path, git_run) -> None:

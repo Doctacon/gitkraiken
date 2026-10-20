@@ -1,12 +1,26 @@
 from __future__ import annotations
 
 import subprocess
+import time
 from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
 GitRun = Callable[..., subprocess.CompletedProcess[str]]
+
+
+@pytest.fixture
+def local_timezone(monkeypatch):
+    """Set the process-local timezone and restore it even after a failed assertion."""
+    with monkeypatch.context() as local_env:
+
+        def use_timezone(name: str) -> None:
+            local_env.setenv("TZ", name)
+            time.tzset()
+
+        yield use_timezone
+    time.tzset()
 
 
 @pytest.fixture
