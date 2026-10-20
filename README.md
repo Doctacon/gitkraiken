@@ -44,14 +44,18 @@ intentionally rejected.
 
 ## The main screen
 
-- **Left:** local and remote branches, current branch, tags, stashes, and hosting
-  provider. Select a ref to focus its ancestry; selecting never checks it out.
-  Full names remain available in tooltips and the action menu.
+- **Left:** a searchable reference tree. Collapse Repository, Local, Remotes,
+  individual remotes, and branch namespaces such as `feature/jlott` using
+  their carets. Tags and Stashes also collapse. Search reveals matching paths;
+  clearing it restores your folds. Full names remain available in tooltips.
+  **Single-click selects action context without moving or filtering the graph.**
+  **Double-click a local/remote branch label to request confirmed checkout.**
 - **Center:** a colored commit graph with rounded bends, branch/tag labels,
   subjects and SHAs. Smooth mode draws Git's actual parent relationships; Compact
   mode retains Git's native lane layout. Search by message, author, ref or SHA and
   jump between matches **without removing graph connections**. Load history in
-  batches of 300, up to 5,000 commits; focus a branch to narrow large histories.
+  batches of 300, up to 5,000 commits. History stays unified across branch
+  selections and checkouts; sidebar search never changes graph topology.
 - **Right:** selected commit's complete message, author/date/SHA, changed files,
   and a syntax-colored unified diff. Merge commits are compared to their first
   parent. The **Working directory** tab has separate staged/unstaged entries,
@@ -66,6 +70,25 @@ intentionally rejected.
 Local state refreshes every five seconds while no dialog or operation is active.
 Network requests happen **only when you ask**. Large patches are clipped with a
 visible notice; binary files have a summary, not a binary-patch dump.
+
+### Branch pointers and navigation
+
+The graph distinguishes **💻 local branch / HEAD**, **🐙 GitHub**, **☁ Azure DevOps**,
+**🦊 GitLab**, and **↗ other remote** pointers, plus **◇ tags** and **▣ stashes**.
+Both local and remote markers appear on a commit when their tips agree. A local
+commit moves only its local pointer; Fetch updates last-fetched remote-tracking
+pointers. These are not live server indicators. Hover a badge or inspect the
+commit for full reference names. Icon appearance depends on your terminal font.
+
+Creating a branch at an existing commit adds a pointer, not an invented graph
+fork. New commits create divergence only when their actual ancestry diverges.
+Use **Actions → Locate … in unified graph** to navigate to a selected tip.
+If it is not loaded, the caption says so; **Load more** can reveal it explicitly.
+Selecting a branch never automatically loads more history.
+
+Remote checkout uses the exact selected remote ref. An existing same-named local
+branch is reused only if its upstream is that exact ref on that remote; a branch tracking another
+remote (or no upstream) is not silently substituted.
 
 ### Graph styles
 
@@ -98,7 +121,10 @@ when its tmux popup is detached.
 | `/` or `f` | Search history |
 | Enter in search / **Next** | Next matching commit |
 | `g` | Switch Smooth / Compact graph (not tmux prefix + g) |
-| `Esc` | Clear search and return to all branches; cancel a dialog |
+| Sidebar click / Enter | Select a reference without moving the graph |
+| Sidebar double-click | Confirm checkout of a local/remote branch |
+| Sidebar caret / Space | Collapse or expand a section or namespace |
+| `Esc` | Clear focused sidebar search; otherwise clear graph search/ref selection; cancel a dialog |
 | `Ctrl+P` or `x` | Actions appropriate to the selected ref/commit/stash |
 | `Ctrl+O` | Open a local repository |
 | `Ctrl+R` or `r` | Refresh |
@@ -107,7 +133,8 @@ when its tmux popup is detached.
 | `?` | Help |
 | `Ctrl+Q` | Quit |
 
-Ordinary letter shortcuts do not steal input while you write a commit message.
+Ordinary letter shortcuts do not steal input while you search or write a commit message.
+Folds and sidebar search survive local refreshes; opening another repository resets them.
 Consequential actions show a confirmation naming the repository and target.
 Staging and committing are explicit button actions. Only staged changes are committed.
 
@@ -262,7 +289,8 @@ uv build
 
 Tests use disposable repositories and local bare remotes; they never write to a
 real private repository. Textual pilot tests exercise actual staging/committing,
-selection, diffs, dialogs, branch creation, refresh and narrow layouts.
+selection, double-click checkout, fold/search persistence, unified graph geometry,
+local/remote pointers, diffs, dialogs, branch creation, refresh and narrow layouts.
 Authentication against your organization's private remotes must still be verified
 with your credentials; none were requested or accessed during development.
 
@@ -271,6 +299,9 @@ For visual inspection:
 ```sh
 uv run python scripts/capture_demo.py /tmp/workspace.svg --width 170 --height 48
 # Add --compact to compare the original denser graph.
+# Exercise nested local/remote folders and sidebar-only search:
+uv run python scripts/capture_demo.py /tmp/refs.svg --many-refs --ref-filter jlott
+# Add --collapse-remotes to preview a folded Remotes section instead.
 # Optional: rsvg-convert -o /tmp/workspace.png /tmp/workspace.svg
 ```
 

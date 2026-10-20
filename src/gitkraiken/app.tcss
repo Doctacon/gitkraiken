@@ -103,7 +103,6 @@ Button:focus { text-style: bold; }
     padding: 1;
     background: #101c27;
     border-right: tall #29414d;
-    scrollbar-size-vertical: 1;
 }
 #history-panel {
     width: 1fr;
@@ -118,31 +117,15 @@ Button:focus { text-style: bold; }
     background: #101a24;
     border-left: tall #29414d;
 }
-.panel-heading, .ref-heading, #history-heading {
+#history-heading {
     height: 1;
-    margin-top: 1;
+    margin: 0;
+    padding: 0 1;
     color: #73cbbf;
     text-style: bold;
+    background: #142430;
 }
-#history-heading { margin: 0; padding: 0 1; background: #142430; }
 #history-caption { height: 1; padding: 0 1; color: #78919a; background: #101d28; }
-.ref-button, #all-refs, #worktree-button {
-    width: 1fr;
-    height: 1;
-    padding: 0 1;
-    background: transparent;
-    color: #b9cdd1;
-    text-align: left;
-    overflow: hidden;
-}
-.ref-button:hover, .ref-button:focus, #all-refs:hover, #all-refs:focus,
-#worktree-button:hover, #worktree-button:focus {
-    background: #1b3c48;
-    color: #edffff;
-}
-#worktree-button { margin-bottom: 1; color: #8dd8cd; text-style: bold; }
-.ref-button.active-ref { background: #1b3c48; color: #9ce9db; }
-.empty-refs { padding: 1; color: #6f8790; }
 
 /* A quiet canvas keeps lane colors readable, including on the selected row. */
 #graph-table {

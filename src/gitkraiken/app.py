@@ -25,6 +25,8 @@ from .dialogs import ActionPicker, ConfirmDialog, HelpDialog, PromptDialog
 from .git import Repository
 from .graph import GraphRow, GraphStyle, render_history
 from .models import Action, Commit, FileChange, HistoryLine, Snapshot
+from .ref_badges import RefBadges, build_ref_badges
+from .sidebar import ReferenceSidebar, SidebarSelection
 
 TEAL = "#62d6c5"
 MUTED = "#7e91a4"
@@ -47,6 +49,14 @@ def patch_text(patch: str) -> Text:
     return text
 
 
+class HistoryTable(DataTable):
+    """Expose full typed ref labels when their compact badge is hovered."""
+
+    def on_mouse_move(self, event: events.MouseMove) -> None:
+        description = event.style.meta.get("ref_description")
+        self.tooltip = Text(description) if isinstance(description, str) else None
+
+
 class GitKraikenApp(App[None]):
     CSS_PATH = "app.tcss"
     TITLE = "GitKraiken"
@@ -66,7 +76,7 @@ class GitKraikenApp(App[None]):
         Binding("k", "previous_row", "Previous", show=False),
         Binding("ctrl+left", "toggle_refs", "Refs", show=False),
         Binding("ctrl+right", "toggle_inspector", "Inspector", show=False),
-        Binding("escape", "clear_filter", "All history", show=False),
+        Binding("escape", "clear_filter", "Clear selection", show=False),
     ]
 
     def __init__(self, path: str | Path) -> None:
@@ -74,7 +84,6 @@ class GitKraikenApp(App[None]):
         self.path = Path(path)
         self.repo: Repository | None = None
         self.snapshot_data: Snapshot | None = None
-        self.ref_filter = ""
         self.limit = 300
         self.busy = False
         self._serial = asyncio.Lock()
@@ -87,17 +96,25 @@ class GitKraikenApp(App[None]):
         self._commit_files: dict[str, FileChange] = {}
         self._selected_commit: Commit | None = None
         self._selected_file: tuple[FileChange, bool] | None = None
-        self._selected_ref = ""
-        self._selected_kind = ""
-        self._ref_targets: dict[str, tuple[str, str]] = {}
-        self._ref_labels: dict[str, str] = {}
+        self._sidebar_selection: SidebarSelection | None = None
+        self._reveal_ref_key: str | None = None
+        self._ref_badges: dict[str, RefBadges] = {}
         self._rebuilding = False
         self._history_key = "wip"
         self.graph_style: GraphStyle = "smooth"
         self._graph_rows: tuple[GraphRow, ...] = ()
         self._graph_cache_key: tuple[tuple[HistoryLine, ...], GraphStyle] | None = None
+        self._graph_geometry: tuple[tuple[str, int], ...] = ()
         self._search_matches: list[str] = []
         self._last_error = ""
+
+    @property
+    def _selected_ref(self) -> str:
+        return self._sidebar_selection.target if self._sidebar_selection else ""
+
+    @property
+    def _selected_kind(self) -> str:
+        return self._sidebar_selection.kind if self._sidebar_selection else ""
 
     def compose(self) -> ComposeResult:
         yield Static("GITKRAIKEN  /  Opening repository…", id="repo-header")
@@ -120,11 +137,8 @@ class GitKraikenApp(App[None]):
             yield Button("Continue", id="continue", classes="operation-button")
             yield Button("Abort", id="abort", classes="operation-button")
         with Horizontal(id="workspace"):
-            with VerticalScroll(id="refs-panel"):
-                yield Label("REPOSITORY", classes="panel-heading")
-                yield Button("◉ Working directory", id="worktree-button", classes="ref-button")
-                yield Button("⑂ All branches", id="all-refs", classes="ref-button")
-                yield Vertical(id="refs-list")
+            with Vertical(id="refs-panel"):
+                yield ReferenceSidebar(id="reference-sidebar")
             with Vertical(id="history-panel"):
                 yield Static("COMMIT GRAPH", id="history-heading")
                 with Horizontal(id="search-bar"):
@@ -138,8 +152,8 @@ class GitKraikenApp(App[None]):
                         tooltip="Switch Smooth / Compact graph (g). Smooth uses rounded bends; "
                         "broken horizontal lines pass behind vertical lanes without joining them.",
                     )
-                yield Static("All branches · newest first", id="history-caption")
-                yield DataTable(
+                yield Static("Unified history · local + remote branches", id="history-caption")
+                yield HistoryTable(
                     id="graph-table",
                     cursor_type="row",
                     zebra_stripes=False,
@@ -182,6 +196,11 @@ class GitKraikenApp(App[None]):
         self.query_one("#wip-table", DataTable).add_columns("Area", "File")
         self.query_one("#commit-file-table", DataTable).add_columns("Δ", "Changed file")
         self._configure_history_columns()
+        self.query_one("#history-heading", Static).tooltip = Text(
+            "💻 Local branch / HEAD · 🐙 GitHub · ☁ Azure DevOps · 🦊 GitLab · ↗ Other remote\n"
+            "Both markers share a commit when local and remote tips agree.\n"
+            "Remote markers reflect last-fetched refs; Fetch updates them."
+        )
         self.set_interval(5, self.poll_repository)
         self.request_refresh()
         self.query_one("#graph-table").focus()
@@ -208,7 +227,6 @@ class GitKraikenApp(App[None]):
         self.screen.set_class(event.size.width < 105, "narrow")
         if self.is_mounted and self.snapshot_data:
             self.call_after_refresh(self.repaint_history)
-            self.call_after_refresh(self.fit_ref_labels)
 
     def poll_repository(self) -> None:
         if not self.busy and len(self.screen_stack) == 1:
@@ -227,7 +245,7 @@ class GitKraikenApp(App[None]):
             async with self._serial:
                 if self.repo is None:
                     self.repo = await asyncio.to_thread(Repository, self.path)
-                snapshot = await asyncio.to_thread(self.repo.snapshot, self.limit, self.ref_filter)
+                snapshot = await asyncio.to_thread(self.repo.snapshot, self.limit)
             if snapshot != self.snapshot_data:
                 await self.apply_snapshot(snapshot)
             elif self._selected_file:
@@ -255,7 +273,19 @@ class GitKraikenApp(App[None]):
         if snapshot.upstream:
             header.append(f"   {snapshot.upstream}", style=MUTED)
         self.query_one("#repo-header", Static).update(header)
-        await self.paint_refs(snapshot)
+        previous = self._sidebar_selection
+        self._sidebar_selection = self.query_one(ReferenceSidebar).update_snapshot(
+            snapshot, previous
+        )
+        if previous and self._sidebar_selection is None:
+            self._reveal_ref_key = None
+            self.notify(Text(f"{previous.label} is no longer available."), severity="warning")
+        selection = self._sidebar_selection
+        if selection and self._reveal_ref_key == selection.key:
+            if any(line.commit and line.commit.oid == selection.oid for line in snapshot.history):
+                self._history_key = selection.oid
+                self._reveal_ref_key = None
+        self._ref_badges = build_ref_badges(snapshot, self._selected_ref)
         self.repaint_history()
         self.paint_wip(snapshot.files)
         banner = self.query_one("#operation-banner")
@@ -293,77 +323,77 @@ class GitKraikenApp(App[None]):
                 )
         self.update_controls()
 
-    async def paint_refs(self, snapshot: Snapshot) -> None:
-        holder = self.query_one("#refs-list", Vertical)
-        await holder.remove_children()
-        self._ref_targets = {}
-        self._ref_labels = {
-            "worktree-button": "◉ Working directory",
-            "all-refs": "⑂ All branches",
-        }
-        widgets = []
-        groups = [
-            (
-                "LOCAL",
-                [
-                    (r.full_name, ("● " if r.current else "⑂ ") + r.name, "local")
-                    for r in snapshot.refs
-                    if r.kind == "local"
-                ],
-            ),
-            (
-                "REMOTES",
-                [
-                    (r.full_name, "⑂ " + r.name, "remote")
-                    for r in snapshot.refs
-                    if r.kind == "remote"
-                ],
-            ),
-            (
-                "TAGS",
-                [(r.full_name, "◇ " + r.name, "tag") for r in snapshot.refs if r.kind == "tag"],
-            ),
-            ("STASHES", [(s.ref, "▣ " + s.subject, "stash") for s in snapshot.stashes]),
-        ]
-        for heading, rows in groups:
-            widgets.append(Label(f"{heading}  {len(rows)}", classes="ref-heading"))
-            if not rows:
-                widgets.append(Static("  —", classes="empty-refs"))
-            for target, label, kind in rows:
-                ident = f"ref-{len(self._ref_targets)}"
-                self._ref_targets[ident] = (target, kind)
-                self._ref_labels[ident] = label
-                button = Button(
-                    Text(label, no_wrap=True, overflow="ellipsis"), id=ident, classes="ref-button"
-                )
-                button.tooltip = target + " · click to focus history; Actions to operate"
-                button.set_class(target == self._selected_ref, "active-ref")
-                widgets.append(button)
-        if snapshot.remotes:
-            widgets.append(Label("HOSTS", classes="ref-heading"))
-            for remote in snapshot.remotes:
-                item = Static(Text(f"  {remote.provider} · {remote.name}"), classes="remote-host")
-                item.tooltip = remote.url
-                widgets.append(item)
-        await holder.mount(*widgets)
-        self.call_after_refresh(self.fit_ref_labels)
+    def _clear_reference_selection(self) -> None:
+        self._sidebar_selection = None
+        self._reveal_ref_key = None
+        self.query_one(ReferenceSidebar).set_active(None)
+        self._update_reference_badges()
 
-    def fit_ref_labels(self) -> None:
-        # Textual 1's Button wraps long words despite Text(no_wrap=True).
-        # Truncate the actual label to its measured cell width; keep the full ref
-        # in the tooltip and action menu. Recompute on terminal/panel resize.
-        for ident, label in self._ref_labels.items():
-            matches = self.query(f"#{ident}")
-            if matches:
-                button = matches.first(Button)
-                text = Text(label, no_wrap=True, overflow="ellipsis")
-                text.truncate(max(6, button.content_size.width - 2), overflow="ellipsis")
-                button.label = text
+    def _update_reference_badges(self) -> None:
+        if not self.snapshot_data:
+            return
+        old = self._ref_badges
+        self._ref_badges = build_ref_badges(self.snapshot_data, self._selected_ref)
+        table = self.query_one("#graph-table", DataTable)
+        for oid in self._commits:
+            if oid in table.rows and old.get(oid) != self._ref_badges.get(oid):
+                badges = self._ref_badges.get(oid)
+                table.update_cell(oid, "refs", badges.text if badges else Text())
+
+    def _current_sidebar_selection(
+        self, root: Path, selection: SidebarSelection
+    ) -> SidebarSelection | None:
+        if len(self.screen_stack) > 1 or not self.repo or root != self.repo.root:
+            return None
+        current = self.query_one(ReferenceSidebar).get_selection(selection.key)
+        return current if current == selection else None
+
+    def on_reference_sidebar_selection_changed(
+        self, event: ReferenceSidebar.SelectionChanged
+    ) -> None:
+        event.stop()
+        selection = self._current_sidebar_selection(event.root, event.selection)
+        if selection is None:
+            return
+        self._sidebar_selection = selection
+        self._reveal_ref_key = None
+        self.query_one(ReferenceSidebar).set_active(selection)
+        if selection.kind == "worktree":
+            self.jump_to("wip")
+        elif selection.kind == "all":
+            self.action_clear_filter()
+            self.status("Unified graph · all local and remote branches")
+        elif selection.oid in self._commits:
+            hint = " · double-click to check out" if selection.kind in {"local", "remote"} else ""
+            self.status(f"Selected {selection.label}{hint} · graph position unchanged")
+        else:
+            self.status(f"Selected {selection.label} · tip is outside the loaded unified graph")
+        self._update_reference_badges()
+        self.update_search(jump=False)
+
+    def on_reference_sidebar_checkout_requested(
+        self, event: ReferenceSidebar.CheckoutRequested
+    ) -> None:
+        event.stop()
+        selection = self._current_sidebar_selection(event.root, event.selection)
+        if selection is None or selection.kind not in {"local", "remote"} or self.busy:
+            return
+        self._sidebar_selection = selection
+        self.query_one(ReferenceSidebar).set_active(selection)
+        self.confirm_action(
+            Action("checkout", target=selection.target, remote=selection.remote),
+            f"Check out {selection.target}?\n"
+            f"Current branch: {self.snapshot_data.branch if self.snapshot_data else ''}\n"
+            "Git will refuse a checkout that would overwrite local changes. "
+            "The graph stays unified.",
+        )
 
     def repaint_history(self) -> None:
         if not self.snapshot_data:
             return
         self._rebuilding = True
+        table = self.query_one("#graph-table", DataTable)
+        previous_scroll = table.scroll_offset
         cache_key = (self.snapshot_data.history, self.graph_style)
         if cache_key != self._graph_cache_key:
             self._graph_rows = render_history(self.snapshot_data.history, self.graph_style)
@@ -372,8 +402,13 @@ class GitKraikenApp(App[None]):
         if self.graph_style == "smooth" and any("╴" in row.graph.plain for row in self._graph_rows):
             heading.append("   ╴│╶ crossing, not a join", style=MUTED)
         self.query_one("#history-heading", Static).update(heading)
+        geometry = tuple(
+            (row.commit.oid if row.commit else f"connector-{index}", row.height)
+            for index, row in enumerate(self._graph_rows)
+        )
+        preserve_scroll = bool(geometry) and geometry == self._graph_geometry
+        self._graph_geometry = geometry
         self._configure_history_columns()
-        table = self.query_one("#graph-table", DataTable)
         self._commits = {}
         dirty = len(self.snapshot_data.files)
         wip_cells = [
@@ -400,9 +435,8 @@ class GitKraikenApp(App[None]):
                 continue
             commit = row.commit
             self._commits[commit.oid] = commit
-            refs = Text(
-                " · ".join(commit.refs), style="bold #83d9ca", no_wrap=True, overflow="ellipsis"
-            )
+            badges = self._ref_badges.get(commit.oid)
+            refs = badges.text if badges else Text()
             message = Text(commit.subject, style="#dce3ed", no_wrap=True, overflow="ellipsis")
             table.add_row(
                 row.graph,
@@ -416,6 +450,10 @@ class GitKraikenApp(App[None]):
         table.move_cursor(row=table.get_row_index(key), animate=False)
         self._history_key = key
         self.update_search(jump=False)
+        if preserve_scroll:
+            self.call_after_refresh(
+                table.scroll_to, previous_scroll.x, previous_scroll.y, animate=False
+            )
         self.call_after_refresh(self._finish_rebuild)
 
     def _finish_rebuild(self) -> None:
@@ -450,10 +488,20 @@ class GitKraikenApp(App[None]):
             self.select_row(event.data_table.id, str(event.row_key.value))
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        self.select_row(event.data_table.id, str(event.row_key.value))
+        self.select_row(event.data_table.id, str(event.row_key.value), explicit=True)
 
-    def select_row(self, table_id: str | None, key: str) -> None:
+    def select_row(self, table_id: str | None, key: str, *, explicit: bool = False) -> None:
         if table_id == "graph-table":
+            selection = self._sidebar_selection
+            if (
+                selection
+                and (explicit or key != self._history_key)
+                and (key == "wip" or key in self._commits)
+            ):
+                same_target = key == ("wip" if selection.kind == "worktree" else selection.oid)
+                if not same_target:
+                    self._clear_reference_selection()
+                    self.update_search(jump=False)
             if key == "wip":
                 self._history_key = key
                 self._detail_token += 1
@@ -494,6 +542,11 @@ class GitKraikenApp(App[None]):
                 text.append(
                     f"{commit.author} <{commit.email}>\n{commit.date}\n{commit.oid}\n", style=MUTED
                 )
+                badges = self._ref_badges.get(commit.oid)
+                if badges:
+                    text.append("\n")
+                    text.append(badges.description)
+                    text.append("\n\n")
                 text.append(detail.stat, style=MUTED)
                 self.query_one("#commit-detail", Static).update(text)
                 table = self.query_one("#commit-file-table", DataTable)
@@ -567,13 +620,21 @@ class GitKraikenApp(App[None]):
             if needle
             and needle in " ".join((c.subject, c.author, c.email, c.oid, *c.refs)).casefold()
         ]
-        scope = self.ref_filter or "All branches"
-        caption = f"{scope} · {len(self._commits)} commits"
+        caption = f"All branches + remotes · {len(self._commits)} commits"
         if needle:
             caption += f" · {len(self._search_matches)} matches (graph preserved)"
         if not self._commits:
             caption += " · No commits yet. Stage files to begin."
+        selection = self._sidebar_selection
+        if selection and selection.oid and selection.oid not in self._commits:
+            if self.snapshot_data and self.snapshot_data.has_more and self.limit < 5000:
+                caption = f"Tip not loaded · Load more to locate {selection.label} · unified graph"
+            elif self.limit >= 5000:
+                caption = f"Tip outside 5,000-commit display limit · {selection.label}"
+            else:
+                caption = f"Tip not in loaded commit graph · {selection.label} · Actions available"
         self.query_one("#history-caption", Static).update(Text(caption))
+        self.query_one("#history-caption", Static).tooltip = Text(caption)
         self.query_one("#search-next", Button).disabled = not self._search_matches
         if jump and self._search_matches:
             self.jump_to(self._search_matches[0])
@@ -617,26 +678,11 @@ class GitKraikenApp(App[None]):
             self.action_command_picker()
         elif ident == "refresh":
             self.action_refresh()
-        elif ident == "worktree-button":
-            self.jump_to("wip")
-        elif ident == "all-refs":
-            self.action_clear_filter()
         elif self.busy:
             return
-        elif ident in self._ref_targets:
-            self._selected_ref, self._selected_kind = self._ref_targets[ident]
-            self.ref_filter = self._selected_ref
-            self._selected_commit = None
-            self._history_key = next(
-                (r.oid for r in self.snapshot_data.refs if r.full_name == self._selected_ref), "wip"
-            )
-            if self._selected_kind == "stash":
-                self._history_key = next(
-                    (s.oid for s in self.snapshot_data.stashes if s.ref == self._selected_ref),
-                    "wip",
-                )
-            self.request_refresh()
         elif ident == "load-more":
+            if self._sidebar_selection and self._sidebar_selection.oid not in self._commits:
+                self._reveal_ref_key = self._sidebar_selection.key
             self.limit = min(5000, self.limit + 300)
             self.request_refresh()
         elif ident == "branch":
@@ -675,7 +721,11 @@ class GitKraikenApp(App[None]):
             ("refresh", "Refresh local repository"),
             ("create-branch", "Create and check out a branch"),
         ]
-        if self._selected_ref and self._selected_kind != "stash":
+        if self._sidebar_selection and self._sidebar_selection.oid:
+            actions.append(
+                ("locate-ref", f"Locate {self._sidebar_selection.label} in unified graph")
+            )
+        if self._selected_ref and self._selected_kind in {"local", "remote", "tag"}:
             actions.extend(
                 [
                     (op, f"{label} {self._selected_ref}")
@@ -727,7 +777,7 @@ class GitKraikenApp(App[None]):
             )
         actions.extend(
             [
-                ("all", "Show all branches"),
+                ("all", "Unified graph / clear reference selection"),
                 ("graph-style", "Switch Smooth / Compact commit graph"),
                 ("help", "Keyboard shortcuts and help"),
             ]
@@ -743,6 +793,13 @@ class GitKraikenApp(App[None]):
             self.action_refresh()
         elif operation == "all":
             self.action_clear_filter()
+        elif operation == "locate-ref":
+            selection = self._sidebar_selection
+            if selection and selection.oid in self._commits:
+                self.jump_to(selection.oid)
+                self.query_one("#graph-table", DataTable).focus()
+            else:
+                self.status("Selected tip is outside loaded history. Use Load more to locate it.")
         elif operation == "help":
             self.action_help()
         elif operation == "graph-style":
@@ -770,8 +827,13 @@ class GitKraikenApp(App[None]):
             )
             if operation == "checkout-commit":
                 operation = "checkout"
+            remote = (
+                self._sidebar_selection.remote
+                if operation == "checkout" and not commit_op and self._sidebar_selection
+                else ""
+            )
             self.confirm_action(
-                Action(operation, target=target),
+                Action(operation, target=target, remote=remote),
                 f"{operation.replace('-', ' ').title()} {target or 'current operation'}?\nCurrent branch: {self.snapshot_data.branch if self.snapshot_data else ''}\n"
                 + (
                     "This moves the branch pointer; your files are preserved."
@@ -784,9 +846,11 @@ class GitKraikenApp(App[None]):
         if not name:
             return
         target = (
-            self._selected_commit.oid
-            if self._selected_commit
-            else (self._selected_ref if self._selected_kind != "stash" else "")
+            self._sidebar_selection.oid
+            if operation == "create-branch"
+            and self._sidebar_selection
+            and self._sidebar_selection.kind in {"local", "remote", "tag"}
+            else (self._selected_commit.oid if self._selected_commit else "")
         )
         if operation == "rename-branch":
             target = self._selected_ref
@@ -942,7 +1006,7 @@ class GitKraikenApp(App[None]):
                 "stash-pop",
                 "stash-drop",
             }:
-                self.ref_filter = self._selected_ref = self._selected_kind = ""
+                self._clear_reference_selection()
             # Index changes invalidate the selected staged/unstaged version.
             if action.operation in {
                 "stage",
@@ -1032,9 +1096,10 @@ class GitKraikenApp(App[None]):
                     repo = await asyncio.to_thread(Repository, Path(path).expanduser())
                     snapshot = await asyncio.to_thread(repo.snapshot)
                 self.repo, self.path = repo, repo.root
-                self.ref_filter = self._selected_ref = self._selected_kind = ""
+                self._clear_reference_selection()
                 self._selected_commit = self._selected_file = None
                 self._history_key = "wip"
+                self._graph_geometry = ()
                 self.limit = 300
                 self.query_one("#commit-message", TextArea).clear()
                 self.query_one("#graph-filter", Input).value = ""
@@ -1063,14 +1128,12 @@ class GitKraikenApp(App[None]):
         if len(self.screen_stack) > 1:
             return
         self.query_one("#graph-filter", Input).value = ""
-        if self.ref_filter and not self.busy:
-            self.ref_filter = self._selected_ref = self._selected_kind = ""
-            self.request_refresh()
+        self._clear_reference_selection()
+        self.update_search(jump=False)
         self.query_one("#graph-table").focus()
 
     def action_toggle_refs(self) -> None:
         self.query_one("#refs-panel").toggle_class("collapsed")
-        self.call_after_refresh(self.fit_ref_labels)
         self.call_after_refresh(self.repaint_history)
 
     def action_toggle_inspector(self) -> None:

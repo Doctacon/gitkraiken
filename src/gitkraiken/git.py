@@ -525,6 +525,9 @@ class Repository:
             operation="list refs",
         )
         current = self._branch()
+        # Remote names may contain slashes. Match the most specific configured
+        # name rather than assuming the first path component is the owner.
+        remote_names = sorted(self._remote_names(), key=len, reverse=True)
         refs: list[Ref] = []
         for line in _decode(result.stdout).splitlines():
             fields = line.split("\t")
@@ -544,6 +547,16 @@ class Repository:
                 name = full_name.removeprefix("refs/tags/")
             else:  # pragma: no cover - constrained by for-each-ref prefixes
                 continue
+            owner = ""
+            if kind == "remote":
+                owner = next(
+                    (
+                        remote_name
+                        for remote_name in remote_names
+                        if name.startswith(f"{remote_name}/")
+                    ),
+                    "",
+                )
             refs.append(
                 Ref(
                     name=name,
@@ -552,6 +565,7 @@ class Repository:
                     kind=kind,
                     current=kind == "local" and name == current,
                     upstream=upstream if kind == "local" else "",
+                    remote=owner,
                 )
             )
         return tuple(refs)
@@ -1015,30 +1029,242 @@ class Repository:
     def _local_branches(self) -> set[str]:
         return {ref.name for ref in self._refs() if ref.kind == "local"}
 
-    def _execute_checkout(self, target: str) -> subprocess.CompletedProcess[bytes]:
+    def _canonical_upstream(self, branch: str) -> tuple[str, str, str]:
+        """Return full tracking ref, owner and remote source without DWIM ambiguity."""
+        full_name = f"refs/heads/{branch}"
+        result = self._git(
+            [
+                "for-each-ref",
+                "--format=%(refname)%00%(upstream)%00%(upstream:remotename)%00%(upstream:remoteref)",
+                full_name,
+            ],
+            operation="read checkout upstream",
+        )
+        for line in _decode(result.stdout).splitlines():
+            fields = line.split("\x00")
+            if len(fields) == 4 and fields[0] == full_name:
+                return fields[1], fields[2], fields[3]
+        return "", "", ""
+
+    @staticmethod
+    def _refspec_match(pattern: str, ref: str) -> str | None:
+        """Return a wildcard capture when *pattern* matches a full ref."""
+        wildcard_count = pattern.count("*")
+        if wildcard_count == 0:
+            return "" if pattern == ref else None
+        if wildcard_count != 1:
+            return None
+        prefix, suffix = pattern.split("*", 1)
+        if not ref.startswith(prefix) or not ref.endswith(suffix):
+            return None
+        if len(ref) < len(prefix) + len(suffix):
+            return None
+        end = len(ref) - len(suffix) if suffix else len(ref)
+        return ref[len(prefix) : end]
+
+    def _valid_refspec_pattern(self, pattern: str) -> bool:
+        result = self._git(
+            ["check-ref-format", "--refspec-pattern", pattern],
+            ok_codes=(0, 1),
+            operation="validate remote fetch mapping",
+        )
+        return result.returncode == 0
+
+    def _remote_source_ref(self, remote: str, tracking_ref: str) -> str:
+        """Reverse exactly one remote fetch refspec for *tracking_ref*."""
+        result = self._git(
+            ["config", "--null", "--get-all", f"remote.{remote}.fetch"],
+            ok_codes=(0, 1),
+            operation="read remote fetch mappings",
+        )
+        refspecs = [value for value in _decode(result.stdout).split("\x00") if value]
+        positive: list[tuple[str, str]] = []
+        negative: list[str] = []
+        for refspec in refspecs:
+            value = refspec.removeprefix("+")
+            if value.startswith("^"):
+                pattern = value[1:]
+                if self._valid_refspec_pattern(pattern):
+                    negative.append(pattern)
+                continue
+            source, separator, destination = value.partition(":")
+            if (
+                not separator
+                or source.count("*") != destination.count("*")
+                or not self._valid_refspec_pattern(source)
+                or not self._valid_refspec_pattern(destination)
+            ):
+                continue
+            positive.append((source, destination))
+
+        sources: set[str] = set()
+        for source, destination in positive:
+            capture = self._refspec_match(destination, tracking_ref)
+            if capture is None:
+                continue
+            mapped_source = source.replace("*", capture)
+            if any(self._refspec_match(pattern, mapped_source) is not None for pattern in negative):
+                continue
+            if self._valid_refspec_pattern(mapped_source):
+                sources.add(mapped_source)
+
+        if not sources:
+            raise GitError(
+                f"No fetch refspec for remote {remote} maps to {tracking_ref}; "
+                "checkout would not have a valid upstream."
+            )
+        if len(sources) != 1:
+            raise GitError(
+                f"Remote {remote} has ambiguous fetch refspecs for {tracking_ref}; "
+                "checkout was not changed."
+            )
+        source = sources.pop()
+        destinations = set()
+        for source_pattern, destination in positive:
+            capture = self._refspec_match(source_pattern, source)
+            if capture is not None:
+                destinations.add(destination.replace("*", capture))
+        if destinations != {tracking_ref}:
+            raise GitError(
+                f"Remote {remote} has ambiguous fetch refspecs for source {source}; "
+                f"it does not map uniquely back to {tracking_ref}. Checkout was not changed."
+            )
+        return source
+
+    def _checkout_remote_ref(
+        self,
+        selected: Ref,
+        local: dict[str, Ref],
+        requested_remote: str,
+    ) -> subprocess.CompletedProcess[bytes]:
+        if requested_remote:
+            configured_remote = self._remote(requested_remote)
+            if selected.remote != configured_remote:
+                owner = selected.remote or "no configured remote"
+                raise GitError(
+                    f"Checkout target {selected.full_name} is owned by {owner}, "
+                    f"not remote {configured_remote}. Refresh and select the branch again."
+                )
+        if not selected.remote:
+            raise GitError(
+                f"Cannot determine the configured remote owner of {selected.full_name}; "
+                "refresh the repository or configure its remote before checkout."
+            )
+
+        owner_prefix = f"{selected.remote}/"
+        if not selected.name.startswith(owner_prefix):  # Defensive: Ref ownership is derived here.
+            raise GitError(f"Invalid remote branch ownership for {selected.full_name}.")
+        local_name = selected.name.removeprefix(owner_prefix)
+        self._validate_branch(local_name, "Tracking branch name")
+        # Resolve the source before any switch can change HEAD. This also makes
+        # reuse reject a tracking destination whose current mapping is no longer
+        # unique.
+        merge_ref = self._remote_source_ref(selected.remote, selected.full_name)
+        existing = local.get(local_name)
+        if existing is not None:
+            upstream, upstream_remote, upstream_source = self._canonical_upstream(local_name)
+            if (upstream, upstream_remote, upstream_source) != (
+                selected.full_name,
+                selected.remote,
+                merge_ref,
+            ):
+                if upstream:
+                    detail = (
+                        f"tracks {upstream} via remote {upstream_remote or '(unknown)'} "
+                        f"({upstream_source})"
+                    )
+                else:
+                    detail = "has no upstream"
+                raise GitError(
+                    f"Local branch {existing.full_name} {detail} and cannot be reused for "
+                    f"remote ref {selected.full_name} ({selected.remote}: {merge_ref}). "
+                    "Choose or create a differently named "
+                    "local branch."
+                )
+            return self._git(["switch", "--", local_name], operation="checkout")
+
+        # Native --track can choose an ambiguous mapping. Record the validated
+        # mapping first: a config-lock/write failure must not change HEAD or
+        # create an untracked branch that strict reuse would refuse to retry.
+        # A failed switch may leave retryable config for a nonexistent branch;
+        # never roll back worktree/refs or rewrite the user's whole config.
+        self._git(
+            [
+                "config",
+                "--local",
+                "--replace-all",
+                f"branch.{local_name}.remote",
+                selected.remote,
+            ],
+            operation="configure checkout remote",
+        )
+        self._git(
+            [
+                "config",
+                "--local",
+                "--replace-all",
+                f"branch.{local_name}.merge",
+                merge_ref,
+            ],
+            operation="configure checkout upstream",
+        )
+        return self._git(
+            ["switch", "--no-track", "-c", local_name, selected.full_name],
+            operation="checkout remote branch",
+        )
+
+    def _execute_checkout(
+        self, target: str, requested_remote: str = ""
+    ) -> subprocess.CompletedProcess[bytes]:
         _safe_value(target, "Checkout target")
         refs = self._refs()
         local = {ref.name: ref for ref in refs if ref.kind == "local"}
         remote = {ref.name: ref for ref in refs if ref.kind == "remote"}
         tags = {ref.name: ref for ref in refs if ref.kind == "tag"}
-        short = target.removeprefix("refs/heads/")
-        if short in local:
-            return self._git(["switch", "--", short], operation="checkout")
-        remote_short = target.removeprefix("refs/remotes/")
-        if remote_short in remote:
-            if "/" not in remote_short:
-                raise GitError(f"Invalid remote branch: {target}")
-            local_name = remote_short.split("/", 1)[1]
-            self._validate_branch(local_name, "Tracking branch name")
-            if local_name in local:
-                return self._git(["switch", "--", local_name], operation="checkout")
-            return self._git(
-                ["switch", "--track", "-c", local_name, remote[remote_short].full_name],
-                operation="checkout remote branch",
+        local_full = {ref.full_name: ref for ref in local.values()}
+        remote_full = {ref.full_name: ref for ref in remote.values()}
+        tag_full = {ref.full_name: ref for ref in tags.values()}
+
+        # An explicit owner makes the intended namespace unambiguous even when
+        # a local branch has the same display name as the remote-tracking ref.
+        if requested_remote:
+            selected = (
+                remote_full.get(target)
+                if target.startswith("refs/remotes/")
+                else remote.get(target)
             )
-        tag_short = target.removeprefix("refs/tags/")
-        if tag_short in tags:
-            oid = self._resolve_commit(tags[tag_short].full_name, label="Tag")
+            if selected is None:
+                raise GitError(f"Remote checkout target does not exist: {target}")
+            return self._checkout_remote_ref(selected, local, requested_remote)
+
+        # Fully qualified names are exact namespace requests. Do not feed a
+        # missing one back through revision DWIM, where another namespace could
+        # accidentally satisfy it.
+        if target.startswith("refs/heads/"):
+            selected = local_full.get(target)
+            if selected is None:
+                raise GitError(f"Unknown local branch: {target}")
+            return self._git(["switch", "--", selected.name], operation="checkout")
+        if target.startswith("refs/remotes/"):
+            selected = remote_full.get(target)
+            if selected is None:
+                raise GitError(f"Unknown remote branch: {target}")
+            return self._checkout_remote_ref(selected, local, "")
+        if target.startswith("refs/tags/"):
+            selected = tag_full.get(target)
+            if selected is None:
+                raise GitError(f"Unknown tag: {target}")
+            oid = self._resolve_commit(selected.full_name, label="Tag")
+            return self._git(["switch", "--detach", oid], operation="checkout tag")
+
+        # Retain the established local/remote/tag preference for ordinary short
+        # inputs. Callers can use a full ref (and owner for remotes) to disambiguate.
+        if target in local:
+            return self._git(["switch", "--", target], operation="checkout")
+        if target in remote:
+            return self._checkout_remote_ref(remote[target], local, "")
+        if target in tags:
+            oid = self._resolve_commit(tags[target].full_name, label="Tag")
             return self._git(["switch", "--detach", oid], operation="checkout tag")
         oid = self._resolve_commit(target, label="Checkout target")
         return self._git(["switch", "--detach", oid], operation="checkout commit")
@@ -1078,7 +1304,7 @@ class Repository:
         fallback = f"Git {operation} completed."
         result: subprocess.CompletedProcess[bytes]
         if operation == "checkout":
-            result = self._execute_checkout(action.target)
+            result = self._execute_checkout(action.target, action.remote)
         elif operation == "create-branch":
             name = self._validate_branch(action.name)
             target = self._resolve_commit(action.target or "HEAD", label="Branch target")

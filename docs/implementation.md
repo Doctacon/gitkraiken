@@ -11,7 +11,8 @@ credential helpers / SSH configuration handle private GitHub and Azure DevOps ac
   repos with a friendly `GitError`. `root: Path`. All I/O stays here. Methods:
   - `snapshot(limit: int = 300, ref: str = "") -> Snapshot`: status, refs, remotes,
     stashes, current operation, bounded native Git graph. Empty `ref` means all refs
-    plus HEAD (including detached HEAD); nonempty ref shows its ancestry.
+    plus HEAD (including detached HEAD); nonempty ref shows its ancestry. The UI
+    always uses the unified, empty-ref form; reference selection never filters it.
   - `detail(oid: str) -> CommitDetail`: full commit message, first-parent changes
     (root commits work), stat. `FileChange.index` holds committed change type.
   - `diff(path: str = "", *, staged: bool = False, oid: str = "") -> str`: plaintext
@@ -27,7 +28,18 @@ credential helpers / SSH configuration handle private GitHub and Azure DevOps ac
     Remotes expose a redacted push_url for confirmation; multiple push URLs are
     rejected. Explicit refspecs override broad or forceful user push defaults.
     Checkout local, remote tracking (creates local tracking branch when needed),
-    or commit/tag detached. Branch create uses name + target (default HEAD) and
+    or commit/tag detached. `Ref.remote` is the longest matching configured remote
+    name, including slash-containing names. Unknown ownership remains explicit.
+    Full ref namespaces cannot be shadowed by similarly named local branches.
+    Remote checkout accepts exact `Action.remote` ownership and only reuses an
+    existing same-named local branch with the same canonical upstream ref and
+    configured upstream remote/source. New tracking branches resolve validated
+    fetch refspecs in both directions; missing or ambiguous mappings fail before
+    changing HEAD. Upstream config is written before creating/switching a new
+    branch, so config-lock failures leave HEAD and refs alone. A failed switch
+    may leave retryable config for a nonexistent branch; no destructive rollback
+    or whole-config rewrite is attempted.
+    Branch create uses name + target (default HEAD) and
     checks out. Rename uses target old + name new. Safe delete uses target. Tag
     uses name + target. Stash includes untracked. Stash actions target exact ref.
     Continue/abort inspect current operation (including an external git am) and
@@ -45,6 +57,19 @@ credential helpers / SSH configuration handle private GitHub and Azure DevOps ac
   Crossings use `╴│╶` underpasses, never connected four-way junctions. Dotted tails
   retain unloaded parents. Compact mode preserves every native Git graph row and
   its ANSI colors. No Git I/O, widget state, topology clipping, or new dependencies.
+- `sidebar.py`: mounted-once Input + Tree over a `Snapshot`; no Git I/O. Typed
+  `SidebarSelection` messages carry full targets, OIDs, exact remote ownership,
+  and repository root. Fold/cursor keys are semantic, not TreeNode IDs. A complete
+  selection index is independent of search visibility. Stash identity uses OID.
+  Search temporarily exposes matching ancestors without overwriting normal folds;
+  refresh preserves the query and viewport, while a new repository resets them.
+  Actual Click chains distinguish selection from confirmed checkout; only two
+  primary-button label clicks on the same branch qualify. Rebuilds invalidate
+  pending double-clicks. Carets, categories, Enter, and navigation never check out.
+- `ref_badges.py`: pure typed pointer grouping by OID from refs, remotes, and stashes,
+  not ambiguous `Commit.refs` strings. Local/HEAD and provider markers precede
+  potentially truncated names. Hover text and commit details retain full refs.
+  Remote markers describe local last-fetched state, never live server state.
 - `app.py`, `dialogs.py`, `app.tcss`: Textual UI. `GitKraikenApp(path: str | Path)`.
   Synchronous Git calls run via `asyncio.to_thread`, not on the UI loop; serialize
   mutation/refresh work and ignore stale selection detail results. No UI-to-shell
@@ -68,8 +93,14 @@ filter/search, load-more. Smooth is the default; `g`, the visible graph-style bu
 and Actions switch styles without losing selection or search. Cache graph layout
 across resize/search; preserve lane colors under selection. Multiline Smooth rows
 remain one keyboard/click target per commit. Never cap graph column width: allow
-horizontal scrolling for wide histories. Branch selection filters history, explicit checkout
-is separate. Worktree has staged/unstaged files, diff and commit composer. Include
+horizontal scrolling for wide histories. Branch single-click only changes action
+context and badge emphasis; it preserves graph data, cursor, inspected commit,
+and viewport. Explicit Locate navigates to its tip. Double-click requests the
+existing checkout confirmation; cancellation does nothing. Checkout updates refs
+and HEAD, not the scope of history. Unloaded tips have an explicit caption and do
+not trigger filtering or automatic loading; Load more may reveal them, within the
+5,000-commit cap. New pointers at an existing OID do not invent a graph divergence.
+Worktree has staged/unstaged files, diff and commit composer. Include
 context actions for commits/refs/stashes, quick command picker, shortcuts/help,
 visible pending-operation and conflict controls. At narrow sizes allow panel toggles;
 never silently perform a destructive operation. All repo data is plain text, not
@@ -88,4 +119,8 @@ remotes, plus Textual pilot tests and isolated tmux smoke tests. Trace rendered
 Smooth glyphs (including underpasses) to check actual visible parent relationships,
 not just a copy of input metadata. Cover crossing and octopus merges, disconnected
 histories, history limits, lane reuse, randomized DAGs, and style/selection behavior.
+Cover actual mouse/keyboard sidebar events, fold/search/scroll persistence,
+namespace collisions, exact remote checkout, and pointer-only changes. Textual
+1.0's Pilot leaks `chain` into MouseDown on `click(times=2)`; the test helper sends
+fresh mouse events through the same screen routing for subsequent clicks.
 Never mutate any user repo during testing.

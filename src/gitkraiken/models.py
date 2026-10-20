@@ -13,6 +13,7 @@ class Ref:
     kind: Literal["local", "remote", "tag"]
     current: bool = False
     upstream: str = ""
+    remote: str = ""  # Exact configured owner for a remote-tracking ref, if known.
 
 
 @dataclass(frozen=True)
@@ -117,5 +118,5 @@ class Action:
     name: str = ""
     message: str = ""
     paths: tuple[str, ...] = field(default_factory=tuple)
-    remote: str = ""
+    remote: str = ""  # Network destination, or exact owner of a remote checkout target.
     expected_oid: str = ""  # Guard mutable stash selectors across a confirmation dialog.

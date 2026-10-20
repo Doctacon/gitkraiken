@@ -84,6 +84,36 @@ def test_history_detail_root_commit_detached_and_limit(git_repo: Path, git_run) 
     assert detached.history[0].commit.oid == first
 
 
+def test_history_graph_order_is_stable_when_checking_out_equal_timestamp_tips(
+    git_repo: Path, git_run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    commit_file(git_run, git_repo, "base.txt", "base\n", "base")
+    timestamp = "2001-02-03T04:05:06+00:00"
+    monkeypatch.setenv("GIT_AUTHOR_DATE", timestamp)
+    monkeypatch.setenv("GIT_COMMITTER_DATE", timestamp)
+
+    git_run(git_repo, "switch", "-c", "left")
+    commit_file(git_run, git_repo, "left.txt", "left\n", "left")
+    git_run(git_repo, "switch", "main")
+    git_run(git_repo, "switch", "-c", "right")
+    commit_file(git_run, git_repo, "right.txt", "right\n", "right")
+    repo = Repository(git_repo)
+
+    before = repo.snapshot()
+    repo.execute(Action("checkout", target="refs/heads/left"))
+    after = repo.snapshot()
+
+    def geometry(snapshot) -> list[tuple[str, str]]:
+        return [
+            (line.graph, line.commit.oid if line.commit is not None else "")
+            for line in snapshot.history
+        ]
+
+    assert geometry(after) == geometry(before)
+    repo.execute(Action("checkout", target="refs/heads/right"))
+    assert geometry(repo.snapshot()) == geometry(before)
+
+
 def test_native_merge_graph_has_real_topology(git_repo: Path, git_run) -> None:
     base = commit_file(git_run, git_repo, "base.txt", "base\n", "base")
     git_run(git_repo, "switch", "-c", "topic")
@@ -336,6 +366,454 @@ def test_am_conflict_is_detected_and_can_abort_or_continue(git_repo: Path, git_r
     repo.execute(Action("continue"))
     assert repo.snapshot().operation == ""
     assert repo.detail("HEAD").commit.subject == "mail patch"
+
+
+def test_remote_ref_owner_uses_longest_configured_remote_name(git_repo: Path, git_run) -> None:
+    commit_file(git_run, git_repo, "base.txt", "base\n", "base")
+    git_run(git_repo, "remote", "add", "team", str(git_repo.parent / "team.git"))
+    git_run(
+        git_repo,
+        "remote",
+        "add",
+        "team/origin",
+        str(git_repo.parent / "team-origin.git"),
+    )
+    git_run(git_repo, "update-ref", "refs/remotes/team/topic", "HEAD")
+    git_run(git_repo, "update-ref", "refs/remotes/team/origin/topic", "HEAD")
+    git_run(git_repo, "update-ref", "refs/remotes/unassigned/topic", "HEAD")
+
+    remote_refs = {
+        ref.full_name: ref for ref in Repository(git_repo).snapshot().refs if ref.kind == "remote"
+    }
+    assert remote_refs["refs/remotes/team/topic"].remote == "team"
+    slash_remote_ref = remote_refs["refs/remotes/team/origin/topic"]
+    assert slash_remote_ref.name == "team/origin/topic"
+    assert slash_remote_ref.remote == "team/origin"
+    assert remote_refs["refs/remotes/unassigned/topic"].remote == ""
+
+
+def test_slash_remote_checkout_creates_and_reuses_exact_tracking_branch(
+    git_repo: Path, git_run
+) -> None:
+    commit_file(git_run, git_repo, "base.txt", "base\n", "base")
+    git_run(git_repo, "remote", "add", "team", str(git_repo.parent / "team.git"))
+    git_run(
+        git_repo,
+        "remote",
+        "add",
+        "team/origin",
+        str(git_repo.parent / "team-origin.git"),
+    )
+    git_run(git_repo, "update-ref", "refs/remotes/team/origin/topic", "HEAD")
+    repo = Repository(git_repo)
+    checkout = Action(
+        "checkout",
+        target="refs/remotes/team/origin/topic",
+        remote="team/origin",
+    )
+
+    repo.execute(checkout)
+    assert repo.snapshot().branch == "topic"
+    upstream = git_run(
+        git_repo,
+        "for-each-ref",
+        "--format=%(upstream)",
+        "refs/heads/topic",
+    ).stdout.strip()
+    assert upstream == "refs/remotes/team/origin/topic"
+
+    repo.execute(Action("checkout", target="refs/heads/main"))
+    repo.execute(checkout)
+    assert repo.snapshot().branch == "topic"
+
+
+def test_remote_checkout_tracks_custom_wildcard_fetch_source(git_repo: Path, git_run) -> None:
+    commit_file(git_run, git_repo, "base.txt", "base\n", "base")
+    git_run(git_repo, "remote", "add", "origin", str(git_repo.parent / "origin.git"))
+    git_run(git_repo, "config", "--unset-all", "remote.origin.fetch")
+    git_run(
+        git_repo,
+        "config",
+        "--add",
+        "remote.origin.fetch",
+        "+refs/heads/release/*:refs/remotes/origin/stable/*",
+    )
+    git_run(git_repo, "update-ref", "refs/remotes/origin/stable/topic", "HEAD")
+
+    Repository(git_repo).execute(
+        Action(
+            "checkout",
+            target="refs/remotes/origin/stable/topic",
+            remote="origin",
+        )
+    )
+
+    assert git_run(git_repo, "branch", "--show-current").stdout.strip() == "stable/topic"
+    assert (
+        git_run(git_repo, "config", "branch.stable/topic.merge").stdout.strip()
+        == "refs/heads/release/topic"
+    )
+    assert (
+        git_run(
+            git_repo,
+            "for-each-ref",
+            "--format=%(upstream)",
+            "refs/heads/stable/topic",
+        ).stdout.strip()
+        == "refs/remotes/origin/stable/topic"
+    )
+
+
+def test_remote_checkout_tracks_custom_direct_full_ref_source(git_repo: Path, git_run) -> None:
+    commit_file(git_run, git_repo, "base.txt", "base\n", "base")
+    git_run(git_repo, "remote", "add", "origin", str(git_repo.parent / "origin.git"))
+    git_run(git_repo, "config", "--unset-all", "remote.origin.fetch")
+    git_run(
+        git_repo,
+        "config",
+        "--add",
+        "remote.origin.fetch",
+        "+refs/changes/42:refs/remotes/origin/review/topic",
+    )
+    git_run(git_repo, "update-ref", "refs/remotes/origin/review/topic", "HEAD")
+
+    Repository(git_repo).execute(
+        Action(
+            "checkout",
+            target="refs/remotes/origin/review/topic",
+            remote="origin",
+        )
+    )
+
+    assert git_run(git_repo, "branch", "--show-current").stdout.strip() == "review/topic"
+    assert (
+        git_run(git_repo, "config", "branch.review/topic.merge").stdout.strip() == "refs/changes/42"
+    )
+    assert (
+        git_run(
+            git_repo,
+            "for-each-ref",
+            "--format=%(upstream)",
+            "refs/heads/review/topic",
+        ).stdout.strip()
+        == "refs/remotes/origin/review/topic"
+    )
+
+
+@pytest.mark.parametrize(
+    ("fetch_refspecs", "message"),
+    [
+        (
+            ("+refs/heads/other/*:refs/remotes/origin/other/*",),
+            "No fetch refspec",
+        ),
+        (
+            (
+                "+refs/heads/release/*:refs/remotes/origin/stable/*",
+                "+refs/heads/archive/*:refs/remotes/origin/stable/*",
+            ),
+            "ambiguous fetch refspecs",
+        ),
+        (
+            (
+                "+refs/heads/release/*:refs/remotes/origin/primary/*",
+                "+refs/heads/release/*:refs/remotes/origin/stable/*",
+            ),
+            "ambiguous fetch refspecs",
+        ),
+        (
+            (
+                "+refs/heads/release/*:refs/remotes/origin/stable/*",
+                "^refs/heads/release/topic",
+            ),
+            "No fetch refspec",
+        ),
+    ],
+)
+def test_remote_checkout_rejects_missing_or_ambiguous_fetch_mapping_before_change(
+    git_repo: Path,
+    git_run,
+    fetch_refspecs: tuple[str, ...],
+    message: str,
+) -> None:
+    head = commit_file(git_run, git_repo, "base.txt", "base\n", "base")
+    git_run(git_repo, "remote", "add", "origin", str(git_repo.parent / "origin.git"))
+    git_run(git_repo, "config", "--unset-all", "remote.origin.fetch")
+    for refspec in fetch_refspecs:
+        git_run(git_repo, "config", "--add", "remote.origin.fetch", refspec)
+    tracking_ref = "refs/remotes/origin/stable/topic"
+    git_run(git_repo, "update-ref", tracking_ref, "HEAD")
+    repo = Repository(git_repo)
+
+    with pytest.raises(GitError, match=message):
+        repo.execute(Action("checkout", target=tracking_ref, remote="origin"))
+
+    assert repo.snapshot().branch == "main"
+    assert repo.snapshot().head == head
+    branch = git_run(
+        git_repo,
+        "show-ref",
+        "--verify",
+        "--quiet",
+        "refs/heads/stable/topic",
+        check=False,
+    )
+    assert branch.returncode != 0
+
+
+def test_remote_checkout_rejects_ambiguous_mapping_before_reusing_branch(
+    git_repo: Path, git_run
+) -> None:
+    head = commit_file(git_run, git_repo, "base.txt", "base\n", "base")
+    git_run(git_repo, "remote", "add", "origin", str(git_repo.parent / "origin.git"))
+    git_run(git_repo, "config", "--unset-all", "remote.origin.fetch")
+    git_run(
+        git_repo,
+        "config",
+        "--add",
+        "remote.origin.fetch",
+        "+refs/heads/release/*:refs/remotes/origin/stable/*",
+    )
+    git_run(git_repo, "update-ref", "refs/remotes/origin/stable/topic", "HEAD")
+    git_run(git_repo, "branch", "stable/topic", "HEAD")
+    git_run(git_repo, "config", "branch.stable/topic.remote", "origin")
+    git_run(git_repo, "config", "branch.stable/topic.merge", "refs/heads/release/topic")
+    git_run(
+        git_repo,
+        "config",
+        "--add",
+        "remote.origin.fetch",
+        "+refs/heads/archive/*:refs/remotes/origin/stable/*",
+    )
+    repo = Repository(git_repo)
+
+    with pytest.raises(GitError, match="ambiguous fetch refspecs"):
+        repo.execute(
+            Action(
+                "checkout",
+                target="refs/remotes/origin/stable/topic",
+                remote="origin",
+            )
+        )
+
+    assert repo.snapshot().branch == "main"
+    assert repo.snapshot().head == head
+
+
+def test_remote_checkout_rejects_an_excluded_source_despite_same_upstream_destination(
+    git_repo: Path, git_run
+) -> None:
+    head = commit_file(git_run, git_repo, "base.txt", "base\n", "base")
+    git_run(git_repo, "remote", "add", "origin", str(git_repo.parent / "origin.git"))
+    git_run(git_repo, "config", "--unset-all", "remote.origin.fetch")
+    for mapping in (
+        "+refs/heads/release/*:refs/remotes/origin/stable/*",
+        "+refs/heads/archive/*:refs/remotes/origin/stable/*",
+        "^refs/heads/archive/*",
+    ):
+        git_run(git_repo, "config", "--add", "remote.origin.fetch", mapping)
+    git_run(git_repo, "update-ref", "refs/remotes/origin/stable/topic", head)
+    git_run(git_repo, "branch", "stable/topic", head)
+    git_run(git_repo, "config", "branch.stable/topic.remote", "origin")
+    git_run(git_repo, "config", "branch.stable/topic.merge", "refs/heads/archive/topic")
+    assert git_run(
+        git_repo, "rev-parse", "--symbolic-full-name", "stable/topic@{upstream}"
+    ).stdout.strip() == ("refs/remotes/origin/stable/topic")
+    repo = Repository(git_repo)
+    with pytest.raises(GitError, match="cannot be reused"):
+        repo.execute(Action("checkout", target="refs/remotes/origin/stable/topic", remote="origin"))
+    assert repo.snapshot().branch == "main"
+    assert repo.snapshot().head == head
+
+
+def test_remote_checkout_refuses_existing_branch_without_exact_canonical_upstream(
+    git_repo: Path, git_run
+) -> None:
+    head = commit_file(git_run, git_repo, "base.txt", "base\n", "base")
+    git_run(git_repo, "remote", "add", "origin", str(git_repo.parent / "origin.git"))
+    git_run(git_repo, "update-ref", "refs/remotes/origin/topic", "HEAD")
+    git_run(git_repo, "branch", "topic", "HEAD")
+    repo = Repository(git_repo)
+    checkout = Action(
+        "checkout",
+        target="refs/remotes/origin/topic",
+        remote="origin",
+    )
+
+    with pytest.raises(GitError, match="differently named local branch") as missing:
+        repo.execute(checkout)
+    assert "refs/heads/topic" in str(missing.value)
+    assert "refs/remotes/origin/topic" in str(missing.value)
+    assert repo.snapshot().branch == "main"
+    assert repo.snapshot().head == head
+
+    # This local upstream has the same short spelling as origin/topic, but its
+    # canonical namespace is refs/heads and must not be treated as the remote ref.
+    git_run(git_repo, "branch", "origin/topic", "HEAD")
+    git_run(git_repo, "config", "branch.topic.remote", ".")
+    git_run(git_repo, "config", "branch.topic.merge", "refs/heads/origin/topic")
+    assert repo.snapshot().refs
+
+    with pytest.raises(GitError, match="differently named local branch") as different:
+        repo.execute(checkout)
+    message = str(different.value)
+    assert "refs/heads/topic" in message
+    assert "refs/heads/origin/topic" in message
+    assert "refs/remotes/origin/topic" in message
+    assert repo.snapshot().branch == "main"
+    assert repo.snapshot().head == head
+
+
+def test_remote_checkout_rejects_same_tracking_namespace_from_another_remote(
+    git_repo: Path, git_run
+) -> None:
+    head = commit_file(git_run, git_repo, "base.txt", "base\n", "base")
+    git_run(git_repo, "remote", "add", "team", str(git_repo.parent / "team.git"))
+    git_run(git_repo, "remote", "add", "team/origin", str(git_repo.parent / "origin.git"))
+    git_run(git_repo, "update-ref", "refs/remotes/team/origin/topic", head)
+    git_run(git_repo, "branch", "topic", head)
+    git_run(git_repo, "config", "branch.topic.remote", "team")
+    git_run(git_repo, "config", "branch.topic.merge", "refs/heads/origin/topic")
+    assert git_run(
+        git_repo, "rev-parse", "--symbolic-full-name", "topic@{upstream}"
+    ).stdout.strip() == ("refs/remotes/team/origin/topic")
+    repo = Repository(git_repo)
+    with pytest.raises(GitError, match="via remote team"):
+        repo.execute(
+            Action("checkout", target="refs/remotes/team/origin/topic", remote="team/origin")
+        )
+    assert repo.snapshot().branch == "main"
+    assert repo.snapshot().head == head
+
+
+def test_remote_checkout_rejects_mismatched_explicit_owner(git_repo: Path, git_run) -> None:
+    head = commit_file(git_run, git_repo, "base.txt", "base\n", "base")
+    git_run(git_repo, "remote", "add", "team", str(git_repo.parent / "team.git"))
+    git_run(
+        git_repo,
+        "remote",
+        "add",
+        "team/origin",
+        str(git_repo.parent / "team-origin.git"),
+    )
+    git_run(git_repo, "update-ref", "refs/remotes/team/origin/topic", "HEAD")
+    repo = Repository(git_repo)
+
+    with pytest.raises(GitError, match="owned by team/origin"):
+        repo.execute(
+            Action(
+                "checkout",
+                target="refs/remotes/team/origin/topic",
+                remote="team",
+            )
+        )
+    assert repo.snapshot().branch == "main"
+    assert repo.snapshot().head == head
+
+
+def test_explicit_remote_checkout_is_not_shadowed_by_local_branch_names(
+    git_repo: Path, git_run
+) -> None:
+    commit_file(git_run, git_repo, "base.txt", "base\n", "base")
+    git_run(git_repo, "remote", "add", "origin", str(git_repo.parent / "origin.git"))
+    git_run(git_repo, "update-ref", "refs/remotes/origin/topic", "HEAD")
+    git_run(git_repo, "branch", "origin/topic", "HEAD")
+    repo = Repository(git_repo)
+
+    repo.execute(Action("checkout", target="origin/topic", remote="origin"))
+    assert repo.snapshot().branch == "topic"
+    repo.execute(Action("checkout", target="refs/heads/main"))
+
+    # Git permits this unusual local branch. A fully qualified remote ref must
+    # still select refs/remotes rather than refs/heads/refs/remotes.
+    git_run(git_repo, "branch", "refs/remotes/origin/topic", "HEAD")
+    repo.execute(Action("checkout", target="refs/remotes/origin/topic"))
+    assert repo.snapshot().branch == "topic"
+
+
+def test_remote_checkout_config_lock_fails_before_changing_head_or_refs(
+    git_repo: Path, git_run
+) -> None:
+    head = commit_file(git_run, git_repo, "base.txt", "base\n", "base")
+    git_run(git_repo, "remote", "add", "origin", str(git_repo.parent / "origin.git"))
+    git_run(git_repo, "update-ref", "refs/remotes/origin/topic", head)
+    lock = git_repo / ".git" / "config.lock"
+    lock.write_text("")
+    repo = Repository(git_repo)
+    action = Action("checkout", target="refs/remotes/origin/topic", remote="origin")
+    with pytest.raises(GitError, match="config"):
+        repo.execute(action)
+    assert repo.snapshot().branch == "main"
+    assert repo.snapshot().head == head
+    assert (
+        git_run(
+            git_repo, "show-ref", "--verify", "--quiet", "refs/heads/topic", check=False
+        ).returncode
+        != 0
+    )
+    lock.unlink()
+    repo.execute(action)
+    assert repo.snapshot().branch == "topic"
+    assert git_run(
+        git_repo, "rev-parse", "--symbolic-full-name", "topic@{upstream}"
+    ).stdout.strip() == ("refs/remotes/origin/topic")
+
+
+def test_remote_checkout_partial_config_failure_is_retryable_without_switching(
+    git_repo: Path, git_run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    commit_file(git_run, git_repo, "base.txt", "base\n", "base")
+    git_run(git_repo, "remote", "add", "origin", str(git_repo.parent / "origin.git"))
+    git_run(git_repo, "update-ref", "refs/remotes/origin/topic", "HEAD")
+    repo = Repository(git_repo)
+    original = repo._git
+
+    def fail_merge(args, **kwargs):
+        if kwargs.get("operation") == "configure checkout upstream":
+            raise GitError("Simulated second config write failure")
+        return original(args, **kwargs)
+
+    monkeypatch.setattr(repo, "_git", fail_merge)
+    action = Action("checkout", target="refs/remotes/origin/topic", remote="origin")
+    with pytest.raises(GitError, match="Simulated"):
+        repo.execute(action)
+    assert repo.snapshot().branch == "main"
+    assert (
+        git_run(
+            git_repo, "show-ref", "--verify", "--quiet", "refs/heads/topic", check=False
+        ).returncode
+        != 0
+    )
+    monkeypatch.setattr(repo, "_git", original)
+    repo.execute(action)
+    assert repo.snapshot().branch == "topic"
+    assert git_run(git_repo, "config", "branch.topic.remote").stdout.strip() == "origin"
+    assert git_run(git_repo, "config", "branch.topic.merge").stdout.strip() == "refs/heads/topic"
+
+
+def test_remote_checkout_preserves_dirty_worktree_on_switch_failure(
+    git_repo: Path, git_run
+) -> None:
+    base = commit_file(git_run, git_repo, "tracked.txt", "base\n", "base")
+    git_run(git_repo, "switch", "-c", "remote-source")
+    remote_head = commit_file(git_run, git_repo, "tracked.txt", "remote\n", "remote")
+    git_run(git_repo, "switch", "main")
+    git_run(git_repo, "remote", "add", "origin", str(git_repo.parent / "origin.git"))
+    git_run(git_repo, "update-ref", "refs/remotes/origin/topic", remote_head)
+    (git_repo / "tracked.txt").write_text("dirty\n")
+    repo = Repository(git_repo)
+
+    with pytest.raises(GitError, match="local changes"):
+        repo.execute(
+            Action(
+                "checkout",
+                target="refs/remotes/origin/topic",
+                remote="origin",
+            )
+        )
+    assert repo.snapshot().branch == "main"
+    assert repo.snapshot().head == base
+    assert (git_repo / "tracked.txt").read_text() == "dirty\n"
 
 
 def test_local_remote_push_tracking_clone_checkout_and_pull(
