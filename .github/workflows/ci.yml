@@ -1,0 +1,27 @@
+name: checks
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest
+      - name: Install tmux for Linux integration checks
+        run: sudo apt-get update && sudo apt-get install -y tmux
+      - name: Test tmux windows, popups, and prefix+g
+        run: |
+          uv run python scripts/tmux_smoke.py
+          uv run python scripts/popup_smoke.py
+          uv run python scripts/popup_smoke.py --hotkey
+      - run: uv build

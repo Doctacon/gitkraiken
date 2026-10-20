@@ -1,0 +1,281 @@
+/* GitKraiken — dark, deliberately quiet framing for a dense native Git graph. */
+Screen {
+    background: #0c131c;
+    color: #d6e2e5;
+}
+
+Static, Label { color: #d6e2e5; }
+Button { min-width: 0; border: none; }
+Button:focus { text-style: bold; }
+
+/* Repository identity is the calm topmost anchor, not another toolbar. */
+#repo-header, #brand {
+    height: 2;
+    padding: 0 2;
+    background: #142432;
+    color: #ecf8f7;
+    content-align: left middle;
+    text-style: bold;
+}
+#repo-path { color: #8fa5ad; text-style: none; }
+#toolbar {
+    height: 3;
+    padding: 1 1 0 1;
+    background: #101d29;
+    border-bottom: tall #213744;
+}
+.tool, #open, #help, #refresh {
+    height: 1;
+    min-width: 7;
+    margin-right: 1;
+    padding: 0 1;
+    background: #1a303d;
+    color: #c5d6d9;
+}
+.tool:hover, .tool:focus, #open:hover, #open:focus, #help:hover, #help:focus,
+#refresh:hover, #refresh:focus {
+    background: #28515a;
+    color: #f3ffff;
+}
+.tool.primary, #refresh {
+    background: #137b78;
+    color: #efffff;
+    text-style: bold;
+}
+/* Horizontal containers otherwise consume the vertical free space in history-panel. */
+#search-bar { height: 1; min-height: 1; }
+#history-caption { height: 1; min-height: 1; }
+#graph-filter {
+    width: 1fr;
+    height: 1;
+    padding: 0 1;
+    border: none;
+    background: #09131c;
+    color: #e1eff0;
+}
+#graph-filter:focus { background: #102632; border: none; }
+#search-next, #clear-search {
+    width: 6;
+    min-width: 6;
+    height: 1;
+    margin-left: 1;
+    padding: 0;
+    background: #1a303d;
+    color: #8bd9cf;
+}
+
+/* Pending work deserves colour, but never the entire screen. */
+#operation-banner {
+    /* App turns this on only for conflicts/operations; absent state must take no row. */
+    display: none;
+    height: 2;
+    padding: 0 2;
+    background: #51351f;
+    color: #ffe0a7;
+    border-bottom: tall #8e6033;
+}
+#operation-text { width: 1fr; content-align: left middle; text-style: bold; }
+.operation-button {
+    width: 10;
+    height: 1;
+    margin: 0 0 0 1;
+    padding: 0 1;
+    background: #754a29;
+    color: #ffe5b3;
+}
+.operation-button:hover, .operation-button:focus { background: #a26731; color: #fff8e6; }
+
+#workspace { height: 1fr; }
+#refs-panel {
+    width: 25;
+    min-width: 19;
+    padding: 1;
+    background: #101c27;
+    border-right: tall #29414d;
+    scrollbar-size-vertical: 1;
+}
+#history-panel {
+    width: 1fr;
+    min-width: 34;
+    padding: 0;
+    background: #0d151e;
+}
+#inspector-panel {
+    width: 46;
+    min-width: 30;
+    padding: 0;
+    background: #101a24;
+    border-left: tall #29414d;
+}
+.panel-heading, .ref-heading, #history-heading {
+    height: 1;
+    margin-top: 1;
+    color: #73cbbf;
+    text-style: bold;
+}
+#history-heading { margin: 0; padding: 0 1; background: #142430; }
+#history-caption { height: 1; padding: 0 1; color: #78919a; background: #101d28; }
+.ref-button, #all-refs, #worktree-button {
+    width: 1fr;
+    height: 1;
+    padding: 0 1;
+    background: transparent;
+    color: #b9cdd1;
+    text-align: left;
+    overflow: hidden;
+}
+.ref-button:hover, .ref-button:focus, #all-refs:hover, #all-refs:focus,
+#worktree-button:hover, #worktree-button:focus {
+    background: #1b3c48;
+    color: #edffff;
+}
+#worktree-button { margin-bottom: 1; color: #8dd8cd; text-style: bold; }
+.ref-button.active-ref { background: #1b3c48; color: #9ce9db; }
+.empty-refs { padding: 1; color: #6f8790; }
+
+/* The graph has a nearly-black canvas, making native ANSI lanes read cleanly. */
+#graph-table {
+    height: 1fr;
+    border: none;
+    background: #0d151e;
+}
+#graph-table > .datatable--header {
+    background: #142632;
+    color: #86a5ac;
+    text-style: bold;
+}
+#graph-table > .datatable--header-hover { background: #193440; }
+#graph-table > .datatable--cursor {
+    background: #1a414c;
+    color: #f1ffff;
+}
+#graph-table > .datatable--hover { background: #142935; }
+#load-more {
+    width: 1fr;
+    height: 2;
+    padding: 0 1;
+    background: #132a35;
+    color: #7edbd0;
+    text-style: bold;
+}
+#load-more:hover, #load-more:focus { background: #1b4b54; color: #f1ffff; }
+
+TabbedContent { height: 1fr; background: #101a24; }
+TabbedContent ContentTab { color: #8fa5ad; background: #142531; }
+TabbedContent ContentTab.-active { color: #baf1e9; background: #1b3540; text-style: bold; }
+TabPane { padding: 1; }
+#commit-detail {
+    height: 8;
+    min-height: 3;
+    max-height: 9;
+    overflow-y: auto;
+    padding: 0 1;
+    color: #dce9ec;
+}
+#commit-files, #commit-file-table {
+    height: 7;
+    min-height: 4;
+    margin-top: 1;
+    border: round #294653;
+    background: #0c141c;
+}
+#commit-files { padding: 0 1; overflow-y: auto; color: #8fc9c0; }
+#diff-title { height: 1; min-height: 1; margin-top: 1; color: #82a8ae; text-style: bold; }
+/* Scroll containers own the flexible height; their Static child stays content-sized. */
+#commit-diff-scroll, #diff-scroll {
+    height: 1fr;
+    min-height: 5;
+    margin-top: 1;
+    padding: 0 1;
+    overflow-y: auto;
+    background: #091119;
+    border-left: tall #244551;
+}
+#commit-diff, #diff-view {
+    height: auto;
+    min-height: 1;
+    color: #b9d5d5;
+}
+#commit-diff-scroll { margin-top: 1; }
+#diff-scroll { margin-top: 0; }
+
+/* Working copy: files first, then enough room to inspect and describe a change. */
+.wip-actions { height: 2; }
+.wip-actions Button, #stage-all, #unstage-all {
+    min-width: 8;
+    height: 1;
+    margin-right: 1;
+    padding: 0 1;
+    background: #20424a;
+    color: #c9e5e2;
+}
+.wip-actions Button:hover, .wip-actions Button:focus, #stage-all:hover,
+#stage-all:focus, #unstage-all:hover, #unstage-all:focus { background: #28616a; color: #f2ffff; }
+#discard { background: #6b3335; color: #ffe0df; }
+#discard:hover, #discard:focus { background: #94494a; color: #fff5f4; }
+#wip-table {
+    height: 8;
+    border: round #294653;
+    background: #0d151d;
+}
+#wip-table > .datatable--header, #commit-file-table > .datatable--header {
+    background: #172b36;
+    color: #85a8ae;
+    text-style: bold;
+}
+#wip-table > .datatable--cursor, #commit-file-table > .datatable--cursor {
+    background: #1a4750;
+    color: #f1ffff;
+}
+.composer-label { height: 1; margin-top: 1; color: #83aaa9; }
+#commit-message {
+    height: 4;
+    margin-top: 0;
+    border: round #315964;
+    background: #0c151e;
+    color: #e2efef;
+}
+#commit-message:focus { border: round #2aa69b; }
+#commit {
+    width: 1fr;
+    height: 2;
+    margin-top: 1;
+    background: #137b78;
+    color: #efffff;
+    text-style: bold;
+}
+#commit:hover, #commit:focus { background: #1a9b91; }
+
+#status-line, #key-hint {
+    height: 1;
+    padding: 0 2;
+    background: #091119;
+    color: #728b94;
+}
+#status-line { color: #8aa3a9; }
+.collapsed, .refs-hidden #refs-panel, .inspector-hidden #inspector-panel { display: none; }
+
+/* Root adds these classes from terminal width; no CSS media queries are needed in Textual. */
+.compact #refs-panel { width: 22; min-width: 17; }
+.compact #inspector-panel { width: 36; min-width: 28; }
+.compact .tool, .compact #open, .compact #help, .compact #refresh { min-width: 5; padding: 0; }
+.compact #toolbar { padding-left: 0; padding-right: 0; }
+.narrow #refs-panel { width: 18; min-width: 15; padding: 0 1; }
+.narrow #inspector-panel { width: 30; min-width: 25; }
+.narrow .tool, .narrow #open, .narrow #help, .narrow #refresh { width: 5; min-width: 5; }
+.narrow #graph-filter { min-width: 12; }
+
+ModalScreen { align: center middle; background: #000000 65%; }
+#action-picker, #prompt-dialog, #confirm-dialog {
+    width: 54;
+    height: auto;
+    max-height: 22;
+    padding: 1 2;
+    border: round #3d7c82;
+    background: #142632;
+}
+.dialog-title { margin-bottom: 1; color: #b9f4ea; text-style: bold; }
+.dialog-detail { margin-bottom: 1; color: #c3d3d7; }
+#action-options { height: auto; max-height: 14; border: round #294f59; background: #0d1821; }
+.dialog-buttons { height: 3; margin-top: 1; align: right middle; }
+.dialog-buttons Button { margin-left: 1; }

@@ -1,0 +1,31 @@
+[project]
+name = "gitkraiken"
+version = "0.1.0"
+description = "A GitKraken-inspired Git workspace for your terminal and tmux"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = ["textual>=1.0,<2.0"]
+
+[project.scripts]
+gitkraiken = "gitkraiken.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gitkraiken"]
+
+[dependency-groups]
+dev = ["pytest>=8.3", "pytest-asyncio>=0.25", "ruff>=0.9"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
