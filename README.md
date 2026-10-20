@@ -51,8 +51,11 @@ intentionally rejected.
   **Single-click selects action context without moving or filtering the graph.**
   **Double-click a local/remote branch label to request confirmed checkout.**
 - **Center:** a colored commit graph with rounded bends, branch/tag labels,
-  subjects and SHAs. Smooth mode draws Git's actual parent relationships; Compact
-  mode retains Git's native lane layout. Search by message, author, ref or SHA and
+  date/time, subjects and SHAs. Dates show `YYYY-MM-DD HH:MM` in the author's
+  recorded timezone; hover for the full timestamp including seconds and offset.
+  Working changes and connector-only rows have no date. Smooth mode draws Git's
+  actual parent relationships; Compact mode retains Git's native lane layout.
+  Search by message, author, ref or SHA and
   jump between matches **without removing graph connections**. Load history in
   batches of 300, up to 5,000 commits. History stays unified across branch
   selections and checkouts; sidebar search never changes graph topology.
@@ -85,6 +88,12 @@ fork. New commits create divergence only when their actual ancestry diverges.
 Use **Actions → Locate … in unified graph** to navigate to a selected tip.
 If it is not loaded, the caption says so; **Load more** can reveal it explicitly.
 Selecting a branch never automatically loads more history.
+
+Double-click a commit row (including its graph node) to request checkout. A branch
+at that commit is preferred over detached HEAD, with local branches preferred over
+remote-tracking refs. If several branches qualify, choose one before confirming.
+For a commit without a branch tip, confirmation explicitly says **detached HEAD**.
+Single-click and Enter still only inspect; cancelling leaves the repository unchanged.
 
 Remote checkout uses the exact selected remote ref. An existing same-named local
 branch is reused only if its upstream is that exact ref on that remote; a branch tracking another
@@ -123,6 +132,7 @@ when its tmux popup is detached.
 | `g` | Switch Smooth / Compact graph (not tmux prefix + g) |
 | Sidebar click / Enter | Select a reference without moving the graph |
 | Sidebar double-click | Confirm checkout of a local/remote branch |
+| Graph row double-click | Confirm checkout of a branch at that commit, or detached HEAD |
 | Sidebar caret / Space | Collapse or expand a section or namespace |
 | `Esc` | Clear focused sidebar search; otherwise clear graph search/ref selection; cancel a dialog |
 | `Ctrl+P` or `x` | Actions appropriate to the selected ref/commit/stash |
@@ -282,7 +292,7 @@ uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 uv run python scripts/tmux_smoke.py  # isolated server; leaves your tmux sessions alone
-uv run python scripts/popup_smoke.py # attached PTY, custom socket, zsh, detach/reopen
+uv run python scripts/popup_smoke.py # real checkout, live popup/PID, detach/reopen
 uv run python scripts/popup_smoke.py --hotkey # generated config + actual prefix+g presses
 uv build
 ```
@@ -291,6 +301,9 @@ Tests use disposable repositories and local bare remotes; they never write to a
 real private repository. Textual pilot tests exercise actual staging/committing,
 selection, double-click checkout, fold/search persistence, unified graph geometry,
 local/remote pointers, diffs, dialogs, branch creation, refresh and narrow layouts.
+Checkout and notification regressions enable toast rendering explicitly; Textual
+otherwise disables notifications in tests. Popup smoke checks exercise real Git
+checkouts and verify that the application process and popup stay alive.
 Authentication against your organization's private remotes must still be verified
 with your credentials; none were requested or accessed during development.
 

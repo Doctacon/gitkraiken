@@ -3,12 +3,13 @@ from __future__ import annotations
 import subprocess
 
 import pytest
-from textual.widgets import DataTable, Input, Static, TabbedContent, TextArea, Tree
-from ui_helpers import click
+from textual.widgets import DataTable, Input, OptionList, Static, TabbedContent, TextArea, Tree
+from textual.widgets._toast import Toast
+from ui_helpers import click, post_click
 
 from gitkraiken.app import GitKraikenApp
 from gitkraiken.demo import create_demo
-from gitkraiken.dialogs import ConfirmDialog
+from gitkraiken.dialogs import ActionPicker, ConfirmDialog
 from gitkraiken.sidebar import ReferenceSidebar, SidebarSelection
 
 
@@ -63,6 +64,22 @@ async def click_reference(app, pilot, target, *, times=1):
     return node
 
 
+async def graph_point(app, pilot, key, *, column="graph"):
+    table = app.query_one("#graph-table", DataTable)
+    table.move_cursor(row=table.get_row_index(key), animate=False)
+    await pilot.pause()
+    x = table.cell_padding + sum(
+        col.width + 2 * table.cell_padding
+        for col in table.ordered_columns[: table.get_column_index(column)]
+    )
+    y = (
+        table.header_height
+        + sum(row.height for row in table.ordered_rows[: table.get_row_index(key)])
+        - int(table.scroll_y)
+    )
+    return table, (x, y)
+
+
 @pytest.fixture
 def branch_repo(git_repo, git_run, bare_remote):
     (git_repo / "base.txt").write_text("base\n")
@@ -94,6 +111,39 @@ async def test_real_repository_mount_and_commit_diff(demo_repo):
         assert app.query_one("#inspector-tabs", TabbedContent).active == "details-tab"
         assert app._commit_files
         assert "diff --git" in str(app.query_one("#commit-diff", Static).render())
+
+
+@pytest.mark.parametrize("width", [120, 170])
+async def test_history_date_time_column_survives_style_and_size_changes(
+    demo_repo, git_run, monkeypatch, width
+):
+    monkeypatch.setenv("GIT_AUTHOR_DATE", "2024-02-03T04:05:06+05:30")
+    git_run(demo_repo, "commit", "--allow-empty", "-m", "Known author timestamp")
+    tip = git(demo_repo, "rev-parse", "HEAD")
+    app = GitKraikenApp(demo_repo)
+    async with app.run_test(size=(width, 50)) as pilot:
+        await settle(app, pilot)
+        table = app.query_one("#graph-table", DataTable)
+        for _ in range(2):
+            columns = [column.key.value for column in table.ordered_columns]
+            assert columns[:4] == ["graph", "refs", "date", "subject"]
+            assert ("sha" in columns) == app._show_sha
+            cell = table.get_cell(tip, "date")
+            assert cell.plain == "2024-02-03 04:05"
+            assert (
+                cell.get_style_at_offset(app.console, 0).meta["commit_date"]
+                == "2024-02-03T04:05:06+05:30"
+            )
+            assert table.columns["date"].width >= len(cell.plain)
+            assert str(table.get_cell("wip", "date")) == ""
+            for key in table.rows:
+                if str(key.value).startswith("connector-"):
+                    assert str(table.get_cell(key, "date")) == ""
+            app.action_toggle_graph_style()
+            await settle(app, pilot)
+        await pilot.resize_terminal(width + 20, 50)
+        await settle(app, pilot)
+        assert table.get_cell(tip, "date").plain == "2024-02-03 04:05"
 
 
 async def test_stage_commit_and_refresh(demo_repo):
@@ -469,6 +519,181 @@ async def test_double_click_checkout_requires_confirmation_and_keeps_graph_unifi
         assert len(app.screen_stack) == 1
 
 
+@pytest.mark.parametrize("style", ["smooth", "compact"])
+async def test_graph_node_double_click_requests_branch_checkout(branch_repo, style):
+    app = GitKraikenApp(branch_repo)
+    app.graph_style = style
+    async with app.run_test(size=(170, 50), notifications=True) as pilot:
+        await settle(app, pilot)
+        tip = git(branch_repo, "rev-parse", "test")
+        table, point = await graph_point(app, pilot, tip)
+        before = [
+            (row.commit.oid if row.commit else None, row.graph.plain) for row in app._graph_rows
+        ]
+        await click(pilot, table, point)
+        await settle(app, pilot)
+        assert app._selected_commit.oid == tip
+        assert len(app.screen_stack) == 1
+        assert git(branch_repo, "branch", "--show-current") == "main"
+        await click(pilot, table, point, times=2)
+        await pilot.pause()
+        assert isinstance(app.screen, ConfirmDialog)
+        assert "refs/heads/test" in app.screen.detail  # Prefer local over its tracking ref.
+        assert git(branch_repo, "branch", "--show-current") == "main"
+        await pilot.press("escape")
+        await settle(app, pilot)
+        assert git(branch_repo, "branch", "--show-current") == "main"
+        await click(pilot, table, point, times=2)
+        await pilot.click("#confirm")
+        await settle(app, pilot)
+        assert git(branch_repo, "branch", "--show-current") == "test"
+        assert app.snapshot_data.branch == "test"
+        assert app._history_key == tip
+        assert [
+            (row.commit.oid if row.commit else None, row.graph.plain) for row in app._graph_rows
+        ] == before
+        assert len(app.screen_stack) == 1
+        assert app.is_running
+
+
+async def test_graph_double_click_chooses_between_local_branches(branch_repo, git_run):
+    git_run(branch_repo, "branch", "another", "test")
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        tip = git(branch_repo, "rev-parse", "test")
+        table, point = await graph_point(app, pilot, tip)
+        await click(pilot, table, point, times=2)
+        assert isinstance(app.screen, ActionPicker)
+        options = app.screen.query_one(OptionList)
+        assert options.option_count == 2  # No redundant remote option.
+        options.highlighted = options.get_option_index("refs/heads/test")
+        await pilot.press("enter")
+        assert isinstance(app.screen, ConfirmDialog)
+        await pilot.click("#confirm")
+        await settle(app, pilot)
+        assert app.snapshot_data.branch == "test"
+        assert app.is_running
+
+
+async def test_graph_double_click_remote_only_tip_uses_exact_owner(
+    branch_repo, git_run, monkeypatch
+):
+    from gitkraiken.models import Action
+
+    git_run(branch_repo, "branch", "-D", "test")
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        tip = git(branch_repo, "rev-parse", "origin/test")
+        calls = []
+        original = app.repo.execute
+
+        def execute(action):
+            calls.append(action)
+            return original(action)
+
+        monkeypatch.setattr(app.repo, "execute", execute)
+        table, point = await graph_point(app, pilot, tip)
+        await click(pilot, table, point, times=2)
+        assert isinstance(app.screen, ConfirmDialog)
+        await pilot.click("#confirm")
+        await settle(app, pilot)
+        assert calls == [Action("checkout", target="refs/remotes/origin/test", remote="origin")]
+        assert app.snapshot_data.branch == "test"
+        assert app.snapshot_data.upstream == "origin/test"
+
+
+async def test_graph_double_click_non_tip_explicitly_confirms_detached_head(branch_repo, git_run):
+    base = git(branch_repo, "rev-parse", "main")
+    git_run(branch_repo, "commit", "--allow-empty", "-m", "Advance main")
+    git_run(branch_repo, "push", "origin", "main")
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        table, point = await graph_point(app, pilot, base)
+        await click(pilot, table, point, times=2)
+        assert isinstance(app.screen, ConfirmDialog)
+        assert "detached HEAD" in app.screen.detail
+        await pilot.click("#confirm")
+        await settle(app, pilot)
+        assert not app.snapshot_data.branch
+        assert app.snapshot_data.head == base
+        assert app.is_running
+
+
+async def test_graph_double_click_ignores_inert_rows_and_stale_clicks(branch_repo):
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        table, point = await graph_point(app, pilot, "wip")
+        await click(pilot, table, point, times=2)
+        await click(pilot, table, (2, 0), times=2)  # Header.
+        assert len(app.screen_stack) == 1
+        tip = git(branch_repo, "rev-parse", "test")
+        table, point = await graph_point(app, pilot, tip)
+        await post_click(pilot, table, point, chain=1, button=3)
+        await post_click(pilot, table, point, chain=2, button=3)
+        assert len(app.screen_stack) == 1
+        await click(pilot, table, point)
+        app.repaint_history()
+        await pilot.pause()
+        await post_click(pilot, table, point, chain=2)
+        assert len(app.screen_stack) == 1
+        assert git(branch_repo, "branch", "--show-current") == "main"
+
+
+async def test_checkout_selected_commit_keeps_workspace_running(branch_repo, git_run):
+    git_run(branch_repo, "switch", "test")
+    git_run(branch_repo, "commit", "--allow-empty", "-m", "[bold]literal[/bold]")
+    git_run(branch_repo, "switch", "main")
+    app = GitKraikenApp(branch_repo)
+    # Textual's default test mode hides toasts; production renders them.
+    async with app.run_test(size=(170, 50), notifications=True) as pilot:
+        await settle(app, pilot)
+        tip = git(branch_repo, "rev-parse", "test")
+        app.jump_to(tip)
+        await settle(app, pilot)
+        await pilot.press("ctrl+p")
+        await pilot.pause()
+        assert isinstance(app.screen, ActionPicker)
+        options = app.screen.query_one(OptionList)
+        options.highlighted = options.get_option_index("checkout-commit")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert isinstance(app.screen, ConfirmDialog)
+        await pilot.click("#confirm")
+        await settle(app, pilot)
+        assert git(branch_repo, "rev-parse", "HEAD") == tip
+        assert app.snapshot_data.head == tip
+        assert not app.snapshot_data.branch
+        assert app._history_key == tip
+        assert len(app.screen_stack) == 1
+        assert app.is_running
+        assert "No file changes" in str(app.query_one("#commit-diff", Static).render())
+        assert "[bold]literal[/bold]" in app.query_one(Toast).render().plain
+        await pilot.press("ctrl+r")
+        await settle(app, pilot)
+        assert app.is_running
+
+
+async def test_checkout_error_notification_is_literal_and_keeps_workspace_running(branch_repo):
+    from gitkraiken.models import Action
+
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(170, 50), notifications=True) as pilot:
+        await settle(app, pilot)
+        missing = "refs/heads/missing[/literal]"
+        app.run_mutation(Action("checkout", target=missing))
+        await settle(app, pilot)
+        assert app.is_running
+        assert app.snapshot_data.branch == "main"
+        assert git(branch_repo, "branch", "--show-current") == "main"
+        assert missing in app._last_error
+        assert missing in app.query_one(Toast).render().plain
+        assert not app.busy
+
+
 async def test_remote_double_click_uses_full_ref_and_exact_owner(branch_repo, monkeypatch):
     from gitkraiken.models import Action
 
@@ -640,7 +865,7 @@ async def test_hidden_selection_survives_refresh_and_stale_checkout_messages_are
     git_run,
 ):
     app = GitKraikenApp(branch_repo)
-    async with app.run_test(size=(170, 50)) as pilot:
+    async with app.run_test(size=(170, 50), notifications=True) as pilot:
         await settle(app, pilot)
         await click_reference(app, pilot, "refs/heads/test")
         stale = app._sidebar_selection
@@ -671,6 +896,8 @@ async def test_hidden_selection_survives_refresh_and_stale_checkout_messages_are
         await settle(app, pilot)
         assert app._sidebar_selection is None
         assert search.value == "origin"
+        assert app.is_running
+        assert "test is no longer available." in app.query_one(Toast).render().plain
 
 
 async def test_commit_selection_waits_for_chained_diff_workers(demo_repo, monkeypatch):

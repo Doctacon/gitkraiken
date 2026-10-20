@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import Self
 
+from rich.markup import escape
+from rich.style import Style
 from rich.text import Text
 from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.message import Message
 from textual.widgets import (
     Button,
     DataTable,
@@ -50,10 +54,46 @@ def patch_text(patch: str) -> Text:
 
 
 class HistoryTable(DataTable):
-    """Expose full typed ref labels when their compact badge is hovered."""
+    """History tooltips and double-click activation, separate from row selection."""
+
+    class CommitActivated(Message):
+        def __init__(self, key: str, revision: int) -> None:
+            self.key, self.revision = key, revision
+            super().__init__()
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.revision = 0
+        self._click_latch: str | None = None
+
+    def clear(self, columns: bool = False) -> Self:
+        self.revision += 1
+        self._click_latch = None
+        return super().clear(columns=columns)
+
+    async def _on_click(self, event: events.Click) -> None:
+        # DataTable selects on every Click but discards Click.chain. Handle it
+        # here so inspection stays single-click and checkout needs two clicks
+        # on the same row, with no rebuild in between.
+        event.prevent_default()
+        event.stop()
+        if event.button != 1:
+            self._click_latch = None
+            return
+        row_index = event.style.meta.get("row", -1)
+        key = (
+            str(self.ordered_rows[row_index].key.value) if 0 <= row_index < self.row_count else None
+        )
+        first = self._click_latch
+        self._click_latch = key if event.chain == 1 else None
+        if event.chain == 1:
+            await super()._on_click(event)
+        elif event.chain == 2 and key is not None and key == first:
+            self.post_message(self.CommitActivated(key, self.revision))
 
     def on_mouse_move(self, event: events.MouseMove) -> None:
-        description = event.style.meta.get("ref_description")
+        meta = event.style.meta
+        description = meta.get("ref_description") or meta.get("commit_date")
         self.tooltip = Text(description) if isinstance(description, str) else None
 
 
@@ -213,11 +253,13 @@ class GitKraikenApp(App[None]):
         available = max(36, table.size.width)
         ref_width = min(23, max(12, available // 5))
         self._show_sha = available >= 80
+        date_width = 16  # YYYY-MM-DD HH:MM, in the commit author's recorded timezone.
         subject_width = max(
-            24, available - graph_width - ref_width - (10 if self._show_sha else 0) - 7
+            24, available - graph_width - ref_width - date_width - (10 if self._show_sha else 0) - 9
         )
         table.add_column("GRAPH", width=graph_width, key="graph")
         table.add_column("BRANCH / TAG", width=ref_width, key="refs")
+        table.add_column("DATE / TIME", width=date_width, key="date")
         table.add_column("COMMIT", width=subject_width, key="subject")
         if self._show_sha:
             table.add_column("SHA", width=8, key="sha")
@@ -279,7 +321,7 @@ class GitKraikenApp(App[None]):
         )
         if previous and self._sidebar_selection is None:
             self._reveal_ref_key = None
-            self.notify(Text(f"{previous.label} is no longer available."), severity="warning")
+            self.notify(escape(f"{previous.label} is no longer available."), severity="warning")
         selection = self._sidebar_selection
         if selection and self._reveal_ref_key == selection.key:
             if any(line.commit and line.commit.oid == selection.oid for line in snapshot.history):
@@ -380,13 +422,58 @@ class GitKraikenApp(App[None]):
             return
         self._sidebar_selection = selection
         self.query_one(ReferenceSidebar).set_active(selection)
+        self._confirm_checkout(selection.target, remote=selection.remote)
+
+    def _confirm_checkout(self, target: str, *, remote: str = "", detached: bool = False) -> None:
         self.confirm_action(
-            Action("checkout", target=selection.target, remote=selection.remote),
-            f"Check out {selection.target}?\n"
+            Action("checkout", target=target, remote=remote),
+            f"Check out {target}?\n"
             f"Current branch: {self.snapshot_data.branch if self.snapshot_data else ''}\n"
-            "Git will refuse a checkout that would overwrite local changes. "
+            + ("This checks out a commit in detached HEAD, not a branch.\n" if detached else "")
+            + "Git will refuse a checkout that would overwrite local changes. "
             "The graph stays unified.",
         )
+
+    def on_history_table_commit_activated(self, event: HistoryTable.CommitActivated) -> None:
+        event.stop()
+        if (
+            self.busy
+            or len(self.screen_stack) > 1
+            or not self.snapshot_data
+            or event.revision != self.query_one(HistoryTable).revision
+            or event.key not in self._commits
+        ):
+            return
+        # Branch tips should switch branches, not silently detach at their OID.
+        # Local + tracking pointers at one tip represent a single local choice.
+        refs = [ref for ref in self.snapshot_data.refs if ref.oid == event.key]
+        candidates = [ref for ref in refs if ref.kind == "local"] or [
+            ref for ref in refs if ref.kind == "remote"
+        ]
+        if not candidates:
+            self._confirm_checkout(event.key, detached=True)
+            return
+        repo = self.repo
+
+        def selected(target: str | None) -> None:
+            if not target or self.repo is not repo:
+                return
+            ref = next((ref for ref in candidates if ref.full_name == target), None)
+            if ref is None or not self.snapshot_data or ref not in self.snapshot_data.refs:
+                self.notify("Branch changed. Choose the checkout again.", severity="warning")
+                return
+            self._confirm_checkout(ref.full_name, remote=ref.remote)
+
+        if len(candidates) == 1:
+            selected(candidates[0].full_name)
+        else:
+            self.push_screen(
+                ActionPicker(
+                    "CHECK OUT BRANCH AT COMMIT",
+                    [(ref.full_name, ref.full_name) for ref in candidates],
+                ),
+                selected,
+            )
 
     def repaint_history(self) -> None:
         if not self.snapshot_data:
@@ -414,6 +501,7 @@ class GitKraikenApp(App[None]):
         wip_cells = [
             Text(" ◉" if self.graph_style == "smooth" else "◉", style=TEAL),
             Text("WIP", style=TEAL),
+            "",  # Working changes have no commit timestamp.
             Text(
                 f"Working directory · {dirty} changed files"
                 if dirty
@@ -430,7 +518,12 @@ class GitKraikenApp(App[None]):
         for index, row in enumerate(self._graph_rows):
             if not row.commit:
                 table.add_row(
-                    row.graph, "", "", *([""] if self._show_sha else []), key=f"connector-{index}"
+                    row.graph,
+                    "",
+                    "",
+                    "",
+                    *([""] if self._show_sha else []),
+                    key=f"connector-{index}",
                 )
                 continue
             commit = row.commit
@@ -441,6 +534,11 @@ class GitKraikenApp(App[None]):
             table.add_row(
                 row.graph,
                 refs,
+                Text(
+                    commit.date[:16].replace("T", " "),
+                    style=Style(color=MUTED, meta={"commit_date": commit.date}),
+                    no_wrap=True,
+                ),
                 message,
                 *([Text(commit.short_id, style=MUTED)] if self._show_sha else []),
                 height=row.height,
@@ -996,7 +1094,8 @@ class GitKraikenApp(App[None]):
                 result = await asyncio.to_thread(self.repo.execute, action)
             self._last_error = ""
             self.status(result or f"{action.operation.title()} complete")
-            self.notify(Text(result or "Done"))
+            # Textual toasts require markup strings, not Rich Text renderables.
+            self.notify(escape(result or "Done"))
             if action.operation == "commit":
                 self.query_one("#commit-message", TextArea).clear()
             if action.operation in {
@@ -1076,7 +1175,7 @@ class GitKraikenApp(App[None]):
     def show_error(self, message: str) -> None:
         self.status("Git: " + message)
         if message != self._last_error:
-            self.notify(Text(message), severity="error", timeout=12)
+            self.notify(escape(message), severity="error", timeout=12)
         self._last_error = message
 
     def action_open_repository(self) -> None:

@@ -22,10 +22,38 @@ import termios
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 
-from gitkraiken.demo import create_demo
 from gitkraiken.tmux import workspace_id
+
+
+def create_fixture(path: Path) -> tuple[Path, str]:
+    """Create a clean, local-only repository with a branch suitable for checkout."""
+    root = path / "repo"
+
+    def git(*args: str) -> str:
+        return subprocess.check_output(
+            ["git", "-C", str(root), *args], text=True, stderr=subprocess.STDOUT
+        ).strip()
+
+    root.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)
+    git("config", "user.name", "Popup Smoke")
+    git("config", "user.email", "popup-smoke@example.invalid")
+    git("config", "commit.gpgsign", "false")
+    git("config", "core.hooksPath", "/dev/null")
+    (root / "src").mkdir()
+    (root / "src" / "base.txt").write_text("base\n")
+    git("add", ".")
+    git("commit", "-q", "-m", "Base")
+    git("switch", "-q", "-c", "test")
+    (root / "topic.txt").write_text("topic\n")
+    git("add", ".")
+    git("commit", "-q", "-m", "Popup checkout target")
+    target = git("rev-parse", "HEAD")
+    git("switch", "-q", "main")
+    return root, target
 
 
 def main(*, use_hotkey: bool = False) -> None:
@@ -39,6 +67,38 @@ def main(*, use_hotkey: bool = False) -> None:
 
     def tmux(*args: str) -> str:
         return subprocess.check_output(["tmux", "-L", server, *args], text=True).strip()
+
+    def capture(target: str) -> str:
+        return tmux("capture-pane", "-p", "-t", target)
+
+    def capture_history(target: str) -> str:
+        return tmux("capture-pane", "-p", "-S", "-", "-t", target)
+
+    def popup_client(target: str) -> tuple[str, int]:
+        clients = tmux(
+            "list-clients", "-F", "#{client_name}\t#{session_name}\t#{client_pid}"
+        ).splitlines()
+        match = next((line.split("\t") for line in clients if line.split("\t")[1] == target), None)
+        return (match[0], int(match[2])) if match else ("", 0)
+
+    def wait_for(check: Callable[[], bool], message: str, *, timeout: float = 8) -> None:
+        deadline = time.monotonic() + timeout
+        error: Exception | None = None
+        while time.monotonic() < deadline:
+            try:
+                if check():
+                    return
+            except (OSError, subprocess.CalledProcessError) as caught:
+                error = caught
+            time.sleep(0.1)
+        raise AssertionError(message) from error
+
+    def send_mouse(target: str, x: int, y: int, *, times: int = 1) -> None:
+        # SGR mouse coordinates are one-based. Complete press/release pairs are
+        # delivered directly to the real Textual process, not a test app wrapper.
+        event = f"\x1b[<0;{x};{y}M\x1b[<0;{x};{y}m"
+        for _ in range(times):
+            tmux("send-keys", "-t", target, "-l", event)
 
     def drain() -> None:
         # A real terminal continuously drains its PTY. Without this, an artificial
@@ -55,7 +115,13 @@ def main(*, use_hotkey: bool = False) -> None:
     reader.start()
     try:
         with tempfile.TemporaryDirectory(prefix="gitkraiken-popup-") as temp:
-            root = create_demo(Path(temp) / "repo's parent")
+            root, checkout_oid = create_fixture(Path(temp) / "repo's parent")
+
+            def git(*args: str) -> str:
+                return subprocess.check_output(
+                    ["git", "-C", str(root), *args], text=True, stderr=subprocess.STDOUT
+                ).strip()
+
             tmux(
                 "-f",
                 "/dev/null",
@@ -98,6 +164,8 @@ def main(*, use_hotkey: bool = False) -> None:
             )
             time.sleep(0.3)
             target = "gitkraiken-" + workspace_id(root)
+            app_pid: int | None = None
+            popup_client_pids: list[int] = []
             for run in range(2):
                 if use_hotkey:
                     os.write(master, b"\x02g")
@@ -106,50 +174,205 @@ def main(*, use_hotkey: bool = False) -> None:
                     command += f"; printf 'POPUP_{run}_EXIT:%s\\n' \"$?\""
                     tmux("send-keys", "-t", "host", "-l", command)
                     tmux("send-keys", "-t", "host", "Enter")
-                for _ in range(80):
-                    clients = tmux(
-                        "list-clients", "-F", "#{client_name}\t#{session_name}"
-                    ).splitlines()
-                    inner = next(
-                        (line.split("\t")[0] for line in clients if line.endswith("\t" + target)),
+
+                inner = ""
+                inner_pid = 0
+
+                def popup_attached() -> bool:
+                    nonlocal inner, inner_pid
+                    inner, inner_pid = popup_client(target)
+                    return bool(inner)
+
+                wait_for(popup_attached, "Popup did not attach")
+                popup_client_pids.append(inner_pid)
+                wait_for(
+                    lambda: "Popup checkout target" in capture(target),
+                    "Popup did not finish rendering the repository",
+                )
+
+                current_pid = int(tmux("display-message", "-p", "-t", target, "#{pane_pid}"))
+                if app_pid is None:
+                    app_pid = current_pid
+                assert current_pid == app_pid, "Reopening replaced the persistent application PID"
+                assert tmux("display-message", "-p", "-t", target, "#{pane_dead}") == "0"
+                os.kill(app_pid, 0)
+                assert attached.poll() is None, "The outer tmux client exited"
+
+                def assert_alive(
+                    context: str,
+                    expected_pid: int = current_pid,
+                    expected_client: str = inner,
+                    expected_client_pid: int = inner_pid,
+                ) -> None:
+                    # Mutations refresh asynchronously; require the same process and
+                    # client to remain healthy long enough for a post-checkout repaint.
+                    deadline = time.monotonic() + 2
+                    while time.monotonic() < deadline:
+                        assert attached.poll() is None, f"{context} exited the outer tmux client"
+                        current_client = popup_client(target)
+                        assert current_client[0], f"{context} closed or detached the popup client"
+                        assert current_client == (expected_client, expected_client_pid), (
+                            f"{context} replaced the popup client PID"
+                        )
+                        os.kill(expected_client_pid, 0)
+                        assert (
+                            int(tmux("display-message", "-p", "-t", target, "#{pane_pid}"))
+                            == expected_pid
+                        ), f"{context} replaced the application PID"
+                        assert tmux("display-message", "-p", "-t", target, "#{pane_dead}") == "0", (
+                            f"{context} exited the application process"
+                        )
+                        os.kill(expected_pid, 0)
+                        time.sleep(0.1)
+
+                def point_for(text: str, *, contains: str = "") -> tuple[int, int]:
+                    lines = capture(target).splitlines()
+                    row = next(
+                        (
+                            number
+                            for number, line in enumerate(lines)
+                            if text in line and (not contains or contains in line)
+                        ),
                         None,
                     )
-                    if inner:
-                        break
-                    time.sleep(0.1)
-                else:
-                    raise AssertionError(
-                        "Popup failed:\n"
-                        + tmux("capture-pane", "-p", "-t", "host")
-                        + "\n"
-                        + repr(output[-1500:])
+                    assert row is not None, f"Could not find {text!r} in the popup"
+                    return lines[row].index(text) + 1, row + 1
+
+                def confirm_checkout(description: str) -> None:
+                    wait_for(
+                        lambda: "CONFIRM GIT ACTION" in capture(target),
+                        f"{description} did not open confirmation",
+                        timeout=3,
                     )
-                for _ in range(40):
-                    if "GITKRAIKEN" in tmux("capture-pane", "-p", "-t", target):
-                        break
-                    time.sleep(0.1)
+                    tmux("send-keys", "-t", target, "Tab", "Enter")
+
+                def wait_for_header(text: str, context: str) -> None:
+                    def rendered() -> bool:
+                        assert tmux("display-message", "-p", "-t", target, "#{pane_dead}") == "0", (
+                            f"{context} exited the application process before repainting"
+                        )
+                        return text in capture(target)
+
+                    wait_for(rendered, f"Displayed header did not update to {text}")
+
+                if run == 0:
+                    # Select the test tip with one real graph click, then independently
+                    # drive Actions -> checkout selected commit (detached HEAD).
+                    graph_x, graph_y = point_for("●", contains="Popup checkout target")
+                    send_mouse(target, graph_x, graph_y)
+                    tmux("send-keys", "-t", target, "C-p")
+                    wait_for(
+                        lambda: (
+                            "REPOSITORY ACTIONS" in capture(target)
+                            and "Check out selected commit" in capture(target)
+                        ),
+                        "Ctrl+P did not open checkout actions for the selected commit",
+                    )
+                    tmux("send-keys", "-t", target, "Down", "Down", "Down", "Enter")
+                    confirm_checkout("Selected-commit Actions checkout")
+                    wait_for(
+                        lambda: git("branch", "--show-current") == "",
+                        "Selected-commit Actions checkout did not detach HEAD",
+                    )
+                    assert git("rev-parse", "HEAD") == checkout_oid
+                    wait_for_header("detached HEAD", "Selected-commit Actions checkout")
+                    assert_alive("Selected-commit Actions checkout")
+
+                    # The same commit also owns branch test. A graph double-click
+                    # must offer that branch and switch back from detached HEAD.
+                    graph_x, graph_y = point_for("●", contains="Popup checkout target")
+                    send_mouse(target, graph_x, graph_y, times=2)
+                    confirm_checkout("Double-clicking the test branch graph node")
+                    wait_for(
+                        lambda: git("branch", "--show-current") == "test",
+                        "Confirmed graph checkout did not switch to branch test",
+                    )
+                    assert git("rev-parse", "HEAD") == checkout_oid
+                    wait_for_header("⑂ test", "Graph double-click checkout")
+                    assert_alive("Graph double-click checkout")
                 else:
-                    raise AssertionError("The popup did not render the repository")
+                    assert git("branch", "--show-current") == "test"
+                    assert git("rev-parse", "HEAD") == checkout_oid
+                    assert "⑂ test" in capture(target), (
+                        "Reopened popup did not display checked-out branch"
+                    )
+
+                    # Also select main in the real sidebar and use its Actions
+                    # checkout, proving that path survives in the reopened popup.
+                    main_x, main_y = point_for("main", contains="├ main")
+                    send_mouse(target, main_x + 2, main_y)
+                    wait_for(
+                        lambda: "Selected main" in capture(target),
+                        "Sidebar click did not select branch main",
+                    )
+                    tmux("send-keys", "-t", target, "C-p")
+                    wait_for(
+                        lambda: (
+                            "REPOSITORY ACTIONS" in capture(target)
+                            and "Check out refs/heads/main" in capture(target)
+                        ),
+                        "Ctrl+P did not open checkout actions for the selected sidebar branch",
+                    )
+                    tmux("send-keys", "-t", target, "Down", "Down", "Down", "Down", "Enter")
+                    confirm_checkout("Sidebar branch Actions checkout")
+                    wait_for(
+                        lambda: git("branch", "--show-current") == "main",
+                        "Sidebar Actions checkout did not switch to branch main",
+                    )
+                    wait_for_header("⑂ main", "Sidebar branch Actions checkout")
+                    assert_alive("Sidebar branch Actions checkout")
+
                 if use_hotkey:
                     os.write(master, b"\x02g")
                 else:
                     tmux("detach-client", "-t", inner)
-                for _ in range(30):
+
+                def popup_detached(run_number: int = run) -> bool:
                     if use_hotkey:
-                        detached = (
+                        return (
                             target not in tmux("list-clients", "-F", "#{session_name}").splitlines()
                         )
-                    else:
-                        detached = f"POPUP_{run}_EXIT:0" in tmux("capture-pane", "-p", "-t", "host")
-                    if detached:
-                        break
-                    time.sleep(0.1)
-                else:
-                    raise AssertionError("The popup did not detach cleanly")
+                    return f"POPUP_{run_number}_EXIT:0" in capture("host")
+
+                wait_for(popup_detached, "Popup did not detach cleanly", timeout=3)
                 assert len(tmux("list-sessions", "-F", "#{session_name}").splitlines()) == 2
+                assert int(tmux("display-message", "-p", "-t", target, "#{pane_pid}")) == app_pid
+                os.kill(app_pid, 0)
+            assert len(set(popup_client_pids)) == 2, "Reopen unexpectedly reused a popup client PID"
             print(
-                f"PASS: {'prefix+g' if use_hotkey else 'CLI'} popup renders, detaches and reuses its session on a custom socket ({shell})"
+                f"PASS: {'prefix+g' if use_hotkey else 'CLI'} keeps outer client PID "
+                f"{attached.pid} and app PID {app_pid} alive throughout; popup client PIDs "
+                f"{popup_client_pids} each stay alive while attached and change on reopen; "
+                "headers detached HEAD → test → main; detach/reopen works "
+                f"on a custom socket ({shell})"
             )
+    except Exception:
+        diagnostics: list[str] = []
+        for pane_target in (locals().get("target", ""), "host"):
+            if pane_target:
+                try:
+                    diagnostics.append(f"--- {pane_target} ---\n{capture_history(pane_target)}")
+                except (subprocess.CalledProcessError, OSError):
+                    pass
+        try:
+            diagnostics.append(
+                "--- clients ---\n"
+                + tmux("list-clients", "-F", "#{client_name}\t#{session_name}\t#{client_pid}")
+            )
+            diagnostics.append(
+                "--- panes ---\n"
+                + tmux(
+                    "list-panes",
+                    "-a",
+                    "-F",
+                    "#{session_name}\t#{pane_pid}\tdead=#{pane_dead}\t#{pane_current_command}",
+                )
+            )
+        except (subprocess.CalledProcessError, OSError):
+            pass
+        diagnostics.append("--- PTY tail ---\n" + bytes(output[-4000:]).decode(errors="replace"))
+        print("\n".join(diagnostics), file=sys.stderr)
+        raise
     finally:
         subprocess.run(["tmux", "-L", server, "kill-server"], capture_output=True, check=False)
         if attached is not None:
