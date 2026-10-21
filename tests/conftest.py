@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import subprocess
 import time
 from collections.abc import Callable
@@ -8,6 +9,19 @@ from pathlib import Path
 import pytest
 
 GitRun = Callable[..., subprocess.CompletedProcess[str]]
+
+
+@pytest.fixture(autouse=True)
+def isolate_system_clipboard(monkeypatch):
+    """Headless tests must never overwrite the developer's real clipboard."""
+    which = shutil.which
+
+    def without_clipboard(command, *args, **kwargs):
+        if command in {"pbcopy", "clip.exe", "wl-copy", "xclip", "xsel"}:
+            return None
+        return which(command, *args, **kwargs)
+
+    monkeypatch.setattr(shutil, "which", without_clipboard)
 
 
 @pytest.fixture

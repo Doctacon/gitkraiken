@@ -157,14 +157,31 @@ use arrows and Enter, or click. Escape and outside clicks cancel.
 - Copy branch names, full commit SHAs, or browser links for GitHub.com, GitLab.com,
   and Azure DevOps. Remote link pickers do not contact a server. Branch links use
   the remote source name, including custom fetch mappings. Unsupported hosts have
-  no generated link. Copying uses the terminal's clipboard / OSC 52 support, which
-  may need enabling in your terminal or tmux.
+  no generated link. Copy actions use native clipboard tools when available, so
+  local copying does not require OSC 52. See [clipboard support](#clipboard-support).
 
 Menus omit inapplicable actions. During an unfinished operation, copy actions stay
 available; use the existing Continue/Abort controls to finish it. Captured branch,
 HEAD, and target guards reject stale mutations, including changes made externally
 while a follow-up name, path, or destination prompt is open. AI features and
 combined (non-atomic) local-plus-remote deletion are not included.
+
+### Clipboard support
+
+**Copy URL**, branch-name, SHA, and browser-link actions use the system clipboard:
+
+- **macOS:** built-in `pbcopy`, including when running locally inside tmux.
+- **Linux / Wayland:** `wl-copy` from `wl-clipboard`.
+- **Linux / X11:** `xclip` or `xsel`, explicitly using the clipboard selection.
+- **WSL2:** Windows `clip.exe` when available through WSL interop.
+
+These commands must be available on `PATH`. Missing, failed, or timed-out helpers
+fall back to the terminal's OSC 52 clipboard request. SSH sessions use OSC 52
+rather than modifying the remote host's clipboard. This fallback may need enabling
+in your terminal or tmux; the app asks you to **paste to verify** because terminal
+requests cannot be confirmed. Only a successful native helper reports **Copied to
+system clipboard**. If copying is unavailable, the created PR link stays visible
+and can be opened in your browser to copy from its address bar.
 
 ### Rebase your feature branch onto an updated base
 

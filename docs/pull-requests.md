@@ -11,7 +11,11 @@
    Click **Done** or press **Ctrl+Enter** to create the PR.
 5. The success screen stays open with the created PR's browser URL and a
    **Copy URL** button. Open that link to manage reviewers, work items, tags,
-   policies, and other provider-specific fields. Close returns to the workspace.
+   policies, and other provider-specific fields. Copy uses the system clipboard
+   when available; local copying does not require terminal OSC 52 support. If the
+   app falls back to a terminal copy request, paste to verify or open the link and
+   copy it from your browser's address bar. See [clipboard support](../README.md#clipboard-support).
+   Close returns to the workspace.
 
 The checked-out branch is the source; the right-clicked branch is the target.
 There is no inferred Git “parent branch” and selecting a target never checks it out.

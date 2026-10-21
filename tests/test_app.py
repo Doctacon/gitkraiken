@@ -1330,7 +1330,14 @@ async def test_right_click_rebase_conflicts_can_abort_or_continue(rebase_repo, g
             git_run(rebase_repo, "merge-base", "--is-ancestor", "test", "HEAD")
 
 
-async def test_expanded_branch_menu_copy_actions_do_not_mutate(branch_repo):
+@pytest.mark.parametrize("native", [True, False])
+async def test_expanded_branch_menu_copy_actions_do_not_mutate(branch_repo, monkeypatch, native):
+    from gitkraiken.clipboard import CopyResult
+
+    copied = []
+    monkeypatch.setattr(
+        "gitkraiken.clipboard._copy_native", lambda value: copied.append(value) or native
+    )
     app = GitKraikenApp(branch_repo)
     async with app.run_test(size=(100, 24)) as pilot:
         await settle(app, pilot)
@@ -1342,10 +1349,17 @@ async def test_expanded_branch_menu_copy_actions_do_not_mutate(branch_repo):
         assert options.get_option("edit-message") and options.get_option("reset")
         assert options.region.right <= 100 and options.region.bottom <= 24
         await choose_option(app, pilot, "copy-branch")
+        await app.workers.wait_for_complete()
+        await pilot.pause()
         assert app.clipboard == "main"
+        result = CopyResult.SYSTEM if native else CopyResult.TERMINAL
+        assert str(app.query_one("#status-line").renderable) == result.value
         await click_reference(app, pilot, "refs/remotes/origin/test", button=3)
         await choose_option(app, pilot, "copy-sha")
+        await app.workers.wait_for_complete()
+        await pilot.pause()
         assert app.clipboard == git(branch_repo, "rev-parse", "origin/test")
+        assert copied == ["main", app.clipboard]
         assert git(branch_repo, "rev-parse", "HEAD") == before
 
 

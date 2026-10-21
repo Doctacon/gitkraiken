@@ -27,6 +27,7 @@ from textual.widgets import (
     TextArea,
 )
 
+from .clipboard import copy_text
 from .commit_files import CommitFileTree
 from .context_actions import ContextTarget, context_actions, remote_link
 from .dates import format_commit_date
@@ -912,8 +913,11 @@ class GitKraikenApp(App[None]):
             self.set_busy(False)
 
     def _copy_context_value(self, value: str) -> None:
-        self.copy_to_clipboard(value)
-        self.status("Copied to clipboard (requires terminal clipboard / OSC 52 support)")
+        self.run_worker(self._copy_value(value), exit_on_error=False)
+
+    async def _copy_value(self, value: str) -> None:
+        result = await copy_text(self, value)
+        self.status(result.value)
 
     def _choose_copy_link(self, links: list[tuple[str, str]]) -> None:
         if len(links) == 1:

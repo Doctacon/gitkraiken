@@ -10,6 +10,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Link, Static, TextArea
 
+from .clipboard import CopyResult, copy_text
 from .pull_requests import PullRequestPlan
 
 
@@ -44,6 +45,7 @@ class PullRequestDialog(ModalScreen[str | None]):
         background: #0d1821;
     }
     PullRequestDialog #pr-feedback { height: auto; margin-top: 1; color: #ee939b; }
+    PullRequestDialog #pr-feedback.copied { color: #62d6c5; }
     PullRequestDialog #pr-url { width: 1fr; height: auto; margin-top: 1; }
     PullRequestDialog #pr-result { display: none; }
     PullRequestDialog.created #pr-form, PullRequestDialog.created .dialog-detail { display: none; }
@@ -61,6 +63,7 @@ class PullRequestDialog(ModalScreen[str | None]):
         self.plan = plan
         self._create = create
         self._submitting = False
+        self._copying = False
         self.created_url = ""
 
     def compose(self) -> ComposeResult:
@@ -143,14 +146,27 @@ class PullRequestDialog(ModalScreen[str | None]):
             self.query_one("#pr-cancel", Button).label = "Close"
             self.query_one("#pr-copy", Button).focus()
 
+    async def _copy_url(self) -> None:
+        button = self.query_one("#pr-copy", Button)
+        feedback = self.query_one("#pr-feedback", Static)
+        try:
+            result = await copy_text(self.app, self.created_url)
+            feedback.update(result.value)
+            feedback.set_class(result is CopyResult.SYSTEM, "copied")
+        finally:
+            self._copying = False
+            button.disabled = False
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         event.stop()
         if event.button.id == "pr-submit":
             self.action_submit()
-        elif event.button.id == "pr-copy" and self.created_url:
-            self.app.copy_to_clipboard(self.created_url)
-            self.query_one("#pr-feedback", Static).update(
-                "URL copied (requires terminal clipboard / OSC 52 support)."
-            )
+        elif event.button.id == "pr-copy" and self.created_url and not self._copying:
+            self._copying = True
+            event.button.disabled = True
+            feedback = self.query_one("#pr-feedback", Static)
+            feedback.remove_class("copied")
+            feedback.update("Copying URL…")
+            self.run_worker(self._copy_url(), exit_on_error=False)
         elif event.button.id == "pr-cancel":
             self.action_cancel()
