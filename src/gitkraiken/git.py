@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import re
 import shlex
+import stat
 import subprocess
 import tempfile
 from pathlib import Path, PurePosixPath
@@ -31,6 +32,7 @@ _LOCAL_TIMEOUT = 30.0
 _MAX_DIFF_BYTES = 2 * 1024 * 1024
 _MAX_ERROR_BYTES = 64 * 1024
 _MAX_HISTORY = 5_000
+_MAX_PATCH_BYTES = 16 * 1024 * 1024
 _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
 _REPOSITORY_ENVIRONMENT = {
     "GIT_ALTERNATE_OBJECT_DIRECTORIES",
@@ -715,6 +717,43 @@ class Repository:
                 return operation
         return ""
 
+    def _ensure_no_operation_or_conflicts(self, operation: str) -> None:
+        current = self._operation()
+        if current:
+            raise GitError(
+                f"Cannot {operation} while a {current} operation is active; "
+                "continue or abort it first."
+            )
+        if any(change.conflicted for change in self._status()):
+            raise GitError(f"Cannot {operation} while the worktree has unresolved conflicts.")
+
+    def _preflight_context(self, action: Action) -> None:
+        """Validate captured menu context before an action can mutate the repository."""
+        # expected_ref is also the signal that empty captured values are intentional:
+        # an unborn expected_head and a detached expected_branch must still be checked.
+        # A nonempty expected_head retains the same generic guard without expected_ref.
+        context_guarded = bool(action.expected_ref or action.expected_head)
+        if context_guarded and (
+            self._head() != action.expected_head or self._branch() != action.expected_branch
+        ):
+            raise GitError("Branch changed. Refresh and choose the action again.")
+        if action.expected_ref and action.expected_oid:
+            try:
+                actual = self._resolve_commit(action.expected_ref, label="Selected ref")
+            except GitError as error:
+                raise GitError(
+                    "The selected ref changed. Refresh and choose the action again."
+                ) from error
+            if actual != action.expected_oid:
+                raise GitError("The selected ref changed. Refresh and choose the action again.")
+        if context_guarded and action.operation not in {
+            "stage",
+            "unstage",
+            "continue",
+            "abort",
+        }:
+            self._ensure_no_operation_or_conflicts(action.operation)
+
     def _upstream(self, branch: str) -> str:
         if not branch:
             return ""
@@ -1131,6 +1170,58 @@ class Repository:
             )
         return source
 
+    def _exact_remote_tracking_ref(self, full_ref: str, remote: str) -> tuple[Ref, str]:
+        if not full_ref.startswith("refs/remotes/"):
+            raise GitError(f"Remote branch must be a full refs/remotes ref: {full_ref}")
+        configured_remote = self._remote(remote)
+        selected = next(
+            (ref for ref in self._refs() if ref.kind == "remote" and ref.full_name == full_ref),
+            None,
+        )
+        if selected is None:
+            raise GitError(f"Unknown remote branch: {full_ref}")
+        if not selected.remote:
+            raise GitError(f"Cannot determine the configured remote owner of {full_ref}.")
+        if selected.remote != configured_remote:
+            raise GitError(
+                f"Remote branch {full_ref} is owned by {selected.remote}, "
+                f"not remote {configured_remote}."
+            )
+        source = self._remote_source_ref(configured_remote, full_ref)
+        return selected, source
+
+    def branch_remote_target(self, full_ref: str) -> tuple[str, str]:
+        """Return the exact remote and source branch represented by *full_ref*."""
+        _safe_value(full_ref, "Branch ref")
+        if full_ref.startswith("refs/heads/"):
+            branch = self._local_branch_name(full_ref)
+            if full_ref not in {ref.full_name for ref in self._refs() if ref.kind == "local"}:
+                raise GitError(f"Unknown local branch: {full_ref}")
+            tracking_ref, remote, source = self._canonical_upstream(branch)
+            if not tracking_ref or not remote or not source:
+                raise GitError(f"Local branch {full_ref} has no configured remote upstream.")
+            configured_remote = self._remote(remote)
+            mapped_source = self._remote_source_ref(configured_remote, tracking_ref)
+            if source != mapped_source:
+                raise GitError(f"Local branch {full_ref} has an inconsistent remote mapping.")
+            if not source.startswith("refs/heads/"):
+                raise GitError(f"Upstream for {full_ref} is not a remote branch.")
+            return configured_remote, source
+        if full_ref.startswith("refs/remotes/"):
+            selected = next(
+                (ref for ref in self._refs() if ref.kind == "remote" and ref.full_name == full_ref),
+                None,
+            )
+            if selected is None:
+                raise GitError(f"Unknown remote branch: {full_ref}")
+            if not selected.remote:
+                raise GitError(f"Cannot determine the configured remote owner of {full_ref}.")
+            _, source = self._exact_remote_tracking_ref(full_ref, selected.remote)
+            if not source.startswith("refs/heads/"):
+                raise GitError(f"Remote ref {full_ref} does not map to a branch source.")
+            return selected.remote, source
+        raise GitError(f"Unsupported branch ref: {full_ref}")
+
     def _checkout_remote_ref(
         self,
         selected: Ref,
@@ -1269,11 +1360,50 @@ class Repository:
         oid = self._resolve_commit(target, label="Checkout target")
         return self._git(["switch", "--detach", oid], operation="checkout commit")
 
+    def _external_path(self, value: str, label: str) -> Path:
+        if not value or "\x00" in value:
+            raise GitError(f"{label} is required and must not contain NUL bytes.")
+        path = Path(value).expanduser()
+        if not path.is_absolute():
+            path = self.root / path
+        try:
+            return path.resolve()
+        except OSError as error:
+            raise GitError(f"Could not resolve {label.lower()}: {error}") from error
+
+    def _read_patch(self, value: str) -> bytes:
+        path = self._external_path(value, "Patch filename")
+        descriptor = -1
+        try:
+            # Reject obvious devices/FIFOs before opening. O_NONBLOCK plus a
+            # second fd-level check also closes the replacement race without
+            # ever waiting for a FIFO writer.
+            if not stat.S_ISREG(path.stat().st_mode):
+                raise GitError(f"Patch is not a regular file: {path}")
+            flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_CLOEXEC", 0)
+            descriptor = os.open(path, flags)
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise GitError(f"Patch is not a regular file: {path}")
+            with os.fdopen(descriptor, "rb") as patch_file:
+                descriptor = -1  # fdopen owns and closes it from this point.
+                data = patch_file.read(_MAX_PATCH_BYTES + 1)
+        except GitError:
+            raise
+        except OSError as error:
+            raise GitError(f"Could not read patch file: {error}") from error
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+        if len(data) > _MAX_PATCH_BYTES:
+            raise GitError(f"Patch file exceeds the {_MAX_PATCH_BYTES // (1024 * 1024)} MiB limit.")
+        return data
+
     def execute(self, action: Action) -> str:
         """Execute one allowlisted mutation and return a short success message."""
         allowed = {
             "checkout",
             "create-branch",
+            "create-worktree",
             "rename-branch",
             "delete-branch",
             "merge",
@@ -1281,6 +1411,9 @@ class Repository:
             "cherry-pick",
             "revert",
             "reset-soft",
+            "reset-mixed",
+            "reset-hard",
+            "edit-message",
             "tag",
             "delete-tag",
             "stash",
@@ -1291,9 +1424,12 @@ class Repository:
             "unstage",
             "discard",
             "commit",
+            "apply-patch",
             "fetch",
             "pull",
             "push",
+            "set-upstream",
+            "delete-remote-branch",
             "continue",
             "abort",
         }
@@ -1301,6 +1437,7 @@ class Repository:
         if operation not in allowed:
             raise GitError(f"Unsupported Git action: {operation or '(empty)'}")
 
+        self._preflight_context(action)
         fallback = f"Git {operation} completed."
         result: subprocess.CompletedProcess[bytes]
         if operation == "checkout":
@@ -1309,6 +1446,26 @@ class Repository:
             name = self._validate_branch(action.name)
             target = self._resolve_commit(action.target or "HEAD", label="Branch target")
             result = self._git(["switch", "-c", name, target], operation="create branch")
+        elif operation == "create-worktree":
+            if len(action.paths) != 1:
+                raise GitError("Create worktree requires exactly one destination path.")
+            target = self._resolve_commit(action.target, label="Worktree target")
+            destination = self._external_path(action.paths[0], "Worktree destination")
+            if destination.exists():
+                if not destination.is_dir():
+                    raise GitError(f"Worktree destination is not a directory: {destination}")
+                try:
+                    nonempty = next(destination.iterdir(), None) is not None
+                except OSError as error:
+                    raise GitError(f"Could not inspect worktree destination: {error}") from error
+                if nonempty:
+                    raise GitError(f"Worktree destination is not empty: {destination}")
+            if action.name:
+                name = self._validate_branch(action.name, "New worktree branch name")
+                command = ["worktree", "add", "-b", name, "--", os.fspath(destination), target]
+            else:
+                command = ["worktree", "add", "--detach", "--", os.fspath(destination), target]
+            result = self._git(command, operation="create worktree")
         elif operation == "rename-branch":
             old = self._local_branch_name(action.target, "Existing branch name")
             new = self._local_branch_name(action.name, "New branch name")
@@ -1320,7 +1477,15 @@ class Repository:
             if name not in self._local_branches():
                 raise GitError(f"Unknown local branch: {name}")
             result = self._git(["branch", "-d", "--", name], operation="delete branch")
-        elif operation in {"merge", "rebase", "cherry-pick", "revert", "reset-soft"}:
+        elif operation in {
+            "merge",
+            "rebase",
+            "cherry-pick",
+            "revert",
+            "reset-soft",
+            "reset-mixed",
+            "reset-hard",
+        }:
             target = self._resolve_commit(action.target, label=f"{operation} target")
             if operation == "rebase" and (
                 (action.expected_branch and self._branch() != action.expected_branch)
@@ -1328,6 +1493,8 @@ class Repository:
                 or (action.expected_oid and target != action.expected_oid)
             ):
                 raise GitError("Branch changed. Refresh and choose the rebase again.")
+            if operation.startswith("reset-"):
+                self._ensure_no_operation_or_conflicts(operation)
             command = {
                 "merge": ["merge", "--no-edit", target],
                 # Rebase only this branch and never implicitly stash work, even
@@ -1343,8 +1510,28 @@ class Repository:
                 "cherry-pick": ["cherry-pick", target],
                 "revert": ["revert", "--no-edit", target],
                 "reset-soft": ["reset", "--soft", target],
+                "reset-mixed": ["reset", "--mixed", target],
+                "reset-hard": ["reset", "--hard", target],
             }[operation]
             result = self._git(command, operation=operation)
+        elif operation == "edit-message":
+            if not action.message.strip():
+                raise GitError("A commit message is required.")
+            target = self._resolve_commit(action.target, label="Commit target")
+            head = self._head()
+            if (
+                not head
+                or target != head
+                or (action.expected_oid and target != action.expected_oid)
+            ):
+                raise GitError("The selected commit is no longer the current HEAD.")
+            if not self._branch():
+                raise GitError("Cannot edit a commit message while HEAD is detached.")
+            self._ensure_no_operation_or_conflicts(operation)
+            result = self._git(
+                ["commit", "--amend", "--only", "-m", action.message],
+                operation="edit commit message",
+            )
         elif operation == "tag":
             name = self._tag_name(action.name)
             target = self._resolve_commit(action.target or "HEAD", label="Tag target")
@@ -1416,6 +1603,17 @@ class Repository:
             if staged.returncode == 0:
                 raise GitError("There are no staged changes to commit.")
             result = self._git(["commit", "-m", action.message], operation="commit")
+        elif operation == "apply-patch":
+            if len(action.paths) != 1:
+                raise GitError("Apply patch requires exactly one patch filename.")
+            self._ensure_no_operation_or_conflicts(operation)
+            patch = self._read_patch(action.paths[0])
+            self._git(
+                ["apply", "--check"],
+                operation="check patch",
+                input_bytes=patch,
+            )
+            result = self._git(["apply"], operation="apply patch", input_bytes=patch)
         elif operation == "fetch":
             remote = self._remote(action.remote) if action.remote else ""
             command = ["fetch", "--", remote] if remote else ["fetch", "--all"]
@@ -1430,6 +1628,65 @@ class Repository:
             elif action.target:
                 raise GitError("A pull target requires an explicit remote.")
             result = self._git(command, timeout=_NETWORK_TIMEOUT, operation="pull")
+        elif operation == "set-upstream":
+            if not action.target.startswith("refs/heads/"):
+                raise GitError("Set upstream target must be a full refs/heads ref.")
+            branch = self._local_branch_name(action.target)
+            if action.target not in {ref.full_name for ref in self._refs() if ref.kind == "local"}:
+                raise GitError(f"Unknown local branch: {action.target}")
+            selected, source = self._exact_remote_tracking_ref(action.name, action.remote)
+            if not source.startswith("refs/heads/"):
+                raise GitError(
+                    f"Remote tracking ref {selected.full_name} does not map to a branch source."
+                )
+            remote = selected.remote
+            self._git(
+                ["config", "--local", "--replace-all", f"branch.{branch}.remote", remote],
+                operation="configure branch remote",
+            )
+            result = self._git(
+                ["config", "--local", "--replace-all", f"branch.{branch}.merge", source],
+                operation="configure branch upstream",
+            )
+        elif operation == "delete-remote-branch":
+            if not action.expected_oid:
+                raise GitError("Deleting a remote branch requires its captured object ID.")
+            selected, source = self._exact_remote_tracking_ref(action.target, action.remote)
+            if action.name and source != action.name:
+                raise GitError("Remote branch mapping changed. Choose the deletion again.")
+            if not source.startswith("refs/heads/"):
+                raise GitError(
+                    f"Remote tracking ref {selected.full_name} does not map to a branch source."
+                )
+            if selected.oid != action.expected_oid:
+                raise GitError("The selected remote branch changed. Refresh and select it again.")
+            push_urls = self._remote_push_urls(selected.remote)
+            if len(push_urls) != 1:
+                if push_urls:
+                    raise GitError(
+                        f"Remote {selected.remote} has multiple push destinations; configure "
+                        "exactly one before deleting its branch."
+                    )
+                raise GitError(f"Remote {selected.remote} has no push destination.")
+            if action.expected_push_url and _redact_url(push_urls[0]) != action.expected_push_url:
+                raise GitError("Remote push destination changed. Choose the deletion again.")
+            command = [
+                "-c",
+                f"remote.{selected.remote}.mirror=false",
+                "-c",
+                "push.followTags=false",
+                "push",
+                "--no-mirror",
+                "--no-follow-tags",
+                f"--force-with-lease={source}:{action.expected_oid}",
+                selected.remote,
+                f":{source}",
+            ]
+            result = self._git(
+                command,
+                timeout=_NETWORK_TIMEOUT,
+                operation="delete remote branch",
+            )
         elif operation == "push":
             branch = self._branch()
             if not branch or not self._head():

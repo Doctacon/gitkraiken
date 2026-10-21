@@ -66,18 +66,18 @@ def build_ref_badges(snapshot: Snapshot, selected_ref: str = "") -> dict[str, Re
         if stashes[oid]:
             text.append("▣ ", style="#c5a6ef")
 
-        labels: list[tuple[str, str]] = []
+        labels: list[tuple[str, str, str]] = []
         if is_head:
             description.append(
                 f"Checked out: {snapshot.branch}\n" if snapshot.branch else "Detached HEAD\n"
             )
             if not any(ref.current for ref in refs):
-                labels.append(("HEAD", f"bold {_LOCAL}"))
+                labels.append(("HEAD", f"bold {_LOCAL}", ""))
         for ref in refs:
             style = f"bold {_LOCAL}" if ref.current else "#b4cbd1"
             if ref.full_name == selected_ref:
                 style += " bold underline"
-            labels.append((ref.name, style))
+            labels.append((ref.name, style, ref.full_name))
             if ref.kind == "local":
                 description.append(f"💻 Local: {ref.full_name}")
                 if ref.upstream:
@@ -92,12 +92,15 @@ def build_ref_badges(snapshot: Snapshot, selected_ref: str = "") -> dict[str, Re
                 description.append(f"◇ Tag: {ref.full_name}\n")
         for stash in stashes[oid]:
             style = "#c5a6ef bold underline" if stash.ref == selected_ref else "#c5a6ef"
-            labels.append((stash.ref, style))
+            labels.append((stash.ref, style, ""))
             description.append(f"▣ {stash.ref}: {stash.subject}\n")
-        for index, (name, style) in enumerate(labels):
+        for index, (name, style, full_ref) in enumerate(labels):
             if index:
                 text.append(" · ", style=_MUTED)
-            text.append(name, style=style)
+            label_style = Style.parse(style)
+            if full_ref:
+                label_style += Style(meta={"context_ref": full_ref})
+            text.append(name, style=label_style)
         if providers:
             description.append(
                 "Remote markers show last-fetched tracking refs; Fetch updates them."

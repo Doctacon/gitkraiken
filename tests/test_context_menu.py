@@ -1,10 +1,10 @@
 import pytest
 from rich.text import Text
 from textual.app import App, ComposeResult
-from textual.widgets import OptionList, Static
+from textual.widgets import OptionList, Static, TextArea
 from ui_helpers import post_click
 
-from gitkraiken.dialogs import BranchContextMenu
+from gitkraiken.dialogs import BranchContextMenu, MessageDialog
 
 
 class ContextMenuApp(App[None]):
@@ -102,6 +102,104 @@ async def test_menu_mouse_click_chooses_rebase_action() -> None:
         await pilot.pause()
         assert results == ["rebase"]
         assert len(app.screen_stack) == 1
+
+
+@pytest.mark.asyncio
+async def test_menu_groups_actions_as_literal_text_and_keyboard_skips_separator() -> None:
+    app = ContextMenuApp()
+    results: list[str | None] = []
+    actions = [
+        None,
+        ("checkout", "Checkout [bold]literal[/bold]"),
+        None,
+        ("copy", "Copy branch name"),
+        ("delete", "Delete branch"),
+    ]
+    async with app.run_test(size=(50, 14)) as pilot:
+        menu = BranchContextMenu("main", "topic", screen_x=2, screen_y=2, actions=actions)
+        app.push_screen(menu, results.append)
+        await pilot.pause()
+
+        options = menu.query_one(OptionList)
+        assert options.tooltip.plain == "Checkout [bold]literal[/bold]"
+        # Check Textual's rendered rows, not just its option model. Separators
+        # used to shift its row cache so labels and click metadata diverged.
+        rows = [options.render_line(row).text.rstrip() for row in range(5)]
+        assert rows == [
+            "─" * options.virtual_size.width,
+            "Checkout [bold]literal[/bold]",
+            "─" * options.virtual_size.width,
+            "Copy branch name",
+            "Delete branch",
+        ]
+        copy_metadata = next(iter(options.render_line(3))).style.meta
+        assert copy_metadata["option"] == options.get_option_index("copy")
+        # The rounded OptionList border occupies the first screen row.
+        await post_click(pilot, options, (2, 4))
+        await pilot.pause()
+        assert results == ["copy"]
+
+        menu = BranchContextMenu("main", "topic", screen_x=2, screen_y=2, actions=actions)
+        app.push_screen(menu, results.append)
+        await pilot.pause()
+        await pilot.press("down", "down", "enter")
+        await pilot.pause()
+        assert results == ["copy", "delete"]
+
+
+@pytest.mark.asyncio
+async def test_menu_scrolls_to_last_action_and_repositions_after_resize() -> None:
+    app = ContextMenuApp()
+    actions = [(f"action-{number}", f"Action {number}") for number in range(12)]
+    results: list[str | None] = []
+    async with app.run_test(size=(22, 6)) as pilot:
+        menu = BranchContextMenu("main", "topic", screen_x=21, screen_y=5, actions=actions)
+        app.push_screen(menu, results.append)
+        await pilot.pause()
+
+        options = menu.query_one(OptionList)
+        assert options.virtual_size.height > options.scrollable_content_region.height
+        await pilot.press(*(["down"] * 11), "enter")
+        await pilot.pause()
+        assert results == ["action-11"]
+
+        menu = BranchContextMenu("main", "topic", screen_x=21, screen_y=5, actions=actions)
+        app.push_screen(menu)
+        await pilot.pause()
+        await pilot.resize_terminal(50, 16)
+        await pilot.pause()
+        options = menu.query_one(OptionList)
+        assert options.region.right <= 50
+        assert options.region.bottom <= 16
+
+
+@pytest.mark.asyncio
+async def test_message_dialog_preserves_multiline_text_and_can_cancel() -> None:
+    app = ContextMenuApp()
+    saved: list[str | None] = []
+    original = "Subject\n\nBody [not markup]"
+    async with app.run_test(size=(80, 25)) as pilot:
+        dialog = MessageDialog("Edit latest commit", original)
+        app.push_screen(dialog, saved.append)
+        await pilot.pause()
+        assert dialog.query_one(TextArea).text == original
+        await pilot.press("ctrl+enter")
+        await pilot.pause()
+        assert saved == [original]
+
+        dialog = MessageDialog("Edit latest commit", "new message")
+        app.push_screen(dialog, saved.append)
+        await pilot.pause()
+        await pilot.press("escape")
+        await pilot.pause()
+        assert saved == [original, None]
+
+        dialog = MessageDialog("Edit latest commit", " \n ")
+        app.push_screen(dialog, saved.append)
+        await pilot.pause()
+        await pilot.press("ctrl+enter")
+        await pilot.pause()
+        assert saved == [original, None, None]
 
 
 @pytest.mark.asyncio

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Self
 
@@ -26,8 +28,9 @@ from textual.widgets import (
 )
 
 from .commit_files import CommitFileTree
+from .context_actions import ContextTarget, context_actions, remote_link
 from .dates import format_commit_date
-from .dialogs import ActionPicker, BranchContextMenu, HelpDialog, PromptDialog
+from .dialogs import ActionPicker, BranchContextMenu, HelpDialog, MessageDialog, PromptDialog
 from .git import Repository
 from .graph import GraphRow, GraphStyle, render_history
 from .models import Action, Commit, FileChange, HistoryLine, Snapshot
@@ -56,7 +59,16 @@ def patch_text(patch: str) -> Text:
 
 
 class HistoryTable(DataTable):
-    """History tooltips and double-click activation, separate from row selection."""
+    """History inspection, checkout, and context requests have distinct click semantics."""
+
+    class ContextRequested(Message):
+        def __init__(
+            self, key: str, revision: int, screen_x: int, screen_y: int, ref_name: str = ""
+        ) -> None:
+            self.key, self.revision = key, revision
+            self.screen_x, self.screen_y = screen_x, screen_y
+            self.ref_name = ref_name
+            super().__init__()
 
     class CommitActivated(Message):
         def __init__(self, key: str, revision: int) -> None:
@@ -79,13 +91,23 @@ class HistoryTable(DataTable):
         # on the same row, with no rebuild in between.
         event.prevent_default()
         event.stop()
-        if event.button != 1:
-            self._click_latch = None
-            return
         row_index = event.style.meta.get("row", -1)
         key = (
             str(self.ordered_rows[row_index].key.value) if 0 <= row_index < self.row_count else None
         )
+        if event.button != 1:
+            self._click_latch = None
+            if event.button == 3 and key is not None:
+                self.post_message(
+                    self.ContextRequested(
+                        key,
+                        self.revision,
+                        event.screen_x,
+                        event.screen_y,
+                        event.style.meta.get("context_ref", ""),
+                    )
+                )
+            return
         first = self._click_latch
         self._click_latch = key if event.chain == 1 else None
         if event.chain == 1:
@@ -265,8 +287,10 @@ class GitKraikenApp(App[None]):
             table.add_column("SHA", width=8, key="sha")
 
     def on_resize(self, event: events.Resize) -> None:
-        self.screen.set_class(event.size.width < 140, "compact")
-        self.screen.set_class(event.size.width < 105, "narrow")
+        # Layout classes belong to the workspace, not whichever modal is active.
+        workspace = self.screen_stack[0]
+        workspace.set_class(event.size.width < 140, "compact")
+        workspace.set_class(event.size.width < 105, "narrow")
         if self.is_mounted and self.snapshot_data:
             self.call_after_refresh(self.repaint_history)
 
@@ -437,56 +461,317 @@ class GitKraikenApp(App[None]):
             or not snapshot
         ):
             return
-        if not snapshot.branch:
-            self.notify("Check out a branch before rebasing.", severity="warning")
-            return
-        if selection.target == f"refs/heads/{snapshot.branch}":
-            self.notify(
-                "This is already the current branch. Choose a different base.", severity="warning"
-            )
-            return
-        if snapshot.operation or snapshot.conflicts:
-            self.notify(
-                "Finish or abort the current operation before rebasing.", severity="warning"
-            )
-            return
         self._sidebar_selection = selection
         self._reveal_ref_key = None
         self.query_one(ReferenceSidebar).set_active(selection)
         self._update_reference_badges()
         self.update_search(jump=False)
-        repo = self.repo
-        action = Action(
-            "rebase",
-            target=selection.target,
-            expected_oid=selection.oid,
-            expected_branch=snapshot.branch,
-            expected_head=snapshot.head,
+        ref = next((ref for ref in snapshot.refs if ref.full_name == selection.target), None)
+        if ref:
+            self._show_context_menu(ContextTarget(ref.oid, ref), event.screen_x, event.screen_y)
+
+    def on_history_table_context_requested(self, event: HistoryTable.ContextRequested) -> None:
+        event.stop()
+        snapshot = self.snapshot_data
+        if (
+            self.busy
+            or len(self.screen_stack) > 1
+            or not snapshot
+            or event.revision != self.query_one(HistoryTable).revision
+            or event.key not in self._commits
+        ):
+            return
+        ref = next(
+            (
+                ref
+                for ref in snapshot.refs
+                if ref.full_name == event.ref_name
+                and ref.oid == event.key
+                and ref.kind in {"local", "remote"}
+            ),
+            None,
         )
+        self._show_context_menu(ContextTarget(event.key, ref), event.screen_x, event.screen_y)
+
+    def _show_context_menu(self, target: ContextTarget, screen_x: int, screen_y: int) -> None:
+        snapshot, repo = self.snapshot_data, self.repo
+        if not snapshot or not repo or self.busy or len(self.screen_stack) > 1:
+            return
+        actions = context_actions(snapshot, target)
+        offered = {item[0] for item in actions if item is not None}
 
         def selected(operation: str | None) -> None:
-            if operation != "rebase":
-                return
-            if (
-                self.repo is not repo
-                or self.snapshot_data is None
-                or self.snapshot_data.branch != snapshot.branch
-                or self.snapshot_data.head != snapshot.head
-                or self._current_sidebar_selection(event.root, selection) is None
-            ):
-                self.notify(
-                    "Repository or branch changed. Choose the rebase again.", severity="warning"
-                )
-                return
-            self.run_mutation(action)
+            if operation in offered and self.repo is repo and not self.busy:
+                self._handle_context_action(operation, target, snapshot, repo)
 
-        target = selection.target.removeprefix("refs/heads/").removeprefix("refs/remotes/")
         self.push_screen(
             BranchContextMenu(
-                snapshot.branch, target, screen_x=event.screen_x, screen_y=event.screen_y
+                snapshot.branch,
+                target.label,
+                screen_x=screen_x,
+                screen_y=screen_y,
+                actions=actions,
             ),
             selected,
         )
+
+    def _handle_context_action(
+        self, operation: str, target: ContextTarget, snapshot: Snapshot, repo: Repository
+    ) -> None:
+        # Every subsequent picker/prompt closes over these immutable values. In
+        # particular, a stale inspector selection must never supply the target.
+        def run(action: Action, *, guard: ContextTarget = target) -> None:
+            if self.repo is not repo:
+                self.notify("Repository changed. Choose the action again.", severity="warning")
+                return
+            self.run_mutation(
+                replace(
+                    action,
+                    expected_branch=snapshot.branch,
+                    expected_head=snapshot.head,
+                    expected_ref=guard.revision,
+                    expected_oid=guard.oid,
+                )
+            )
+
+        def named(op: str, name: str | None) -> None:
+            if name:
+                run(Action(op, target=target.revision, name=name))
+
+        if operation in {"copy-sha", "copy-branch"}:
+            self._copy_context_value(target.oid if operation == "copy-sha" else target.label)
+        elif operation == "copy-commit-link":
+            links = [
+                (remote.name, remote_link(remote, "commit", target.oid))
+                for remote in snapshot.remotes
+            ]
+            self._choose_copy_link([(name, url) for name, url in links if url])
+        elif operation in {"copy-branch-link", "edit-message", "delete-remote-branch"}:
+            self.run_worker(
+                self._context_read(operation, target, snapshot, repo, run),
+                group="context-read",
+                exit_on_error=False,
+            )
+        elif operation in {"pull", "push"}:
+            if operation == "push" and not snapshot.upstream and len(snapshot.remotes) > 1:
+                self.push_screen(
+                    ActionPicker(
+                        f"PUBLISH {snapshot.branch} TO",
+                        [(r.name, f"{r.name} · {r.push_url or r.url}") for r in snapshot.remotes],
+                    ),
+                    lambda remote: run(Action("push", remote=remote)) if remote else None,
+                )
+            else:
+                run(Action(operation))
+        elif operation == "checkout":
+            if target.ref:
+                run(Action("checkout", target=target.revision, remote=target.ref.remote))
+            else:
+                refs = [
+                    r
+                    for r in snapshot.refs
+                    if r.oid == target.oid and r.kind in {"local", "remote"}
+                ]
+                choices = [(r.full_name, f"Check out {r.name}") for r in refs]
+                choices.append(("detached", f"Detached HEAD at {target.label}"))
+
+                def checkout(choice: str | None) -> None:
+                    if choice == "detached":
+                        run(Action("checkout", target=target.oid))
+                    elif ref := next((r for r in refs if r.full_name == choice), None):
+                        run(
+                            Action("checkout", target=ref.full_name, remote=ref.remote),
+                            guard=ContextTarget(ref.oid, ref),
+                        )
+
+                self.push_screen(ActionPicker("CHECK OUT", choices), checkout)
+        elif operation in {"create-branch", "rename-branch", "tag"}:
+            self.push_screen(
+                PromptDialog(operation.replace("-", " ").title() + f" · {target.label}", "Name"),
+                lambda name: named(operation, name),
+            )
+        elif operation == "reset":
+            modes = [
+                ("reset-soft", "Soft — keep index and working files"),
+                ("reset-mixed", "Mixed — keep working files, reset index"),
+                ("reset-hard", "Hard — discard changes; may overwrite untracked files"),
+            ]
+            self.push_screen(
+                ActionPicker(f"RESET {snapshot.branch} TO {target.label}", modes),
+                lambda mode: run(Action(mode, target=target.revision)) if mode else None,
+            )
+        elif operation == "create-worktree":
+
+            def destination(name: str = "") -> None:
+                self.push_screen(
+                    PromptDialog(f"Worktree at {target.label} · destination directory", "Path"),
+                    lambda path: (
+                        run(
+                            Action(
+                                "create-worktree", target=target.revision, name=name, paths=(path,)
+                            )
+                        )
+                        if path
+                        else None
+                    ),
+                )
+
+            def worktree_mode(mode: str | None) -> None:
+                if mode == "detached":
+                    destination()
+                elif mode == "new-branch":
+                    self.push_screen(
+                        PromptDialog("New worktree branch", "Branch name"),
+                        lambda name: destination(name) if name else None,
+                    )
+
+            self.push_screen(
+                ActionPicker(
+                    "CREATE WORKTREE",
+                    [
+                        ("new-branch", "On a new branch…"),
+                        ("detached", "With detached HEAD…"),
+                    ],
+                ),
+                worktree_mode,
+            )
+        elif operation == "set-upstream" and target.ref:
+            if target.ref.kind == "remote":
+                run(
+                    Action(
+                        "set-upstream",
+                        target=f"refs/heads/{snapshot.branch}",
+                        name=target.revision,
+                        remote=target.ref.remote,
+                    )
+                )
+            else:
+                remotes = [r for r in snapshot.refs if r.kind == "remote" and r.remote]
+
+                def upstream(choice: str | None) -> None:
+                    if ref := next((r for r in remotes if r.full_name == choice), None):
+                        run(
+                            Action(
+                                "set-upstream",
+                                target=target.revision,
+                                name=ref.full_name,
+                                remote=ref.remote,
+                            )
+                        )
+
+                self.push_screen(
+                    ActionPicker(
+                        f"UPSTREAM FOR {target.label}", [(r.full_name, r.name) for r in remotes]
+                    ),
+                    upstream,
+                )
+        elif operation == "apply-patch":
+            self.push_screen(
+                PromptDialog(
+                    "Apply patch to current working directory (index unchanged)", "Patch file path"
+                ),
+                lambda path: run(Action("apply-patch", paths=(path,))) if path else None,
+            )
+        else:
+            run(Action(operation, target=target.revision))
+
+    async def _context_read(
+        self,
+        operation: str,
+        target: ContextTarget,
+        snapshot: Snapshot,
+        repo: Repository,
+        run: Callable[[Action], None],
+    ) -> None:
+        """Read prompt/link data without blocking the event loop or drifting targets."""
+        self.set_busy(True, "Reading selected context…")
+        try:
+            async with self._serial:
+                if operation == "edit-message":
+                    value = (await asyncio.to_thread(repo.detail, target.oid)).message
+                else:
+                    remote_name, source = await asyncio.to_thread(
+                        repo.branch_remote_target, target.revision
+                    )
+                    remote = next((r for r in snapshot.remotes if r.name == remote_name), None)
+                    value = (
+                        remote_link(remote, "branch", source.removeprefix("refs/heads/"))
+                        if remote
+                        else ""
+                    )
+            if self.repo is not repo or len(self.screen_stack) > 1:
+                return
+            if operation == "edit-message":
+                self.push_screen(
+                    MessageDialog(
+                        "Edit latest commit message (staged files are not included)", value
+                    ),
+                    lambda message: (
+                        run(
+                            Action(
+                                "edit-message",
+                                target=target.revision,
+                                message=message,
+                            )
+                        )
+                        if message
+                        else None
+                    ),
+                )
+            elif operation == "delete-remote-branch":
+                # Resolve the actual source, not a possibly different tracking
+                # alias, before asking the user to choose a destructive target.
+                # Local deletion remains separate; the two are not atomic.
+                destination = (remote.push_url or remote.url) if remote else remote_name
+                self.push_screen(
+                    ActionPicker(
+                        "DELETE BRANCH ON REMOTE",
+                        [
+                            (
+                                "delete",
+                                f"Delete {source.removeprefix('refs/heads/')} on {remote_name}"
+                                f" · {destination} (cannot undo here)",
+                            ),
+                        ],
+                    ),
+                    lambda choice: (
+                        run(
+                            Action(
+                                "delete-remote-branch",
+                                target=target.revision,
+                                name=source,
+                                remote=remote_name,
+                                expected_push_url=destination,
+                            )
+                        )
+                        if choice == "delete"
+                        else None
+                    ),
+                )
+            elif value:
+                self._copy_context_value(value)
+            else:
+                self.notify("No supported browser link for this remote.", severity="warning")
+        except Exception as error:
+            self.show_error(str(error))
+        finally:
+            self.set_busy(False)
+
+    def _copy_context_value(self, value: str) -> None:
+        self.copy_to_clipboard(value)
+        self.status("Copied to clipboard (requires terminal clipboard / OSC 52 support)")
+
+    def _choose_copy_link(self, links: list[tuple[str, str]]) -> None:
+        if len(links) == 1:
+            self._copy_context_value(links[0][1])
+        elif links:
+            by_name = dict(links)
+            self.push_screen(
+                ActionPicker(
+                    "COPY LINK FROM REMOTE", [(name, f"{name} · {url}") for name, url in links]
+                ),
+                lambda name: self._copy_context_value(by_name[name]) if name in by_name else None,
+            )
 
     def on_history_table_commit_activated(self, event: HistoryTable.CommitActivated) -> None:
         event.stop()
@@ -530,7 +815,10 @@ class GitKraikenApp(App[None]):
             )
 
     def repaint_history(self) -> None:
-        if not self.snapshot_data:
+        # App queries search the active screen. A modal can open between a
+        # resize and this deferred callback; leave its focus/contents alone.
+        # The next workspace refresh rebuilds columns at the new dimensions.
+        if not self.snapshot_data or len(self.screen_stack) != 1:
             return
         self._rebuilding = True
         table = self.query_one("#graph-table", DataTable)

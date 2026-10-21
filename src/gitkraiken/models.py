@@ -107,18 +107,22 @@ class Snapshot:
 class Action:
     """Allowlisted mutation request. Values remain argv, never shell source.
 
-    operation: checkout, create-branch, rename-branch, delete-branch, merge,
-    rebase, cherry-pick, revert, reset-soft, tag, delete-tag, stash, stash-apply,
-    stash-pop, stash-drop, stage, unstage, discard, commit, fetch, pull, push,
-    continue, abort. Fields interpreted by the engine, not raw Git arguments.
+    operation: checkout, create-branch, create-worktree, rename-branch, delete-branch,
+    merge, rebase, cherry-pick, revert, reset-soft, reset-mixed, reset-hard,
+    edit-message, tag, delete-tag, stash, stash-apply, stash-pop, stash-drop, stage,
+    unstage, discard, commit, apply-patch, fetch, pull, push, set-upstream,
+    delete-remote-branch, continue, abort. Fields are interpreted by the engine,
+    not raw Git arguments.
     """
 
     operation: str
     target: str = ""
-    name: str = ""
+    name: str = ""  # Also captures the resolved source ref for a remote deletion picker.
     message: str = ""
     paths: tuple[str, ...] = field(default_factory=tuple)
     remote: str = ""  # Network destination, or exact owner of a remote checkout target.
-    expected_oid: str = ""  # Guard a stash selector or rebase target while a menu is open.
-    expected_branch: str = ""  # Rebase only the branch named when the action was chosen.
-    expected_head: str = ""  # Reject a rebase if that branch has moved since selection.
+    expected_oid: str = ""  # Captured object identifier used by operation-specific guards.
+    expected_branch: str = ""  # Branch captured with expected_head (empty means detached).
+    expected_head: str = ""  # Require both this HEAD and expected_branch before mutation.
+    expected_push_url: str = ""  # Redacted destination shown by the remote-deletion picker.
+    expected_ref: str = ""  # Ref captured independently of target for an exact OID guard.

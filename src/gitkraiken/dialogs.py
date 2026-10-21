@@ -7,7 +7,7 @@ from textual import events
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, OptionList, Static
+from textual.widgets import Button, Input, Label, OptionList, Static, TextArea
 from textual.widgets.option_list import Option
 
 
@@ -71,6 +71,61 @@ class PromptDialog(ModalScreen[str | None]):
         self.dismiss((value or None) if event.button.id == "confirm" else None)
 
 
+class MessageDialog(ModalScreen[str | None]):
+    """Edit a commit message without treating its contents as markup."""
+
+    BINDINGS = [("escape", "cancel", "Cancel"), ("ctrl+enter", "save", "Save")]
+
+    DEFAULT_CSS = """
+    MessageDialog > #message-dialog {
+        width: 62;
+        max-width: 100%;
+        height: auto;
+        max-height: 24;
+        padding: 1 2;
+        border: round #3d7c82;
+        background: #142632;
+    }
+    MessageDialog #message-value {
+        height: 10;
+        max-height: 14;
+        border: round #294f59;
+        background: #0d1821;
+    }
+    MessageDialog .dialog-buttons { height: 3; margin-top: 1; align: right middle; }
+    MessageDialog .dialog-buttons Button { margin-left: 1; }
+    """
+
+    def __init__(self, title: str, value: str = "") -> None:
+        super().__init__()
+        self.heading, self.value = title, value
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="message-dialog"):
+            yield Label(Text(self.heading), classes="dialog-title")
+            yield TextArea(self.value, id="message-value")
+            with Horizontal(classes="dialog-buttons"):
+                yield Button("Cancel", id="cancel")
+                yield Button("Save", id="confirm", variant="primary")
+
+    def on_mount(self) -> None:
+        self.query_one(TextArea).focus()
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+    def action_save(self) -> None:
+        value = self.query_one(TextArea).text.strip()
+        self.dismiss(value or None)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        event.stop()
+        if event.button.id == "confirm":
+            self.action_save()
+        else:
+            self.dismiss(None)
+
+
 class _BranchContextOptions(OptionList):
     async def _on_click(self, event: events.Click) -> None:
         # Textual 1.x OptionList otherwise activates on any mouse button.
@@ -82,7 +137,7 @@ class _BranchContextOptions(OptionList):
 
 
 class BranchContextMenu(ModalScreen[str | None]):
-    """A single, immutable branch action positioned at the invoking click."""
+    """A reusable, literal-text dropdown positioned at the invoking click."""
 
     BINDINGS = [("escape", "cancel", "Cancel")]
 
@@ -101,7 +156,7 @@ class BranchContextMenu(ModalScreen[str | None]):
         border: round #3d7c82;
         background: #142632;
         color: #d6e2e5;
-        scrollbar-size: 0 0;
+        scrollbar-size: 1 1;
     }
     BranchContextMenu > #branch-context-menu:focus {
         border: round #62d6c5;
@@ -120,34 +175,69 @@ class BranchContextMenu(ModalScreen[str | None]):
         *,
         screen_x: int,
         screen_y: int,
+        actions: list[tuple[str, str] | None] | None = None,
     ) -> None:
         super().__init__()
         self.current_branch = current_branch
         self.target = target
         self.screen_x = screen_x
         self.screen_y = screen_y
-        self._label = Text(f"Rebase {current_branch} onto {target}")
+        self.actions = (
+            [("rebase", f"Rebase {current_branch} onto {target}")] if actions is None else actions
+        )
+        # Keep labels as Rich Text, rather than markup-bearing strings.
+        self._labels: dict[str, Text] = {}
+        self._option_index_by_id: dict[str, int] = {}
+        for index, action in enumerate(self.actions):
+            if action is not None:
+                action_id, label = action
+                self._labels[action_id] = Text(label)
+                self._option_index_by_id[action_id] = index
 
     def compose(self) -> ComposeResult:
-        yield _BranchContextOptions(
-            Option(self._label, id="rebase"),
-            id="branch-context-menu",
-            tooltip=self._label.copy(),
-        )
+        content = []
+        for action in self.actions:
+            if action is None:
+                # Textual 1.x's Separator shifts its render-cache indexes from
+                # its selectable option indexes. A disabled, cropped rule is a
+                # nonselectable visual separator without that mismatch.
+                content.append(
+                    Option(
+                        Text("─" * 76, style="dim", no_wrap=True, overflow="crop"), disabled=True
+                    )
+                )
+            else:
+                action_id, _label = action
+                content.append(Option(self._labels[action_id], id=action_id))
+        yield _BranchContextOptions(*content, id="branch-context-menu")
 
     def on_mount(self) -> None:
         menu = self.query_one("#branch-context-menu", OptionList)
-        menu.highlighted = 0
+        if self._option_index_by_id:
+            menu.highlighted = next(iter(self._option_index_by_id.values()))
         menu.focus()
+        self._set_highlight_tooltip()
         self._place_menu()
+
+    def _set_highlight_tooltip(self) -> None:
+        menu = self.query_one("#branch-context-menu", OptionList)
+        if menu.highlighted is not None:
+            option = menu.get_option_at_index(menu.highlighted)
+            if option.id is not None:
+                menu.tooltip = self._labels[str(option.id)].copy()
 
     def _place_menu(self) -> None:
         menu = self.query_one("#branch-context-menu", OptionList)
         screen_width, screen_height = self.size
-        width = min(self._label.cell_len + 4, screen_width)
+        longest = max((label.cell_len for label in self._labels.values()), default=1)
+        width = min(max(longest + 4, 8), 76, max(screen_width, 1))
         content_width = max(width - 4, 1)  # Border and horizontal padding take two each.
-        wrapped_height = len(self._label.wrap(self.app.console, content_width, overflow="fold"))
-        height = min(wrapped_height + 2, screen_height)
+        item_height = sum(
+            len(label.wrap(self.app.console, content_width, overflow="fold"))
+            for label in self._labels.values()
+        )
+        separator_height = sum(action is None for action in self.actions)
+        height = min(max(item_height + separator_height + 2, 3), max(screen_height, 1))
         menu.styles.width = width
         menu.styles.height = height
         menu.styles.offset = (
@@ -160,6 +250,10 @@ class BranchContextMenu(ModalScreen[str | None]):
 
     def action_cancel(self) -> None:
         self.dismiss(None)
+
+    def on_option_list_option_highlighted(self, event: OptionList.OptionHighlighted) -> None:
+        event.stop()
+        self._set_highlight_tooltip()
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         event.stop()
@@ -209,7 +303,10 @@ class HelpDialog(ModalScreen[None]):
                         "(choose if several), or check out detached HEAD.\n"
                         "Action and double-click checkouts take effect immediately.\n"
                         "Git actions do not show a confirmation dialog.\n"
-                        "Right-click a branch to rebase the checked-out branch onto it.\n"
+                        "Right-click a branch or commit for its available actions.\n"
+                        "Branch menus include checkout, reset, worktree and copy choices.\n"
+                        "Reset opens a Soft, Mixed, or Hard mode picker; Hard discards work.\n"
+                        "Only the latest commit message can be edited.\n"
                         "History dates use your computer's local timezone;\n"
                         "hover a date for seconds and the timezone offset.\n"
                         "Actions → Locate moves to its tip; Load more reveals\n"

@@ -10,7 +10,7 @@ from ui_helpers import click, post_click
 from gitkraiken.app import GitKraikenApp
 from gitkraiken.commit_files import CommitFileTree
 from gitkraiken.demo import create_demo
-from gitkraiken.dialogs import ActionPicker, BranchContextMenu
+from gitkraiken.dialogs import ActionPicker, BranchContextMenu, MessageDialog, PromptDialog
 from gitkraiken.sidebar import ReferenceSidebar, SidebarSelection
 
 
@@ -66,6 +66,13 @@ async def click_reference(app, pilot, target, *, times=1, button=1):
     else:
         await post_click(pilot, tree, (x, y), button=button)
     return node
+
+
+async def choose_option(app, pilot, operation):
+    options = app.screen.query_one(OptionList)
+    options.highlighted = options.get_option_index(operation)
+    await pilot.press("enter")
+    await pilot.pause()
 
 
 async def graph_point(app, pilot, key, *, column="graph"):
@@ -618,6 +625,9 @@ async def test_graph_double_click_ignores_inert_rows_and_stale_clicks(branch_rep
         table, point = await graph_point(app, pilot, tip)
         await post_click(pilot, table, point, chain=1, button=3)
         await post_click(pilot, table, point, chain=2, button=3)
+        assert isinstance(app.screen, BranchContextMenu)
+        assert git(branch_repo, "branch", "--show-current") == "main"
+        await pilot.press("escape")
         assert len(app.screen_stack) == 1
         await click(pilot, table, point)
         app.repaint_history()
@@ -977,7 +987,7 @@ async def test_right_click_rebases_current_feature_onto_clicked_branch(
         assert app.screen.styles.background.a == 0
         assert menu.region.right <= app.screen.size.width
         assert menu.region.bottom <= app.screen.size.height
-        label = menu.get_option_at_index(0).prompt.plain
+        label = menu.get_option("rebase").prompt.plain
         assert label == "Rebase feature/payments onto " + (
             "origin/test" if "remotes" in target else "test"
         )
@@ -985,7 +995,7 @@ async def test_right_click_rebases_current_feature_onto_clicked_branch(
         await pilot.press("escape")
         assert git(rebase_repo, "rev-parse", "HEAD") == before
         await click_reference(app, pilot, target, button=3)
-        await pilot.press("enter")
+        await choose_option(app, pilot, "rebase")
         await settle(app, pilot)
         assert len(app.screen_stack) == 1
         assert len(calls) == 1
@@ -1009,7 +1019,7 @@ async def test_rebase_menu_rejects_external_checkout_while_open(rebase_repo, git
         assert isinstance(app.screen, BranchContextMenu)
         git_run(rebase_repo, "switch", "main")
         main = git(rebase_repo, "rev-parse", "HEAD")
-        await pilot.press("enter")
+        await choose_option(app, pilot, "rebase")
         await settle(app, pilot)
         assert "Branch changed" in app._last_error
         assert app.snapshot_data.branch == "main"
@@ -1030,7 +1040,16 @@ async def test_right_click_does_not_offer_invalid_rebase(rebase_repo, git_run, s
             app.set_busy(True)
         target = "refs/heads/feature/payments" if state == "current" else "refs/heads/test"
         await click_reference(app, pilot, target, button=3)
-        assert len(app.screen_stack) == 1
+        if state == "busy":
+            assert len(app.screen_stack) == 1
+        else:
+            assert isinstance(app.screen, BranchContextMenu)
+            options = app.screen.query_one(OptionList)
+            assert "rebase" not in {
+                options.get_option_at_index(i).id for i in range(options.option_count)
+            }
+            assert options.get_option("copy-sha")
+            await pilot.press("escape")
         assert git(rebase_repo, "rev-parse", "HEAD") == before
         app.set_busy(False)
 
@@ -1042,7 +1061,7 @@ async def test_rebase_dirty_worktree_error_keeps_changes_and_refreshes(rebase_re
     async with app.run_test(size=(170, 50), notifications=True) as pilot:
         await settle(app, pilot)
         await click_reference(app, pilot, "refs/heads/test", button=3)
-        await pilot.press("enter")
+        await choose_option(app, pilot, "rebase")
         await settle(app, pilot)
         assert len(app.screen_stack) == 1
         assert app._last_error
@@ -1070,7 +1089,7 @@ async def test_right_click_rebase_conflicts_can_abort_or_continue(rebase_repo, g
     async with app.run_test(size=(170, 50), notifications=True) as pilot:
         await settle(app, pilot)
         await click_reference(app, pilot, "refs/heads/test", button=3)
-        await pilot.press("enter")
+        await choose_option(app, pilot, "rebase")
         await settle(app, pilot)
         assert app.snapshot_data.operation == "rebase"
         assert app.snapshot_data.conflicts
@@ -1094,6 +1113,305 @@ async def test_right_click_rebase_conflicts_can_abort_or_continue(rebase_repo, g
             assert app.snapshot_data.head != before
             assert (rebase_repo / "base.txt").read_text() == "resolved together\n"
             git_run(rebase_repo, "merge-base", "--is-ancestor", "test", "HEAD")
+
+
+async def test_expanded_branch_menu_copy_actions_do_not_mutate(branch_repo):
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(100, 24)) as pilot:
+        await settle(app, pilot)
+        before = app.snapshot_data.head
+        await click_reference(app, pilot, "refs/heads/main", button=3)
+        assert isinstance(app.screen, BranchContextMenu)
+        options = app.screen.query_one(OptionList)
+        assert options.get_option("pull") and options.get_option("push")
+        assert options.get_option("edit-message") and options.get_option("reset")
+        assert options.region.right <= 100 and options.region.bottom <= 24
+        await choose_option(app, pilot, "copy-branch")
+        assert app.clipboard == "main"
+        await click_reference(app, pilot, "refs/remotes/origin/test", button=3)
+        await choose_option(app, pilot, "copy-sha")
+        assert app.clipboard == git(branch_repo, "rev-parse", "origin/test")
+        assert git(branch_repo, "rev-parse", "HEAD") == before
+
+
+async def test_context_menu_resize_keeps_workspace_alive_and_actions_usable(branch_repo):
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await settle(app, pilot)
+        before = app.snapshot_data.head
+        await click_reference(app, pilot, "refs/heads/main", button=3)
+        await pilot.resize_terminal(80, 20)
+        await pilot.press("end")
+        await pilot.pause(0.2)
+        assert isinstance(app.screen, BranchContextMenu)
+        options = app.screen.query_one(OptionList)
+        assert options.region.right <= 80 and options.region.bottom <= 20
+        await choose_option(app, pilot, "copy-sha")
+        assert app.clipboard == before
+        await pilot.resize_terminal(170, 50)
+        await pilot.pause(0.2)
+        assert app.query_one("#graph-table", DataTable).row_count > 1
+        assert app.is_running and not app._last_error
+
+
+async def test_context_branch_creation_uses_clicked_tip_not_inspector(branch_repo):
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        app.jump_to(app.snapshot_data.head)
+        await settle(app, pilot)
+        tip = git(branch_repo, "rev-parse", "test")
+        await click_reference(app, pilot, "refs/remotes/origin/test", button=3)
+        await choose_option(app, pilot, "create-branch")
+        assert isinstance(app.screen, PromptDialog)
+        app.screen.query_one(Input).value = "from-context"
+        await pilot.press("enter")
+        await settle(app, pilot)
+        assert app.snapshot_data.branch == "from-context"
+        assert app.snapshot_data.head == tip
+        assert not app._last_error
+
+
+async def test_context_prompt_rejects_target_move_before_submission(branch_repo, git_run):
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        before = app.snapshot_data.head
+        await click_reference(app, pilot, "refs/heads/test", button=3)
+        await choose_option(app, pilot, "create-branch")
+        git_run(branch_repo, "branch", "-f", "test", "main")
+        app.screen.query_one(Input).value = "must-not-exist"
+        await pilot.press("enter")
+        await settle(app, pilot)
+        assert app._last_error
+        assert "must-not-exist" not in git(branch_repo, "branch", "--format=%(refname:short)")
+        assert app.snapshot_data.head == before
+
+
+async def test_graph_context_uses_clicked_commit_and_ignores_inert_rows(branch_repo):
+    from gitkraiken.app import HistoryTable
+
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        await click_reference(app, pilot, "refs/heads/main")
+        tip = git(branch_repo, "rev-parse", "test")
+        table, point = await graph_point(app, pilot, tip)
+        await post_click(pilot, table, point, button=3)
+        assert isinstance(app.screen, BranchContextMenu)
+        options = app.screen.query_one(OptionList)
+        assert options.get_option("checkout")
+        assert "rename-branch" not in {
+            options.get_option_at_index(i).id for i in range(options.option_count)
+        }
+        await choose_option(app, pilot, "copy-sha")
+        assert app.clipboard == tip
+        table, point = await graph_point(app, pilot, "wip")
+        await post_click(pilot, table, point, button=3)
+        assert len(app.screen_stack) == 1
+        app.post_message(HistoryTable.ContextRequested(tip, table.revision - 1, 40, 10))
+        await pilot.pause()
+        assert len(app.screen_stack) == 1
+        table, point = await graph_point(app, pilot, tip)
+        await post_click(pilot, table, point, button=3)
+        await choose_option(app, pilot, "checkout")
+        await choose_option(app, pilot, "detached")
+        await settle(app, pilot)
+        assert app.snapshot_data.head == tip and not app.snapshot_data.branch
+        assert not app._last_error
+
+
+async def test_graph_badge_context_resolves_exact_branch(branch_repo):
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        tip = git(branch_repo, "rev-parse", "test")
+        table, point = await graph_point(app, pilot, tip, column="refs")
+        # Badge names carry exact ref metadata; icon-only cells remain commit context.
+        x, y = point
+        for offset in range(table.ordered_columns[1].width):
+            style = app.screen.get_style_at(table.region.x + x + offset, table.region.y + y)
+            if style.meta.get("context_ref") == "refs/heads/test":
+                await post_click(pilot, table, (x + offset, y), button=3)
+                break
+        else:
+            raise AssertionError("No clickable test badge")
+        assert isinstance(app.screen, BranchContextMenu)
+        assert "test" in app.screen.query_one(OptionList).get_option("rename-branch").prompt.plain
+        await choose_option(app, pilot, "copy-branch")
+        assert app.clipboard == "test"
+
+
+@pytest.mark.parametrize("mode", ["reset-soft", "reset-mixed", "reset-hard"])
+async def test_graph_reset_mode_picker_executes_explicit_choice(branch_repo, git_run, mode):
+    git_run(branch_repo, "switch", "test")
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        target = git(branch_repo, "rev-parse", "main")
+        before = app.snapshot_data.head
+        table, point = await graph_point(app, pilot, target)
+        await post_click(pilot, table, point, button=3)
+        await choose_option(app, pilot, "reset")
+        assert isinstance(app.screen, ActionPicker)
+        assert git(branch_repo, "rev-parse", "HEAD") == before
+        await pilot.press("escape")
+        assert git(branch_repo, "rev-parse", "HEAD") == before
+        await post_click(pilot, table, point, button=3)
+        await choose_option(app, pilot, "reset")
+        await choose_option(app, pilot, mode)
+        await settle(app, pilot)
+        assert app.snapshot_data.head == target
+        assert app.snapshot_data.branch == "test"
+        assert not app._last_error
+        assert (branch_repo / "topic.txt").exists() == (mode != "reset-hard")
+        assert bool(git(branch_repo, "diff", "--cached", "--name-only")) == (mode == "reset-soft")
+
+
+async def test_context_edit_latest_message_preserves_staged_content(branch_repo, git_run):
+    (branch_repo / "base.txt").write_text("staged, not part of message edit\n")
+    git_run(branch_repo, "add", "base.txt")
+    tree = git(branch_repo, "rev-parse", "HEAD^{tree}")
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        await click_reference(app, pilot, "refs/heads/main", button=3)
+        await choose_option(app, pilot, "edit-message")
+        await settle(app, pilot)
+        assert isinstance(app.screen, MessageDialog)
+        editor = app.screen.query_one(TextArea)
+        assert "Base" in editor.text
+        editor.load_text("A better subject\n\nWith a body.")
+        await pilot.click("#confirm")
+        await settle(app, pilot)
+        assert git(branch_repo, "log", "-1", "--format=%B") == "A better subject\n\nWith a body."
+        assert git(branch_repo, "rev-parse", "HEAD^{tree}") == tree
+        assert git(branch_repo, "diff", "--cached", "--name-only") == "base.txt"
+        assert not app._last_error
+
+
+async def test_context_create_worktree_keeps_current_checkout(branch_repo, tmp_path):
+    destination = tmp_path / "context worktree"
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        before = app.snapshot_data.head
+        target = git(branch_repo, "rev-parse", "test")
+        await click_reference(app, pilot, "refs/heads/test", button=3)
+        await choose_option(app, pilot, "create-worktree")
+        await choose_option(app, pilot, "new-branch")
+        app.screen.query_one(Input).value = "parallel-work"
+        await pilot.press("enter")
+        await pilot.pause()
+        app.screen.query_one(Input).value = str(destination)
+        await pilot.press("enter")
+        await settle(app, pilot)
+        assert not app._last_error
+        assert git(destination, "rev-parse", "HEAD") == target
+        assert git(destination, "branch", "--show-current") == "parallel-work"
+        assert app.snapshot_data.head == before and app.snapshot_data.branch == "main"
+
+
+@pytest.mark.parametrize("target", ["refs/heads/main", "refs/remotes/origin/test"])
+async def test_context_upstream_updates_explicit_branch(branch_repo, target):
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        await click_reference(app, pilot, target, button=3)
+        await choose_option(app, pilot, "set-upstream")
+        if target == "refs/heads/main":
+            await choose_option(app, pilot, "refs/remotes/origin/test")
+        await settle(app, pilot)
+        assert not app._last_error
+        assert git(branch_repo, "config", "branch.main.merge") == "refs/heads/test"
+        assert app.snapshot_data.branch == "main"
+
+
+async def test_context_apply_patch_keeps_index_unchanged(branch_repo, tmp_path):
+    patch = tmp_path / "change.patch"
+    patch.write_text(
+        "diff --git a/base.txt b/base.txt\n--- a/base.txt\n+++ b/base.txt\n@@ -1 +1 @@\n-base\n+patched\n"
+    )
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        await click_reference(app, pilot, "refs/heads/main", button=3)
+        await choose_option(app, pilot, "apply-patch")
+        app.screen.query_one(Input).value = str(patch)
+        await pilot.press("enter")
+        await settle(app, pilot)
+        assert not app._last_error
+        assert (branch_repo / "base.txt").read_text() == "patched\n"
+        assert not git(branch_repo, "diff", "--cached", "--name-only")
+
+
+async def test_context_remote_delete_requires_explicit_destination_and_preserves_local(
+    branch_repo, bare_remote
+):
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        await click_reference(app, pilot, "refs/remotes/origin/test", button=3)
+        await choose_option(app, pilot, "delete-remote-branch")
+        await settle(app, pilot)
+        assert isinstance(app.screen, ActionPicker)
+        assert git(bare_remote, "rev-parse", "refs/heads/test")
+        await pilot.press("escape")
+        await click_reference(app, pilot, "refs/remotes/origin/test", button=3)
+        await choose_option(app, pilot, "delete-remote-branch")
+        await settle(app, pilot)
+        await choose_option(app, pilot, "delete")
+        await settle(app, pilot)
+        assert not app._last_error
+        assert "refs/heads/test" not in git(bare_remote, "for-each-ref", "--format=%(refname)")
+        assert git(branch_repo, "rev-parse", "refs/heads/test")
+        assert app.snapshot_data.branch == "main"
+
+
+async def test_context_remote_delete_rejects_mapping_change_while_picker_open(
+    branch_repo, bare_remote, git_run
+):
+    oid = git(branch_repo, "rev-parse", "test")
+    git_run(bare_remote, "update-ref", "refs/heads/other", oid)
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        await click_reference(app, pilot, "refs/remotes/origin/test", button=3)
+        await choose_option(app, pilot, "delete-remote-branch")
+        await settle(app, pilot)
+        label = app.screen.query_one(OptionList).get_option("delete").prompt.plain
+        assert "Delete test on origin" in label and str(bare_remote) in label
+        git_run(
+            branch_repo,
+            "config",
+            "remote.origin.fetch",
+            "+refs/heads/other:refs/remotes/origin/test",
+        )
+        await choose_option(app, pilot, "delete")
+        await settle(app, pilot)
+        assert "mapping changed" in app._last_error
+        assert git(bare_remote, "rev-parse", "refs/heads/test") == oid
+        assert git(bare_remote, "rev-parse", "refs/heads/other") == oid
+
+
+async def test_context_copy_branch_link_uses_remote_source_not_tracking_alias(branch_repo, git_run):
+    oid = git(branch_repo, "rev-parse", "test")
+    git_run(branch_repo, "remote", "set-url", "origin", "https://github.com/org/repo.git")
+    git_run(
+        branch_repo,
+        "config",
+        "remote.origin.fetch",
+        "+refs/heads/release/*:refs/remotes/origin/cache/*",
+    )
+    git_run(branch_repo, "update-ref", "refs/remotes/origin/cache/test", oid)
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        await click_reference(app, pilot, "refs/remotes/origin/cache/test", button=3)
+        await choose_option(app, pilot, "copy-branch-link")
+        await settle(app, pilot)
+        assert not app._last_error
+        assert app.clipboard == "https://github.com/org/repo/tree/release%2Ftest"
 
 
 async def test_commit_selection_waits_for_chained_diff_workers(demo_repo, monkeypatch):

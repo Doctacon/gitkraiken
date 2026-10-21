@@ -273,7 +273,7 @@ TabPane { padding: 1; }
 .narrow #graph-filter { min-width: 12; }
 
 ModalScreen { align: center middle; background: #000000 65%; }
-/* A branch context menu is a small dropdown, not a dimmed confirmation screen. */
+/* Branch and commit context menus are anchored dropdowns, not dimmed dialogs. */
 BranchContextMenu { align: left top; background: transparent; }
 #action-picker, #prompt-dialog {
     width: 54;

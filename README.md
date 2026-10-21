@@ -50,7 +50,8 @@ intentionally rejected.
   clearing it restores your folds. Full names remain available in tooltips.
   **Single-click selects action context without moving or filtering the graph.**
   **Double-click a local/remote branch label to check it out immediately.**
-  **Right-click a branch to rebase the currently checked-out branch onto it.**
+  **Right-click a branch for checkout, integration, creation, reset, upstream,
+  rename/delete, and copy actions.**
 - **Center:** a colored commit graph with rounded bends, branch/tag labels,
   date/time, subjects and SHAs. Dates show `YYYY-MM-DD HH:MM` in your computer's
   local timezone, including daylight-saving rules for that date; hover for seconds,
@@ -71,6 +72,9 @@ intentionally rejected.
 - **Toolbar / Actions:** fetch, fast-forward-only pull, push/publish branch,
   checkout, create/rename/safe-delete branch, merge, rebase, cherry-pick, revert,
   soft reset, create/delete local tags, stash/apply/pop/drop, and open another repo.
+  **Right-click menus** additionally offer worktree creation, all three reset modes,
+  latest-commit message editing, upstream configuration, remote branch deletion,
+  patch application, and copying names, SHAs, and supported provider links.
 - **Conflicts:** a visible operation banner with Continue/Abort. Resolve files in
   your editor, stage resolutions, then Continue. Git's errors remain visible;
   failed operations refresh the screen too.
@@ -103,6 +107,49 @@ Single-click and Enter still only inspect.
 Remote checkout uses the exact selected remote ref. An existing same-named local
 branch is reused only if its upstream is that exact ref on that remote; a branch tracking another
 remote (or no upstream) is not silently substituted.
+
+### Right-click branch and commit actions
+
+Right-click a branch in the sidebar or its **name badge** in the graph for branch
+and tip-commit actions. Right-click elsewhere on a commit row for actions on that
+exact commit, independently of the inspector's previous selection. Working-directory
+and connector-only rows do not open a commit menu. Menus scroll in small terminals;
+use arrows and Enter, or click. Escape and outside clicks cancel.
+
+- **Checkout**, **create branch here**, **create worktree here**, and **create tag**
+  use the clicked tip/commit. Branch creation checks out the new branch. Worktree
+  creation asks for a new branch or detached HEAD, then a destination directory;
+  it leaves the current checkout alone. Relative paths start at the repository root.
+- **Merge**, **rebase**, **cherry-pick**, and **revert** act on the checked-out branch.
+  **Reset** asks for a mode: Soft preserves the index and working files; Mixed keeps
+  working files and resets the index; **Hard discards staged/unstaged changes and can overwrite
+  obstructing untracked files**. Choosing a mode executes it immediately.
+- **Edit latest commit message** is available only at HEAD on a branch. The editor
+  preserves multiline messages; staged files are not included in the amendment.
+  This rewrites the commit SHA. Editing older messages, dropping commits, and moving
+  commits require an interactive history-editing workflow and are not offered here.
+- **Pull** (fast-forward only) and **Push** (never force) appear on the current local
+  branch, not an unrelated clicked branch. **Set upstream** on a local branch asks
+  for an exact remote-tracking branch; on a remote branch it sets the current local
+  branch's upstream. Setting upstream does not fetch or push.
+- **Rename** affects the clicked local branch. **Delete local branch** is merged-only
+  and is not offered on the current branch. **Delete on remote** asks you to select
+  the explicit remote destination, then deletes only that remote branch, provided
+  it still matches its last-fetched SHA. It never also deletes the local branch.
+  Fetch and review again if the server branch has changed.
+- **Apply patch** asks for a patch file, checks it, and applies it to the current
+  working directory without staging or committing. It is not `git am`.
+- Copy branch names, full commit SHAs, or browser links for GitHub.com, GitLab.com,
+  and Azure DevOps. Remote link pickers do not contact a server. Branch links use
+  the remote source name, including custom fetch mappings. Unsupported hosts have
+  no generated link. Copying uses the terminal's clipboard / OSC 52 support, which
+  may need enabling in your terminal or tmux.
+
+Menus omit inapplicable actions. During an unfinished operation, copy actions stay
+available; use the existing Continue/Abort controls to finish it. Captured branch,
+HEAD, and target guards reject stale mutations, including changes made externally
+while a follow-up name, path, or destination prompt is open. AI features, hosted PR
+creation, and combined (non-atomic) local-plus-remote deletion are not included.
 
 ### Rebase your feature branch onto an updated base
 
@@ -152,7 +199,8 @@ when its tmux popup is detached.
 | `g` | Switch Smooth / Compact graph (not tmux prefix + g) |
 | Sidebar click / Enter | Select a reference without moving the graph |
 | Sidebar double-click | Check out a local/remote branch immediately |
-| Sidebar right-click | Rebase the current branch onto the clicked branch |
+| Sidebar / graph branch-name right-click | Branch and tip-commit actions |
+| Graph row right-click | Actions on the clicked commit |
 | Graph row double-click | Check out a branch at that commit, or detached HEAD |
 | Tree caret / Space | Collapse or expand references or changed-file directories |
 | `Esc` | Clear focused sidebar search; otherwise clear graph search/ref selection; cancel a dialog |
@@ -167,7 +215,8 @@ when its tmux popup is detached.
 Ordinary letter shortcuts do not steal input while you search or write a commit message.
 Folds and sidebar search survive local refreshes; opening another repository resets them.
 Git actions run as soon as you select them, without a **Confirm Git Action** screen.
-Name/message prompts and destination pickers remain where input is needed.
+Name/message prompts and destination pickers remain where input is needed. Reset
+modes and remote deletion destinations are explicit follow-up choices, not implicit defaults.
 Discard immediately removes the selected file's unstaged edits. Only staged changes
 are committed.
 
@@ -290,17 +339,21 @@ are redacted in the interface. Git itself owns its credential storage/configurat
 - Git is invoked with argument arrays, never interpolated shell commands. File
   paths use literal pathspecs; repository-selection environment variables are
   isolated so operations apply to the repository you opened.
-- No force push, hard reset, `git clean`, remote deletion, implicit network activity,
-  or automatic stashing. Pull refuses divergence. Safe branch deletion refuses
-  unmerged branches. Discard only affects explicitly selected tracked worktree
-  changes and preserves the index; untracked/intent-to-add content is protected.
+- No force push of history, `git clean`, implicit network activity, or automatic
+  stashing. Pull refuses divergence. Safe local branch deletion refuses unmerged
+  branches. Discard only affects explicitly selected tracked worktree changes and
+  preserves the index; untracked/intent-to-add content is protected by Discard.
+  **Hard reset is different:** its explicitly selected mode discards changes and
+  may overwrite untracked files. Remote deletion is an explicit destination choice,
+  limited to one branch with a last-fetched-SHA lease; local deletion is separate.
 - Push sends only the current branch with an explicit non-force refspec, not Git's
   potentially broad configured push defaults. Destination pickers show redacted
   push URLs. Multiple configured push URLs are refused.
 - Actions require an explicit selection, but no second confirmation. Git operations
   are serialized; changing selection/refresh cannot cancel a running mutation.
   Repository switching is blocked while a picker or operation is active; context
-  rebases also reject a changed source branch, HEAD, or target.
+  actions also reject a changed source branch, HEAD, or target. History-changing
+  context actions are not offered during conflicts or unfinished operations.
 - This is a **terminal adaptation of the main repository screen**, not an official
   GitKraken product or a pixel-identical clone. No proprietary assets were copied.
   It intentionally omits hosted PR/issue browsing, OAuth/account management,
@@ -324,7 +377,8 @@ uv build
 
 Tests use disposable repositories and local bare remotes; they never write to a
 real private repository. Textual pilot tests exercise actual staging/committing,
-selection, immediate double-click checkout, right-click rebase and conflicts,
+selection, immediate double-click checkout, grouped right-click menus and conflicts,
+context-specific creation/reset/upstream/copy actions, worktrees and message editing,
 local-time dates, changed-file folders, fold/search persistence, unified graph geometry,
 local/remote pointers, diffs, dialogs, branch creation, refresh and narrow layouts.
 Checkout and notification regressions enable toast rendering explicitly; Textual

@@ -22,8 +22,13 @@ credential helpers / SSH configuration handle private GitHub and Azure DevOps ac
     `GitError` on failure. Explicitly selected actions run without a second confirmation. stage and
     unstage with empty paths mean all; discard REQUIRES explicit tracked file paths,
     only worktree edits (never deletes untracked files or resets the index). Commit
-    only staged changes. reset-soft targets a commit and preserves working changes.
-    pull = ff-only; push never force. Push with no upstream sets it on selected
+    only staged changes. reset-soft preserves index/worktree; reset-mixed preserves
+    working files and resets the index; reset-hard explicitly discards changes.
+    Reset refuses unfinished operations/conflicts. edit-message amends HEAD only,
+    using --only so staged content stays out of the commit. create-worktree uses
+    one explicit destination, a resolved commit, and either a new named branch or
+    detached HEAD. apply-patch reads one bounded regular file and checks/applies
+    the same bytes to the worktree without staging. pull = ff-only; push never force. Push with no upstream sets it on selected
     remote (`action.remote`, else sole remote; ambiguous remotes must error).
     Remotes expose a redacted push_url for destination pickers; multiple push URLs are
     rejected. Explicit refspecs override broad or forceful user push defaults.
@@ -44,9 +49,20 @@ credential helpers / SSH configuration handle private GitHub and Azure DevOps ac
     uses name + target. Stash includes untracked. Stash actions target exact ref.
     Continue/abort inspect current operation (including an external git am) and
     never invent one. UI stash requests include expected_oid to reject selectors
-    that moved while a picker was open. Context rebase actions include expected_branch,
-    expected_head and expected_oid; the engine revalidates source branch/HEAD and
-    target OID before rebasing, refusing stale menu context without changing Git.
+    that moved while a picker was open. Context actions include expected_branch,
+    expected_head, expected_ref and expected_oid; the engine revalidates source
+    branch/HEAD and captured ref OID before mutation, including detached/unborn
+    empty values. Follow-up prompts keep that context. set-upstream uses exact
+    local and remote refs with validated fetch mappings. delete-remote-branch
+    requires a captured OID, exact configured owner and source branch mapping,
+    and one push destination. The deletion picker displays the resolved remote
+    source and redacted push URL; Action.name captures that source and
+    expected_push_url captures the destination, rejecting either configuration
+    changing while the picker is open. An explicit single-ref deletion with an OID
+    lease refuses a server branch that moved since fetch; it never also deletes locally.
+  - `branch_remote_target(full_ref: str) -> tuple[str, str]`: resolve a local
+    upstream or remote tracking alias to its exact configured remote and source
+    refs/heads name for browser links, without network I/O.
   - `Repository.clone(url: str, destination: str) -> Path`: safe argv, credential
     redaction and noninteractive prompt policy, returns worktree root.
   - `GitError` has human-readable, redacted `str(error)`.
@@ -74,6 +90,11 @@ credential helpers / SSH configuration handle private GitHub and Azure DevOps ac
   not ambiguous `Commit.refs` strings. Local/HEAD and provider markers precede
   potentially truncated names. Hover text and commit details retain full refs.
   Remote markers describe local last-fetched state, never live server state.
+  Individual name spans carry full-ref metadata for graph branch context menus.
+- `context_actions.py`: immutable clicked targets and pure contextual menu policy.
+  Grouped literal action labels depend on local/remote/current/detached/operation
+  state, not the previous inspector selection. Credential-free provider links are
+  generated only for supported URL shapes and encode remote source branch names.
 - `dates.py`: presentation-only conversion of offset-aware Git timestamps to the
   OS local timezone at the commit instant (including DST). Raw model dates stay intact.
 - `commit_files.py`: presentation-only changed-file tree. Compacted directory
@@ -105,9 +126,12 @@ remain one keyboard/click target per commit. Never cap graph column width: allow
 horizontal scrolling for wide histories. Branch single-click only changes action
 context and badge emphasis; it preserves graph data, cursor, inspected commit,
 and viewport. Explicit Locate navigates to its tip. Double-click checks out immediately
-(or offers a branch picker for ambiguous tips). Right-click opens a small anchored
-rebase menu naming current and target branches; choosing it rebases without another
-confirmation. Escape/outside click only dismiss the menu. Checkout updates refs
+(or offers a branch picker for ambiguous tips). Right-click opens an anchored,
+scrollable grouped menu for the clicked branch name or commit row. Copy actions
+remain available during operations; unsupported mutations are omitted. Reset modes,
+worktree modes, remote deletion destinations, and ambiguous checkout choices use
+follow-up pickers; names/paths use prompts, and message editing uses a multiline
+editor. Escape/outside click only dismiss the menu. Checkout updates refs
 and HEAD, not the scope of history. Unloaded tips have an explicit caption and do
 not trigger filtering or automatic loading; Load more may reveal them, within the
 5,000-commit cap. New pointers at an existing OID do not invent a graph divergence.
@@ -126,10 +150,12 @@ Git is invoked with argv (no shell), end-of-options / validated revisions and
 literal pathspecs. Never use remote URLs as display text without redacting
 userinfo/query secrets. Network uses existing credential helpers and SSH agent,
 never terminal password prompts; timeout and helpful auth failure instructions.
-No automatic fetch/push and no force push, hard reset or clean. Poll status locally
-when idle. UI executes selected Git actions immediately, preserving prompts only
-for required input and choices. Busy/modal guards prevent overlapping actions;
-rebase menus capture their repository and exact source/target context. Tests use
+No automatic fetch/push, force push of history, or clean. Hard reset is an explicit
+mode choice with discard/overwrite warnings; remote deletion is an explicit
+single-destination choice protected by an OID lease. Poll status locally when
+idle. UI executes selected Git actions immediately, preserving prompts for
+required input and choices. Busy/modal guards prevent overlapping actions;
+context menus capture their repository and exact source/target context. Tests use
 disposable real repositories and local bare
 remotes, plus Textual pilot tests and isolated tmux smoke tests. Trace rendered
 Smooth glyphs (including underpasses) to check actual visible parent relationships,
