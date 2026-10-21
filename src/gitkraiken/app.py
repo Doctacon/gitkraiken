@@ -34,7 +34,9 @@ from .dialogs import ActionPicker, BranchContextMenu, HelpDialog, MessageDialog,
 from .git import Repository
 from .graph import GraphRow, GraphStyle, render_history
 from .models import Action, Commit, FileChange, HistoryLine, Snapshot
+from .pane_splitter import PaneGroup, PaneSplitter
 from .ref_badges import RefBadges, build_ref_badges
+from .resizable_table import ResizableDataTable
 from .sidebar import ReferenceSidebar, SidebarSelection
 
 TEAL = "#62d6c5"
@@ -58,8 +60,11 @@ def patch_text(patch: str) -> Text:
     return text
 
 
-class HistoryTable(DataTable):
+class HistoryTable(ResizableDataTable):
     """History inspection, checkout, and context requests have distinct click semantics."""
+
+    class ViewportChanged(Message):
+        """The graph's available width changed, including after a pane drag."""
 
     class ContextRequested(Message):
         def __init__(
@@ -79,6 +84,16 @@ class HistoryTable(DataTable):
         super().__init__(*args, **kwargs)
         self.revision = 0
         self._click_latch: str | None = None
+        self._viewport_width = 0
+
+    def on_resize(self, event: events.Resize) -> None:
+        if event.size.width != self._viewport_width:
+            self._viewport_width = event.size.width
+            self.post_message(self.ViewportChanged())
+
+    def on_mouse_down(self, event: events.MouseDown) -> None:
+        if "resize_column" in event.style.meta:
+            self._click_latch = None
 
     def clear(self, columns: bool = False) -> Self:
         self.revision += 1
@@ -86,6 +101,9 @@ class HistoryTable(DataTable):
         return super().clear(columns=columns)
 
     async def _on_click(self, event: events.Click) -> None:
+        if self.consume_resize_click(event):
+            self._click_latch = None
+            return
         # DataTable selects on every Click but discards Click.chain. Handle it
         # here so inspection stays single-click and checkout needs two clicks
         # on the same row, with no rebuild in between.
@@ -199,9 +217,12 @@ class GitKraikenApp(App[None]):
             yield Static(id="operation-text")
             yield Button("Continue", id="continue", classes="operation-button")
             yield Button("Abort", id="abort", classes="operation-button")
-        with Horizontal(id="workspace"):
+        with PaneGroup(id="workspace", classes="horizontal"):
             with Vertical(id="refs-panel"):
                 yield ReferenceSidebar(id="reference-sidebar")
+            yield PaneSplitter(
+                "#refs-panel", "#history-panel", minimum=15, flexible_minimum=34, id="refs-splitter"
+            )
             with Vertical(id="history-panel"):
                 yield Static("COMMIT GRAPH", id="history-heading")
                 with Horizontal(id="search-bar"):
@@ -223,15 +244,32 @@ class GitKraikenApp(App[None]):
                     cursor_foreground_priority="renderable",
                 )
                 yield Button("Load 300 more commits", id="load-more")
+            yield PaneSplitter(
+                "#inspector-panel",
+                "#history-panel",
+                grow_direction=-1,
+                minimum=25,
+                flexible_minimum=34,
+                id="inspector-splitter",
+            )
             with Vertical(id="inspector-panel"):
                 with TabbedContent(id="inspector-tabs"):
                     with TabPane("Commit", id="details-tab"):
                         yield Static("Select a commit to inspect its changes.", id="commit-detail")
-                        yield CommitFileTree(id="commit-file-tree")
-                        with VerticalScroll(id="commit-diff-scroll"):
-                            yield Static(
-                                "Select a changed file to read its diff.", id="commit-diff"
+                        with PaneGroup(id="commit-changes"):
+                            yield CommitFileTree(id="commit-file-tree")
+                            yield PaneSplitter(
+                                "#commit-file-tree",
+                                "#commit-diff-scroll",
+                                axis="height",
+                                minimum=5,
+                                flexible_minimum=5,
+                                id="commit-files-splitter",
                             )
+                            with VerticalScroll(id="commit-diff-scroll"):
+                                yield Static(
+                                    "Select a changed file to read its diff.", id="commit-diff"
+                                )
                     with TabPane("Working directory", id="wip-tab"):
                         with Horizontal(classes="wip-actions"):
                             yield Button("Stage", id="stage")
@@ -240,10 +278,22 @@ class GitKraikenApp(App[None]):
                         with Horizontal(classes="wip-actions"):
                             yield Button("Stage all", id="stage-all")
                             yield Button("Unstage all", id="unstage-all")
-                        yield DataTable(id="wip-table", cursor_type="row")
-                        yield Static("Select a file to inspect its changes", id="diff-title")
-                        with VerticalScroll(id="diff-scroll"):
-                            yield Static("Working directory is clean.", id="diff-view")
+                        with PaneGroup(id="wip-changes"):
+                            yield ResizableDataTable(id="wip-table", cursor_type="row")
+                            yield PaneSplitter(
+                                "#wip-table",
+                                "#wip-preview",
+                                axis="height",
+                                minimum=3,
+                                flexible_minimum=6,
+                                id="wip-files-splitter",
+                            )
+                            with Vertical(id="wip-preview"):
+                                yield Static(
+                                    "Select a file to inspect its changes", id="diff-title"
+                                )
+                                with VerticalScroll(id="diff-scroll"):
+                                    yield Static("Working directory is clean.", id="diff-view")
                         yield Label("COMMIT MESSAGE", classes="composer-label")
                         yield TextArea(id="commit-message")
                         yield Button("Commit staged changes", id="commit", variant="primary")
@@ -256,7 +306,9 @@ class GitKraikenApp(App[None]):
     def on_mount(self) -> None:
         self.query_one("#operation-banner").display = False
         self.query_one("#load-more").display = False
-        self.query_one("#wip-table", DataTable).add_columns("Area", "File")
+        wip_table = self.query_one("#wip-table", ResizableDataTable)
+        wip_table.add_column("Area", key="area")
+        wip_table.add_column("File", key="file")
         self._configure_history_columns()
         self.query_one("#history-heading", Static).tooltip = Text(
             "💻 Local branch / HEAD · 🐙 GitHub · ☁ Azure DevOps · 🦊 GitLab · ↗ Other remote\n"
@@ -268,23 +320,43 @@ class GitKraikenApp(App[None]):
         self.query_one("#graph-table").focus()
 
     def _configure_history_columns(self) -> None:
-        table = self.query_one("#graph-table", DataTable)
+        table = self.query_one("#graph-table", HistoryTable)
         table.clear(columns=True)
-        # Never crop away graph lanes: wide histories scroll horizontally instead.
-        graph_width = max(5, max((row.width for row in self._graph_rows), default=3) + 1)
+        # Never crop away graph lanes, even when manually shrinking the column.
+        graph_minimum = max(5, max((row.width for row in self._graph_rows), default=3) + 1)
+        table.column_minimums["graph"] = graph_minimum
         available = max(36, table.size.width)
-        ref_width = min(23, max(12, available // 5))
+        width = table.preferred_column_width
+        graph_width = width("graph", graph_minimum)
+        ref_width = width("refs", min(23, max(12, available // 5)))
+        author_width = width("author", min(20, max(10, available // 7)))
         self._show_sha = available >= 80
-        date_width = 16  # YYYY-MM-DD HH:MM, in the computer's local timezone.
+        date_width = width("date", 16)  # YYYY-MM-DD HH:MM, in the local timezone.
+        sha_width = width("sha", 8) if self._show_sha else 0
+        padding = 2 * table.cell_padding * (6 if self._show_sha else 5)
         subject_width = max(
-            24, available - graph_width - ref_width - date_width - (10 if self._show_sha else 0) - 9
+            24,
+            available - graph_width - ref_width - author_width - date_width - sha_width - padding,
         )
         table.add_column("GRAPH", width=graph_width, key="graph")
         table.add_column("BRANCH / TAG", width=ref_width, key="refs")
+        table.add_column("AUTHOR", width=author_width, key="author")
         table.add_column("DATE / TIME", width=date_width, key="date")
         table.add_column("COMMIT", width=subject_width, key="subject")
         if self._show_sha:
-            table.add_column("SHA", width=8, key="sha")
+            table.add_column("SHA", width=sha_width, key="sha")
+
+    def on_history_table_viewport_changed(self, event: HistoryTable.ViewportChanged) -> None:
+        event.stop()
+        # Keep pane dragging cheap even with 5,000 loaded commits. Existing
+        # columns scroll/clip during the drag; refit defaults once on release.
+        if not isinstance(self.mouse_captured, PaneSplitter):
+            self.call_after_refresh(self.repaint_history)
+
+    def on_pane_splitter_resized(self, event: PaneSplitter.Resized) -> None:
+        event.stop()
+        if event.splitter.axis == "width":
+            self.call_after_refresh(self.repaint_history)
 
     def on_resize(self, event: events.Resize) -> None:
         # Layout classes belong to the workspace, not whichever modal is active.
@@ -293,6 +365,18 @@ class GitKraikenApp(App[None]):
         workspace.set_class(event.size.width < 105, "narrow")
         if self.is_mounted and self.snapshot_data:
             self.call_after_refresh(self.repaint_history)
+
+    def push_screen(self, screen, callback=None, wait_for_dismiss=False):
+        # A keyboard shortcut can open a modal mid-drag. Textual 1.0 otherwise
+        # keeps routing mouse events to the captured widget on the old screen.
+        if isinstance(self.mouse_captured, (PaneSplitter, ResizableDataTable)):
+            self.capture_mouse(None)
+        return super().push_screen(screen, callback, wait_for_dismiss)
+
+    def _fit_panes(self) -> None:
+        # Resize can arrive while a modal is open; query the workspace explicitly.
+        for splitter in self.screen_stack[0].query(PaneSplitter):
+            splitter.fit()
 
     def poll_repository(self) -> None:
         if not self.busy and len(self.screen_stack) == 1:
@@ -843,6 +927,7 @@ class GitKraikenApp(App[None]):
         wip_cells = [
             Text(" ◉" if self.graph_style == "smooth" else "◉", style=TEAL),
             Text("WIP", style=TEAL),
+            "",  # Working changes have no commit author.
             "",  # Working changes have no commit timestamp.
             Text(
                 f"Working directory · {dirty} changed files"
@@ -864,6 +949,7 @@ class GitKraikenApp(App[None]):
                     "",
                     "",
                     "",
+                    "",
                     *([""] if self._show_sha else []),
                     key=f"connector-{index}",
                 )
@@ -876,6 +962,7 @@ class GitKraikenApp(App[None]):
             table.add_row(
                 row.graph,
                 refs,
+                Text(commit.author, style=MUTED, no_wrap=True, overflow="ellipsis"),
                 Text(
                     format_commit_date(commit.date),
                     style=Style(
@@ -1510,10 +1597,14 @@ class GitKraikenApp(App[None]):
 
     def action_toggle_refs(self) -> None:
         self.query_one("#refs-panel").toggle_class("collapsed")
+        self.query_one("#refs-splitter").toggle_class("collapsed")
+        self.call_after_refresh(self._fit_panes)
         self.call_after_refresh(self.repaint_history)
 
     def action_toggle_inspector(self) -> None:
         self.query_one("#inspector-panel").toggle_class("collapsed")
+        self.query_one("#inspector-splitter").toggle_class("collapsed")
+        self.call_after_refresh(self._fit_panes)
         self.call_after_refresh(self.repaint_history)
 
     def action_toggle_graph_style(self) -> None:

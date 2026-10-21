@@ -103,10 +103,9 @@ Button:focus { text-style: bold; }
 #workspace { height: 1fr; }
 #refs-panel {
     width: 25;
-    min-width: 19;
+    min-width: 15;
     padding: 1;
     background: #101c27;
-    border-right: tall #29414d;
 }
 #history-panel {
     width: 1fr;
@@ -116,10 +115,9 @@ Button:focus { text-style: bold; }
 }
 #inspector-panel {
     width: 46;
-    min-width: 30;
+    min-width: 25;
     padding: 0;
     background: #101a24;
-    border-left: tall #29414d;
 }
 #history-heading {
     height: 1;
@@ -161,7 +159,12 @@ Button:focus { text-style: bold; }
 TabbedContent { height: 1fr; background: #101a24; }
 TabbedContent ContentTab { color: #8fa5ad; background: #142531; }
 TabbedContent ContentTab.-active { color: #baf1e9; background: #1b3540; text-style: bold; }
+#inspector-tabs > ContentSwitcher, TabPane { height: 1fr; }
 TabPane { padding: 1; }
+#commit-changes, #wip-changes, #wip-preview { height: 1fr; }
+#commit-changes { min-height: 12; }
+#wip-changes { min-height: 10; }
+#wip-preview { min-height: 6; }
 /* Compact commit metadata leaves room for the file tree and diff. */
 #commit-detail {
     height: 4;
@@ -174,7 +177,7 @@ TabPane { padding: 1; }
 /* Root header plus eight file rows fit in the normal inspector. */
 #commit-file-tree {
     height: 11;
-    min-height: 11;
+    min-height: 5;
     margin-top: 1;
     padding: 0 1;
     border: round #294653;
@@ -191,12 +194,11 @@ TabPane { padding: 1; }
     color: #f2fbfc;
     text-style: none;
 }
-#diff-title { height: 1; min-height: 1; margin-top: 1; color: #82a8ae; text-style: bold; }
+#diff-title { height: 1; min-height: 1; color: #82a8ae; text-style: bold; }
 /* Scroll containers own the flexible height; their Static child stays content-sized. */
 #commit-diff-scroll, #diff-scroll {
     height: 1fr;
     min-height: 5;
-    margin-top: 1;
     padding: 0 1;
     overflow-y: auto;
     background: #091119;
@@ -207,8 +209,6 @@ TabPane { padding: 1; }
     min-height: 1;
     color: #b9d5d5;
 }
-#commit-diff-scroll { margin-top: 1; }
-#diff-scroll { margin-top: 0; }
 
 /* Working copy: files first, then enough room to inspect and describe a change. */
 .wip-actions { height: 2; }
@@ -226,6 +226,7 @@ TabPane { padding: 1; }
 #discard:hover, #discard:focus { background: #94494a; color: #fff5f4; }
 #wip-table {
     height: 8;
+    min-height: 3;
     border: round #294653;
     background: #0d151d;
 }
@@ -264,15 +265,16 @@ TabPane { padding: 1; }
     color: #728b94;
 }
 #status-line { color: #8aa3a9; }
-.collapsed, .refs-hidden #refs-panel, .inspector-hidden #inspector-panel { display: none; }
+.collapsed, .refs-hidden #refs-panel, .refs-hidden #refs-splitter,
+.inspector-hidden #inspector-panel, .inspector-hidden #inspector-splitter { display: none; }
 
 /* Root adds these classes from terminal width; no CSS media queries are needed in Textual. */
-.compact #refs-panel { width: 22; min-width: 17; }
-.compact #inspector-panel { width: 36; min-width: 28; }
+.compact #refs-panel { width: 22; }
+.compact #inspector-panel { width: 36; }
 .compact .tool, .compact #open, .compact #help, .compact #refresh { min-width: 5; padding: 0; }
 .compact #toolbar { padding-left: 0; padding-right: 0; }
-.narrow #refs-panel { width: 18; min-width: 15; padding: 0 1; }
-.narrow #inspector-panel { width: 30; min-width: 25; }
+.narrow #refs-panel { width: 18; padding: 0 1; }
+.narrow #inspector-panel { width: 30; }
 .narrow .tool, .narrow #open, .narrow #help, .narrow #refresh { width: 5; min-width: 5; }
 .narrow #graph-filter { min-width: 12; }
 

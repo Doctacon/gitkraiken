@@ -53,9 +53,9 @@ intentionally rejected.
   **Right-click a branch for checkout, integration, creation, reset, upstream,
   rename/delete, and copy actions.**
 - **Center:** a colored commit graph with rounded bends, branch/tag labels,
-  date/time, subjects and SHAs. Dates show `YYYY-MM-DD HH:MM` in your computer's
+  authors, date/time, subjects and SHAs. Dates show `YYYY-MM-DD HH:MM` in your computer's
   local timezone, including daylight-saving rules for that date.
-  Working changes and connector-only rows have no date. Smooth mode draws Git's
+  Working changes and connector-only rows have no author or date. Smooth mode draws Git's
   actual parent relationships; Compact mode retains Git's native lane layout.
   Search by message, author, ref or SHA and
   jump between matches **without removing graph connections**. Load history in
@@ -76,6 +76,15 @@ intentionally rejected.
 - **Conflicts:** a visible operation banner with Continue/Abort. Resolve files in
   your editor, stage resolutions, then Continue. Git's errors remain visible;
   failed operations refresh the screen too.
+
+**Resize the workspace:** click, hold, and drag the vertical dividers beside the
+sidebar and inspector. Drag the horizontal divider between files and the diff in
+either inspector tab to adjust their heights. Drag a `│` at the right edge of a
+graph or working-directory column header to change that column's width; scroll
+horizontally to reach off-screen headers. Sizes are remembered for the running
+session across refreshes, graph-style changes, and hiding/showing panes. Shrinking
+the terminal temporarily limits pane sizes; expanding it restores your preference.
+The graph column cannot shrink enough to hide lanes.
 
 Hover tooltip popups are disabled throughout the workspace and menus.
 

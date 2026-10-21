@@ -14,12 +14,14 @@ from textual.widgets import (
     Tree,
 )
 from textual.widgets._toast import Toast
-from ui_helpers import click, post_click
+from ui_helpers import click, drag, header_grip, post_click
 
 from gitkraiken.app import GitKraikenApp
 from gitkraiken.commit_files import CommitFileTree
 from gitkraiken.demo import create_demo
 from gitkraiken.dialogs import ActionPicker, BranchContextMenu, MessageDialog, PromptDialog
+from gitkraiken.pane_splitter import PaneSplitter
+from gitkraiken.resizable_table import ResizableDataTable
 from gitkraiken.sidebar import ReferenceSidebar, SidebarSelection
 
 
@@ -172,7 +174,7 @@ async def test_hover_tooltips_stay_hidden_in_workspace_and_context_menu(demo_rep
 
 
 @pytest.mark.parametrize("width", [120, 170])
-async def test_history_date_time_column_survives_style_and_size_changes(
+async def test_history_author_and_date_time_columns_survive_style_and_size_changes(
     demo_repo, git_run, monkeypatch, local_timezone, width
 ):
     local_timezone("America/Denver")
@@ -185,7 +187,9 @@ async def test_history_date_time_column_survives_style_and_size_changes(
         table = app.query_one("#graph-table", DataTable)
         for _ in range(2):
             columns = [column.key.value for column in table.ordered_columns]
-            assert columns[:4] == ["graph", "refs", "date", "subject"]
+            assert columns[:5] == ["graph", "refs", "author", "date", "subject"]
+            assert table.get_cell(tip, "author").plain == app._commits[tip].author
+            assert str(table.get_cell("wip", "author")) == ""
             assert ("sha" in columns) == app._show_sha
             cell = table.get_cell(tip, "date")
             assert cell.plain == "2024-02-02 15:35"
@@ -198,6 +202,7 @@ async def test_history_date_time_column_survives_style_and_size_changes(
             for key in table.rows:
                 if str(key.value).startswith("connector-"):
                     assert str(table.get_cell(key, "date")) == ""
+                    assert str(table.get_cell(key, "author")) == ""
             app.action_toggle_graph_style()
             await settle(app, pilot)
         await pilot.resize_terminal(width + 20, 50)
@@ -209,6 +214,168 @@ async def test_history_date_time_column_survives_style_and_size_changes(
         assert "2024-02-02 15:35" in str(detail.render())
         assert "2024-02-02 15:35:06 MST (-0700)" in detail.tooltip.plain
         assert app._selected_commit.date == "2024-02-03T04:05:06+05:30"
+
+
+async def test_workspace_pane_drags_survive_refresh_collapse_and_terminal_resize(demo_repo):
+    app = GitKraikenApp(demo_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        app.jump_to(app.snapshot_data.head)
+        await settle(app, pilot)
+        before_head = git(demo_repo, "rev-parse", "HEAD")
+        key = app._history_key
+        refs = app.query_one("#refs-panel")
+        inspector = app.query_one("#inspector-panel")
+        history = app.query_one("#history-panel")
+        refs_width, inspector_width = refs.region.width, inspector.region.width
+        handle = app.query_one("#refs-splitter")
+        x, y = handle.region.x, handle.region.y + 4
+        table = app.query_one("#graph-table")
+        revision = table.revision
+        assert await pilot.mouse_down(handle, offset=(0, 4))
+        for delta in (3, 6):
+            await pilot.hover(offset=(x + delta, y))
+            await pilot.pause()
+            assert refs.region.width == refs_width + delta
+            assert table.revision == revision  # No whole-history rebuild per mouse cell.
+        await pilot.mouse_up(offset=(x + 6, y))
+        await settle(app, pilot)
+        assert table.revision > revision
+        await drag(pilot, app.query_one("#inspector-splitter"), (0, 4), (-12, 0))
+        await settle(app, pilot)
+        assert refs.region.width == refs_width + 6
+        assert inspector.region.width == inspector_width + 12
+        assert history.region.width >= 34
+        assert app._history_key == key
+        assert app.mouse_captured is None
+        app.action_toggle_graph_style()
+        app.action_refresh()
+        await settle(app, pilot)
+        for toggle, panel, handle in (
+            (app.action_toggle_refs, refs, "#refs-splitter"),
+            (app.action_toggle_inspector, inspector, "#inspector-splitter"),
+        ):
+            toggle()
+            await settle(app, pilot)
+            assert not panel.display
+            assert not app.query_one(handle).display
+            toggle()
+            await settle(app, pilot)
+            assert app.query_one(handle).display
+        await pilot.resize_terminal(100, 40)
+        await settle(app, pilot)
+        assert history.region.width >= 34
+        assert inspector.region.right <= app.query_one("#workspace").region.right
+        await pilot.resize_terminal(170, 50)
+        await settle(app, pilot)
+        assert refs.region.width == refs_width + 6
+        assert inspector.region.width == inspector_width + 12
+        assert app._history_key == key
+        assert git(demo_repo, "rev-parse", "HEAD") == before_head
+
+
+@pytest.mark.parametrize("tab", ["details-tab", "wip-tab"])
+async def test_inspector_file_diff_split_is_draggable_and_bounded(demo_repo, tab):
+    app = GitKraikenApp(demo_repo)
+    async with app.run_test(size=(170, 55)) as pilot:
+        await settle(app, pilot)
+        app.jump_to(app.snapshot_data.head if tab == "details-tab" else "wip")
+        await settle(app, pilot)
+        is_commit = tab == "details-tab"
+        files = app.query_one("#commit-file-tree" if is_commit else "#wip-table")
+        preview = app.query_one("#commit-diff-scroll" if is_commit else "#wip-preview")
+        handle = app.query_one(
+            "#commit-files-splitter" if is_commit else "#wip-files-splitter", PaneSplitter
+        )
+        file_height, preview_height = files.region.height, preview.region.height
+        await drag(pilot, handle, (3, 0), (0, 4))
+        assert files.region.height == file_height + 4
+        assert preview.region.height == preview_height - 4
+        app.action_refresh()
+        await settle(app, pilot)
+        assert files.region.height == file_height + 4
+        await pilot.resize_terminal(170, 35)
+        await settle(app, pilot)
+        assert preview.region.height >= handle.flexible_minimum
+        assert preview.region.bottom <= files.parent.region.bottom
+        await pilot.resize_terminal(170, 55)
+        await settle(app, pilot)
+        assert files.region.height == file_height + 4
+        tabs = app.query_one("#inspector-tabs", TabbedContent)
+        tabs.active = "wip-tab" if is_commit else "details-tab"
+        await pilot.pause()
+        tabs.active = tab
+        await settle(app, pilot)
+        assert files.region.height == file_height + 4
+        await drag(pilot, handle, (3, 0), (0, 100))
+        assert preview.region.height >= handle.flexible_minimum
+        await drag(pilot, handle, (3, 0), (0, -100))
+        assert files.region.height == handle.minimum
+        assert app.mouse_captured is None
+        if not is_commit:
+            assert (
+                app.query_one("#commit").region.bottom <= app.query_one("#workspace").region.bottom
+            )
+
+
+@pytest.mark.parametrize("selector", ["#refs-splitter", "#graph-table"])
+async def test_opening_modal_cancels_mouse_resize_capture(demo_repo, selector):
+    app = GitKraikenApp(demo_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        widget = app.query_one(selector)
+        point = header_grip(widget, "author") if selector == "#graph-table" else (0, 3)
+        assert await pilot.mouse_down(widget, offset=point)
+        assert app.mouse_captured is widget
+        app.action_help()
+        await pilot.pause()
+        assert app.mouse_captured is None
+        await pilot.press("escape")
+        await pilot.hover(offset=(70, 20))
+        assert app.mouse_captured is None
+        if isinstance(widget, ResizableDataTable):
+            assert not widget.column_widths
+        else:
+            assert widget.preferred_size is None
+
+
+async def test_history_column_drags_preserve_sizes_and_selection(demo_repo, git_run):
+    app = GitKraikenApp(demo_repo)
+    async with app.run_test(size=(190, 50)) as pilot:
+        await settle(app, pilot)
+        table = app.query_one("#graph-table", ResizableDataTable)
+        app.jump_to(app.snapshot_data.head)
+        await settle(app, pilot)
+        key, rows = app._history_key, app._graph_rows
+        widths = {}
+        for column in ("graph", "refs", "author", "date", "subject", "sha"):
+            table.scroll_to(
+                x=table.max_scroll_x if column in ("subject", "sha") else 0, animate=False
+            )
+            await pilot.pause()
+            original = table.columns[column].width
+            await drag(pilot, table, header_grip(table, column), (4, 2))
+            widths[column] = original + 4
+            assert table.columns[column].width == widths[column]
+            assert app._history_key == key
+            assert app._graph_rows is rows
+        git_run(demo_repo, "tag", "layout-refresh")
+        app.action_refresh()
+        await settle(app, pilot)
+        app.action_toggle_graph_style()
+        await settle(app, pilot)
+        await pilot.resize_terminal(120, 45)  # SHA temporarily disappears.
+        await settle(app, pilot)
+        await pilot.resize_terminal(190, 50)
+        await settle(app, pilot)
+        for column, width in widths.items():
+            assert table.columns[column].width == width
+        assert app._history_key == key
+        assert git(demo_repo, "rev-parse", "HEAD") == key
+        table.scroll_home(animate=False)
+        await pilot.pause()
+        await drag(pilot, table, header_grip(table, "graph"), (-100, 0))
+        assert table.columns["graph"].width >= max(row.width for row in app._graph_rows)
 
 
 async def test_stage_commit_and_refresh(demo_repo):
