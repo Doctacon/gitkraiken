@@ -3,7 +3,16 @@ from __future__ import annotations
 import subprocess
 
 import pytest
-from textual.widgets import DataTable, Input, OptionList, Static, TabbedContent, TextArea, Tree
+from textual.widgets import (
+    DataTable,
+    Input,
+    OptionList,
+    Static,
+    TabbedContent,
+    TextArea,
+    Tooltip,
+    Tree,
+)
 from textual.widgets._toast import Toast
 from ui_helpers import click, post_click
 
@@ -122,6 +131,44 @@ async def test_real_repository_mount_and_commit_diff(demo_repo):
         assert app.query_one("#inspector-tabs", TabbedContent).active == "details-tab"
         assert app.query_one(CommitFileTree).selected_file
         assert "diff --git" in str(app.query_one("#commit-diff", Static).render())
+
+
+async def test_hover_tooltips_stay_hidden_in_workspace_and_context_menu(demo_repo):
+    app = GitKraikenApp(demo_repo)
+    app.TOOLTIP_DELAY = 0.01
+    # Textual disables tooltips in run_test by default; exercise the real hover path.
+    async with app.run_test(size=(170, 50), tooltips=True) as pilot:
+        await settle(app, pilot)
+        app.jump_to(app.snapshot_data.head)
+        await settle(app, pilot)
+
+        async def hover_without_popup(widget, offset=(0, 0)):
+            await pilot.hover(offset=(0, 0))
+            assert await pilot.hover(widget, offset=offset)
+            await pilot.pause(0.05)
+            tooltip = app.screen.query_one(Tooltip)
+            # Verify the hover timer actually fired, not just the initial hidden state.
+            assert widget.tooltip is not None
+            assert tooltip.renderable == widget.tooltip
+            assert not tooltip.visible
+            assert app.screen.get_widget_at(*app.mouse_position)[0] is widget
+
+        for selector in ("#history-heading", "#history-caption", "#graph-style", "#commit-detail"):
+            await hover_without_popup(app.query_one(selector))
+        for column in ("refs", "date"):
+            table, offset = await graph_point(app, pilot, app.snapshot_data.head, column=column)
+            await hover_without_popup(table, offset)
+
+        # Hover suppression must not interfere with deliberate clicks or modal menus.
+        await post_click(pilot, table, offset, button=3)
+        await pilot.pause()
+        assert isinstance(app.screen, BranchContextMenu)
+        options = app.screen.query_one(OptionList)
+        await hover_without_popup(options, (2, 1))
+        await pilot.press("escape")
+        assert len(app.screen_stack) == 1
+        assert await pilot.click("#graph-style")
+        assert app.graph_style == "compact"
 
 
 @pytest.mark.parametrize("width", [120, 170])

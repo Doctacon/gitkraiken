@@ -47,15 +47,14 @@ intentionally rejected.
 - **Left:** a searchable reference tree. Collapse Repository, Local, Remotes,
   individual remotes, and branch namespaces such as `feature/jlott` using
   their carets. Tags and Stashes also collapse. Search reveals matching paths;
-  clearing it restores your folds. Full names remain available in tooltips.
+  clearing it restores your folds.
   **Single-click selects action context without moving or filtering the graph.**
   **Double-click a local/remote branch label to check it out immediately.**
   **Right-click a branch for checkout, integration, creation, reset, upstream,
   rename/delete, and copy actions.**
 - **Center:** a colored commit graph with rounded bends, branch/tag labels,
   date/time, subjects and SHAs. Dates show `YYYY-MM-DD HH:MM` in your computer's
-  local timezone, including daylight-saving rules for that date; hover for seconds,
-  timezone abbreviation and offset.
+  local timezone, including daylight-saving rules for that date.
   Working changes and connector-only rows have no date. Smooth mode draws Git's
   actual parent relationships; Compact mode retains Git's native lane layout.
   Search by message, author, ref or SHA and
@@ -64,10 +63,9 @@ intentionally rejected.
   selections and checkouts; sidebar search never changes graph topology.
 - **Right:** selected commit's title and compact author/date/SHA, an expanded
   changed-file tree, and a syntax-colored unified diff. Fold directories with a
-  click or Space; file labels show just the filename, with full paths (including
-  rename origins) on hover. Commit descriptions no longer consume the file list's
-  space; hover the header for full metadata. Merge commits are compared to their first
-  parent. The **Working directory** tab has separate staged/unstaged entries,
+  click or Space; file labels show just the filename. Commit descriptions do not
+  consume the file list's space. Merge commits are compared to their first parent.
+  The **Working directory** tab has separate staged/unstaged entries,
   file/all staging, safe discard, diff preview, and a multiline commit composer.
 - **Toolbar / Actions:** fetch, fast-forward-only pull, push/publish branch,
   checkout, create/rename/safe-delete branch, merge, rebase, cherry-pick, revert,
@@ -79,6 +77,8 @@ intentionally rejected.
   your editor, stage resolutions, then Continue. Git's errors remain visible;
   failed operations refresh the screen too.
 
+Hover tooltip popups are disabled throughout the workspace and menus.
+
 Local state refreshes every five seconds while no dialog or operation is active.
 Network requests happen **only when you ask**. Large patches are clipped with a
 visible notice; binary files have a summary, not a binary-patch dump.
@@ -89,8 +89,8 @@ The graph distinguishes **💻 local branch / HEAD**, **🐙 GitHub**, **☁ Azu
 **🦊 GitLab**, and **↗ other remote** pointers, plus **◇ tags** and **▣ stashes**.
 Both local and remote markers appear on a commit when their tips agree. A local
 commit moves only its local pointer; Fetch updates last-fetched remote-tracking
-pointers. These are not live server indicators. Hover a badge or inspect the
-commit for full reference names. Icon appearance depends on your terminal font.
+pointers. These are not live server indicators. Icon appearance depends on your
+terminal font.
 
 Creating a branch at an existing commit adds a pointer, not an invented graph
 fork. New commits create divergence only when their actual ancestry diverges.

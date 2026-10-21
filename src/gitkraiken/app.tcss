@@ -4,6 +4,10 @@ Screen {
     color: #d6e2e5;
 }
 
+/* Never let hover popups cover the workspace or dialogs. Textual toggles
+   display inline, so hide visibility instead (also excludes mouse hit-testing). */
+Tooltip { visibility: hidden; }
+
 Static, Label { color: #d6e2e5; }
 Button { min-width: 0; border: none; }
 Button:focus { text-style: bold; }
@@ -158,7 +162,7 @@ TabbedContent { height: 1fr; background: #101a24; }
 TabbedContent ContentTab { color: #8fa5ad; background: #142531; }
 TabbedContent ContentTab.-active { color: #baf1e9; background: #1b3540; text-style: bold; }
 TabPane { padding: 1; }
-/* Commit metadata stays scannable; its complete value belongs in a tooltip. */
+/* Compact commit metadata leaves room for the file tree and diff. */
 #commit-detail {
     height: 4;
     min-height: 4;

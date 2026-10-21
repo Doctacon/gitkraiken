@@ -88,7 +88,7 @@ credential helpers / SSH configuration handle private GitHub and Azure DevOps ac
   Carets, categories, Enter, and navigation never check out.
 - `ref_badges.py`: pure typed pointer grouping by OID from refs, remotes, and stashes,
   not ambiguous `Commit.refs` strings. Local/HEAD and provider markers precede
-  potentially truncated names. Hover text and commit details retain full refs.
+  potentially truncated names. Description metadata retains full refs.
   Remote markers describe local last-fetched state, never live server state.
   Individual name spans carry full-ref metadata for graph branch context menus.
 - `context_actions.py`: immutable clicked targets and pure contextual menu policy.
@@ -98,8 +98,8 @@ credential helpers / SSH configuration handle private GitHub and Azure DevOps ac
 - `dates.py`: presentation-only conversion of offset-aware Git timestamps to the
   OS local timezone at the commit instant (including DST). Raw model dates stay intact.
 - `commit_files.py`: presentation-only changed-file tree. Compacted directory
-  chains, basename/status leaves, literal full-path/rename tooltips, and typed
-  FileSelected messages. Same-commit refresh preserves folds and selection.
+  chains, basename/status leaves, and typed FileSelected messages. Same-commit
+  refresh preserves folds and selection.
 - `app.py`, `dialogs.py`, `app.tcss`: Textual UI. `GitKraikenApp(path: str | Path)`.
   Synchronous Git calls run via `asyncio.to_thread`, not on the UI loop; serialize
   mutation/refresh work and ignore stale selection detail results. No UI-to-shell
@@ -137,7 +137,8 @@ not trigger filtering or automatic loading; Load more may reveal them, within th
 5,000-commit cap. New pointers at an existing OID do not invent a graph divergence.
 The inspector shows a commit title and compact local-time metadata, not the commit
 body or multiline stat; that space belongs to the collapsible changed-file tree.
-Full metadata remains in the header tooltip. Worktree has staged/unstaged files,
+Hover tooltip popups are globally hidden, including in modal menus; normal mouse
+highlighting and explicit clicks remain active. Worktree has staged/unstaged files,
 diff and commit composer. Include context actions for commits/refs/stashes, quick
 command picker, shortcuts/help, visible pending-operation and conflict controls.
 At narrow sizes allow panel toggles. Actions require explicit invocation but no
