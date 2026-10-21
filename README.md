@@ -51,7 +51,7 @@ intentionally rejected.
   **Single-click selects action context without moving or filtering the graph.**
   **Double-click a local/remote branch label to check it out immediately.**
   **Right-click a branch for checkout, integration, creation, reset, upstream,
-  rename/delete, and copy actions.**
+  rename/delete, pull request creation, and copy actions.**
 - **Center:** a colored commit graph with rounded bends, branch/tag labels,
   authors, date/time, subjects and SHAs. Dates show `YYYY-MM-DD HH:MM` in your computer's
   local timezone, including daylight-saving rules for that date.
@@ -137,6 +137,12 @@ use arrows and Enter, or click. Escape and outside clicks cancel.
   preserves multiline messages; staged files are not included in the amendment.
   This rewrites the commit SHA. Editing older messages, dropping commits, and moving
   commits require an interactive history-editing workflow and are not offered here.
+- **Start a PR against … from …** creates a GitHub or Azure DevOps pull request from
+  the checked-out feature branch into the right-clicked target branch. A composer
+  asks for a title and optional multiline description; **Done** creates it and
+  displays a browser URL with **Copy URL**. Push your commits first. Reviewers,
+  work items, and tags can be added in the web UI. This optional feature uses an
+  authenticated `gh` or `az` CLI; see [setup and branch rules](docs/pull-requests.md).
 - **Pull** (fast-forward only) and **Push** (never force) appear on the current local
   branch, not an unrelated clicked branch. **Set upstream** on a local branch asks
   for an exact remote-tracking branch; on a remote branch it sets the current local
@@ -157,8 +163,8 @@ use arrows and Enter, or click. Escape and outside clicks cancel.
 Menus omit inapplicable actions. During an unfinished operation, copy actions stay
 available; use the existing Continue/Abort controls to finish it. Captured branch,
 HEAD, and target guards reject stale mutations, including changes made externally
-while a follow-up name, path, or destination prompt is open. AI features, hosted PR
-creation, and combined (non-atomic) local-plus-remote deletion are not included.
+while a follow-up name, path, or destination prompt is open. AI features and
+combined (non-atomic) local-plus-remote deletion are not included.
 
 ### Rebase your feature branch onto an updated base
 
@@ -306,10 +312,13 @@ Windows credentials and SSH agents are not automatically the same as WSL's.
 
 ## Private GitHub and Azure DevOps
 
-There is no GitKraiken login, token database, GitHub API token requirement, or
-subscription. **If command-line Git can authenticate, this app uses the same
-credential helper, SSH configuration and agent.** Use SSH keys or a system
-credential manager—not a PAT embedded in a URL.
+There is no GitKraiken login, token database, or subscription. **Git operations use
+the same credential helper, SSH configuration and agent as command-line Git.**
+Use SSH keys or a system credential manager—not a PAT embedded in a URL.
+Optional **pull request creation** additionally requires an authenticated GitHub
+CLI (`gh auth login`) or Azure CLI with its `azure-devops` extension (`az login`
+or `az devops login`). SSH authentication alone cannot create hosted PRs.
+See [pull request setup](docs/pull-requests.md); credentials stay with those CLIs.
 
 ```sh
 # GitHub, including private repositories
@@ -390,6 +399,8 @@ selection, immediate double-click checkout, grouped right-click menus and confli
 context-specific creation/reset/upstream/copy actions, worktrees and message editing,
 local-time dates, changed-file folders, fold/search persistence, unified graph geometry,
 local/remote pointers, diffs, dialogs, branch creation, refresh and narrow layouts.
+PR tests cover branch targeting, provider argv/payloads, guarded creation, failure
+recovery, and copyable result links using mocked provider commands (no live PRs).
 Checkout and notification regressions enable toast rendering explicitly; Textual
 otherwise disables notifications in tests. Popup smoke checks exercise real Git
 checkouts and verify that the application process and popup stay alive.

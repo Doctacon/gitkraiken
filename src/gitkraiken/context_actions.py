@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from urllib.parse import quote, urlencode, urlsplit, urlunsplit
 
 from .models import Ref, Remote, Snapshot
+from .pull_requests import hosted_repository
 
 MenuActions = list[tuple[str, str] | None]
 
@@ -43,6 +44,24 @@ def context_actions(snapshot: Snapshot, target: ContextTarget) -> MenuActions:
             network.append(("set-upstream", f"Set upstream for {ref.name}…"))
         elif ref.kind == "remote" and ref.remote and attached:
             network.append(("set-upstream", f"Set {snapshot.branch} upstream to {ref.name}"))
+    supported_pr_remotes = {r.name for r in snapshot.remotes if hosted_repository(r.url)}
+    if (
+        idle
+        and attached
+        and ref
+        and ref.kind in {"local", "remote"}
+        and not current
+        and not (
+            ref.kind == "remote"
+            and snapshot.upstream in {ref.name, ref.full_name, ref.full_name.removeprefix("refs/")}
+        )
+        and (
+            ref.remote in supported_pr_remotes
+            if ref.kind == "remote"
+            else bool(supported_pr_remotes)
+        )
+    ):
+        network.append(("create-pr", f"Start a PR against {ref.name} from {snapshot.branch}…"))
     groups.append(network)
 
     navigation: list[tuple[str, str]] = []

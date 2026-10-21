@@ -60,6 +60,7 @@ def test_branch_menu_operations_apply_to_clicked_ref_not_current_branch():
     assert not {"pull", "push", "edit-message", "delete-remote-branch"} & available
     labels = dict(action for action in context_actions(state, other) if action)
     assert labels["rebase"] == "Rebase feature/payments onto test"
+    assert labels["create-pr"] == "Start a PR against test from feature/payments…"
     assert other.revision == "refs/heads/test"
     assert other.label == "test"
 
@@ -68,7 +69,7 @@ def test_current_and_remote_contexts_have_distinct_safe_actions():
     state = snapshot()
     current = ids(state, ContextTarget(state.head, state.refs[0]))
     assert {"pull", "push", "reset", "edit-message", "rename-branch"} <= current
-    assert not {"checkout", "delete-branch", "merge", "rebase"} & current
+    assert not {"checkout", "delete-branch", "merge", "rebase", "create-pr"} & current
     remote = ids(state, ContextTarget(state.refs[2].oid, state.refs[2]))
     assert {"delete-remote-branch", "copy-branch-link", "set-upstream"} <= remote
     assert not {"rename-branch", "delete-branch", "pull", "push"} & remote
@@ -81,7 +82,7 @@ def test_detached_and_operation_menus_keep_copy_without_invalid_mutations():
     target = ContextTarget(state.refs[1].oid, state.refs[1])
     detached = ids(replace(state, branch=""), target)
     assert {"checkout", "create-branch", "create-worktree", "copy-sha"} <= detached
-    assert not {"rebase", "reset", "edit-message", "merge", "revert"} & detached
+    assert not {"rebase", "reset", "edit-message", "merge", "revert", "create-pr"} & detached
     active = ids(replace(state, operation="rebase"), target)
     assert active == {"copy-sha", "copy-branch", "copy-commit-link"}
 
@@ -90,6 +91,7 @@ def test_local_only_remotes_do_not_advertise_browser_links():
     state = replace(snapshot(), remotes=(Remote("origin", "/tmp/local.git"),))
     available = ids(state, ContextTarget(state.refs[2].oid, state.refs[2]))
     assert "copy-branch-link" not in available and "copy-commit-link" not in available
+    assert "create-pr" not in available
 
 
 def test_commit_menu_never_renames_a_previously_selected_branch():
@@ -99,9 +101,41 @@ def test_commit_menu_never_renames_a_previously_selected_branch():
     available = ids(state, target)
     assert {"checkout", "create-branch", "reset", "edit-message", "copy-sha"} <= available
     assert (
-        not {"rename-branch", "delete-branch", "copy-branch", "set-upstream", "pull", "push"}
+        not {
+            "rename-branch",
+            "delete-branch",
+            "copy-branch",
+            "set-upstream",
+            "pull",
+            "push",
+            "create-pr",
+        }
         & available
     )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "git@github.com:org/repo.git",
+        "https://dev.azure.com/org/project/_git/repo",
+        "git@ssh.dev.azure.com:v3/org/project/repo",
+    ],
+)
+def test_pr_menu_supports_local_and_remote_targets_even_at_same_commit(url):
+    state = replace(snapshot(), remotes=(Remote("origin", url),))
+    for ref in state.refs[1:]:
+        ref = replace(ref, oid=state.head)
+        assert "create-pr" in ids(state, ContextTarget(ref.oid, ref))
+    source_remote = replace(state.refs[2], name="origin/payments")
+    assert "create-pr" not in ids(state, ContextTarget(source_remote.oid, source_remote))
+
+
+def test_pr_menu_does_not_offer_unsupported_remote_when_another_is_supported():
+    state = snapshot()
+    state = replace(state, remotes=(*state.remotes, Remote("other", "https://gitlab.com/o/r")))
+    ref = replace(state.refs[2], remote="other")
+    assert "create-pr" not in ids(state, ContextTarget(ref.oid, ref))
 
 
 @pytest.mark.parametrize(

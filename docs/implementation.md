@@ -1,14 +1,15 @@
 # Implementation contract
 
 A Python 3.13+ / Textual 1.x application, launched with `uv run gitkraiken [PATH]`.
-No web server, hosted service, account integration, or token database. Existing Git
-credential helpers / SSH configuration handle private GitHub and Azure DevOps access.
+No web server, hosted service, built-in account management, or token database.
+Existing Git credential helpers / SSH configuration handle Git access. Optional
+hosted PR creation uses authenticated GitHub/Azure CLIs; see [pull requests](pull-requests.md).
 
 ## Ownership / seams
 
 - `models.py`: immutable shared values.
 - `git.py`: synchronous `Repository(path)` discovers the worktree root, rejects bare
-  repos with a friendly `GitError`. `root: Path`. All I/O stays here. Methods:
+  repos with a friendly `GitError`. `root: Path`. All Git I/O stays here. Methods:
   - `snapshot(limit: int = 300, ref: str = "") -> Snapshot`: status, refs, remotes,
     stashes, current operation, bounded native Git graph. Empty `ref` means all refs
     plus HEAD (including detached HEAD); nonempty ref shows its ancestry. The UI
@@ -63,6 +64,14 @@ credential helpers / SSH configuration handle private GitHub and Azure DevOps ac
   - `branch_remote_target(full_ref: str) -> tuple[str, str]`: resolve a local
     upstream or remote tracking alias to its exact configured remote and source
     refs/heads name for browser links, without network I/O.
+  - `pull_request_plans(action: Action) -> tuple[PullRequestPlan, ...]`: local-only
+    resolution of captured current source and clicked target branches to supported
+    hosted repositories. Exact upstream mappings win; ambiguous remotes require a
+    picker. Same-repository only, with no implicit branch publishing.
+  - `create_pull_request(plan, title, description) -> str`: revalidate context and
+    repository mappings, check live remote branch existence and source HEAD, then
+    call the provider adapter once. Returns the created PR's browser URL. No local
+    mutation, push, or merge; failures do not erase the UI draft.
   - `Repository.clone(url: str, destination: str) -> Path`: safe argv, credential
     redaction and noninteractive prompt policy, returns worktree root.
   - `GitError` has human-readable, redacted `str(error)`.
@@ -95,6 +104,14 @@ credential helpers / SSH configuration handle private GitHub and Azure DevOps ac
   Grouped literal action labels depend on local/remote/current/detached/operation
   state, not the previous inspector selection. Credential-free provider links are
   generated only for supported URL shapes and encode remote source branch names.
+- `pull_requests.py`: strict hosted-repository URL parsing, immutable PR plans,
+  and noninteractive provider CLI adapters (`gh api`, `az repos pr create`). Explicit
+  repository and branch fields, literal argv/JSON payloads, bounded timeout, no
+  automatic retries. Credentials remain CLI-owned; failure output is not echoed.
+- `pull_request_dialog.py`: title/description composer and persistent success link
+  with copy/open affordances. Modal owns in-flight controls; the app shares its
+  operation lock/busy flag. Duplicate submission and cancellation are blocked until
+  the request settles. Errors keep the draft; Escape cancels before submission.
 - `dates.py`: presentation-only conversion of offset-aware Git timestamps to the
   OS local timezone at the commit instant (including DST). Raw model dates stay intact.
 - `commit_files.py`: presentation-only changed-file tree. Compacted directory

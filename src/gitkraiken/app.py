@@ -35,6 +35,8 @@ from .git import Repository
 from .graph import GraphRow, GraphStyle, render_history
 from .models import Action, Commit, FileChange, HistoryLine, Snapshot
 from .pane_splitter import PaneGroup, PaneSplitter
+from .pull_request_dialog import PullRequestDialog
+from .pull_requests import PullRequestError, PullRequestPlan
 from .ref_badges import RefBadges, build_ref_badges
 from .resizable_table import ResizableDataTable
 from .sidebar import ReferenceSidebar, SidebarSelection
@@ -636,6 +638,13 @@ class GitKraikenApp(App[None]):
                 group="context-read",
                 exit_on_error=False,
             )
+        elif operation == "create-pr":
+            self.set_busy(True, "Reading pull request branches…")
+            self.run_worker(
+                self._prepare_pull_request(target, snapshot, repo),
+                group="context-read",
+                exit_on_error=False,
+            )
         elif operation in {"pull", "push"}:
             if operation == "push" and not snapshot.upstream and len(snapshot.remotes) > 1:
                 self.push_screen(
@@ -758,6 +767,67 @@ class GitKraikenApp(App[None]):
             )
         else:
             run(Action(operation, target=target.revision))
+
+    async def _prepare_pull_request(
+        self, target: ContextTarget, snapshot: Snapshot, repo: Repository
+    ) -> None:
+        guard = Action(
+            "create-pr",
+            target=target.revision,
+            expected_branch=snapshot.branch,
+            expected_head=snapshot.head,
+            expected_ref=target.revision,
+            expected_oid=target.oid,
+        )
+        try:
+            async with self._serial:
+                plans = await asyncio.to_thread(repo.pull_request_plans, guard)
+        except Exception as error:
+            self.show_error(str(error))
+            return
+        finally:
+            self.set_busy(False)
+        if self.repo is not repo or len(self.screen_stack) > 1:
+            return
+
+        def compose(plan: PullRequestPlan) -> None:
+            if self.repo is not repo or self.busy or len(self.screen_stack) > 1:
+                return
+
+            async def create(title: str, description: str) -> str:
+                if self.repo is not repo or self.busy:
+                    raise PullRequestError("Repository changed. Close and choose the action again.")
+                # The modal owns its disabled controls while in flight. The shared
+                # flag/lock also exclude refresh and any other repository operation.
+                self.busy = True
+                try:
+                    async with self._serial:
+                        return await asyncio.to_thread(
+                            repo.create_pull_request, plan, title, description
+                        )
+                finally:
+                    self.busy = False
+
+            def closed(url: str | None) -> None:
+                self.update_controls()
+                self.status(f"Pull request created: {url}" if url else "Pull request cancelled")
+
+            self.push_screen(PullRequestDialog(plan, create), closed)
+
+        if len(plans) == 1:
+            compose(plans[0])
+        elif plans:
+            choices = {str(index): plan for index, plan in enumerate(plans)}
+            self.push_screen(
+                ActionPicker(
+                    "CREATE PULL REQUEST IN",
+                    [
+                        (key, f"{plan.remote} · {plan.repository.web_url}")
+                        for key, plan in choices.items()
+                    ],
+                ),
+                lambda key: compose(choices[key]) if key in choices else None,
+            )
 
     async def _context_read(
         self,

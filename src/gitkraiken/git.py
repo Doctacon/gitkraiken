@@ -26,6 +26,8 @@ from .models import (
     Snapshot,
     Stash,
 )
+from .pull_requests import HostedRepository, PullRequestError, PullRequestPlan, hosted_repository
+from .pull_requests import create_pull_request as _create_hosted_pull_request
 
 _NETWORK_TIMEOUT = 60.0
 _LOCAL_TIMEOUT = 30.0
@@ -1221,6 +1223,210 @@ class Repository:
                 raise GitError(f"Remote ref {full_ref} does not map to a branch source.")
             return selected.remote, source
         raise GitError(f"Unsupported branch ref: {full_ref}")
+
+    def _remote_fetch_url(self, name: str) -> str:
+        configured = self._remote(name)
+        result = self._git(
+            ["remote", "get-url", "--", configured], operation="read pull request remote URL"
+        )
+        return _decode(result.stdout).rstrip("\n")
+
+    def _hosted_remote(self, name: str) -> HostedRepository | None:
+        return hosted_repository(self._remote_fetch_url(name))
+
+    @staticmethod
+    def _same_hosted_repository(left: HostedRepository, right: HostedRepository) -> bool:
+        if left.provider != right.provider:
+            return False
+        if left.provider == "GitHub":
+            return (left.owner.casefold(), left.repository.casefold()) == (
+                right.owner.casefold(),
+                right.repository.casefold(),
+            )
+        if left.provider == "Azure DevOps":
+            return (
+                left.organization.casefold(),
+                left.project.casefold(),
+                left.repository.casefold(),
+            ) == (
+                right.organization.casefold(),
+                right.project.casefold(),
+                right.repository.casefold(),
+            )
+        return False
+
+    def _safe_pull_request_remote(self, name: str) -> HostedRepository:
+        repository = self._hosted_remote(name)
+        if repository is None:
+            raise GitError(
+                f"Remote {name} is not a supported GitHub.com or Azure DevOps repository."
+            )
+        push_urls = self._remote_push_urls(name)
+        if len(push_urls) != 1:
+            if push_urls:
+                raise GitError(
+                    f"Remote {name} has multiple push destinations; configure exactly one "
+                    "before creating a pull request."
+                )
+            raise GitError(f"Remote {name} has no push destination.")
+        push_repository = hosted_repository(push_urls[0])
+        if push_repository is None or not self._same_hosted_repository(push_repository, repository):
+            raise GitError(
+                f"Remote {name} pushes to a different or unsupported hosted repository; "
+                "refusing to create a cross-repository pull request."
+            )
+        return repository
+
+    def pull_request_plans(self, action: Action) -> tuple[PullRequestPlan, ...]:
+        """Derive safe pull-request choices using local repository state only."""
+        if action.operation != "create-pr":
+            raise GitError("Pull request planning requires a create-pr action.")
+        if (
+            not action.expected_ref
+            or action.expected_ref != action.target
+            or not action.expected_oid
+            or not action.expected_head
+        ):
+            raise GitError(
+                "Pull request context is incomplete. Refresh and choose the action again."
+            )
+        self._preflight_context(action)
+
+        branch = self._branch()
+        head = self._head()
+        if not branch or not head:
+            raise GitError("Cannot create a pull request from a detached or unborn HEAD.")
+        if action.expected_branch != branch or action.expected_head != head:
+            raise GitError("Branch changed. Refresh and choose the action again.")
+        if action.target == f"refs/heads/{branch}":
+            raise GitError("The pull request target cannot be the current local branch.")
+
+        source_ref = f"refs/heads/{branch}"
+        source_upstream = self._canonical_upstream(branch)
+        source_owner = ""
+        if any(source_upstream) and source_upstream[1] != ".":
+            source_owner, source_full = self.branch_remote_target(source_ref)
+            source_branch = source_full.removeprefix("refs/heads/")
+        else:
+            # remote='.' means this branch tracks another local branch. It is a
+            # history/integration hint, not evidence that the source is hosted
+            # under the tracked branch's name.
+            source_branch = self._validate_branch(branch, "Source branch name")
+
+        target_owner = ""
+        if action.target.startswith("refs/heads/"):
+            target_branch = self._local_branch_name(action.target, "Target branch name")
+            if action.target not in {ref.full_name for ref in self._refs() if ref.kind == "local"}:
+                raise GitError(f"Unknown local branch: {action.target}")
+            target_upstream = self._canonical_upstream(target_branch)
+            if any(target_upstream) and target_upstream[1] != ".":
+                target_owner, target_full = self.branch_remote_target(action.target)
+                target_branch = target_full.removeprefix("refs/heads/")
+        elif action.target.startswith("refs/remotes/"):
+            target_owner, target_full = self.branch_remote_target(action.target)
+            target_branch = target_full.removeprefix("refs/heads/")
+        else:
+            raise GitError("Pull request target must be a local or remote branch ref.")
+
+        if source_branch == target_branch:
+            raise GitError("Pull request source and target hosted branch names must differ.")
+
+        owners = tuple(dict.fromkeys(owner for owner in (source_owner, target_owner) if owner))
+        if len(owners) > 1:
+            owner_repositories = [self._safe_pull_request_remote(owner) for owner in owners]
+            if any(
+                not self._same_hosted_repository(item, owner_repositories[0])
+                for item in owner_repositories[1:]
+            ):
+                raise GitError(
+                    "Source and target branches belong to different hosted repositories; "
+                    "cross-repository and fork pull requests are not supported."
+                )
+            candidates = (target_owner or source_owner,)
+        elif owners:
+            candidates = owners
+        else:
+            candidates = self._remote_names()
+
+        plans: list[PullRequestPlan] = []
+        for remote in candidates:
+            # With no configured branch owners, unsupported remotes are not PR
+            # choices. Owned remotes are checked above and fail explicitly.
+            if not owners and self._hosted_remote(remote) is None:
+                continue
+            repository = self._safe_pull_request_remote(remote)
+            plans.append(
+                PullRequestPlan(
+                    remote=remote,
+                    repository=repository,
+                    source_branch=source_branch,
+                    target_branch=target_branch,
+                    guard=action,
+                )
+            )
+        if not plans:
+            raise GitError("No supported GitHub.com or Azure DevOps remote is configured.")
+        return tuple(plans)
+
+    def create_pull_request(self, plan: PullRequestPlan, title: str, description: str) -> str:
+        """Verify live hosted branches and create exactly one pull request."""
+        if not title.strip():
+            raise PullRequestError("A pull request title is required.")
+
+        current_plans = self.pull_request_plans(plan.guard)
+        if plan not in current_plans:
+            raise GitError(
+                "Pull request repository or branch mapping changed. Refresh and choose it again."
+            )
+
+        source_ref = f"refs/heads/{plan.source_branch}"
+        target_ref = f"refs/heads/{plan.target_branch}"
+        result = self._git(
+            ["ls-remote", "--heads", "--", plan.remote, source_ref, target_ref],
+            timeout=_NETWORK_TIMEOUT,
+            operation="verify pull request branches",
+        )
+        remote_refs: dict[str, str] = {}
+        for line in _decode(result.stdout).splitlines():
+            oid, separator, ref = line.partition("\t")
+            if (
+                separator
+                and ref in {source_ref, target_ref}
+                and re.fullmatch(r"[0-9a-fA-F]{40,64}", oid)
+            ):
+                remote_refs[ref] = oid.lower()
+
+        if source_ref not in remote_refs:
+            raise GitError(
+                f"Source branch {plan.source_branch} is not published on remote {plan.remote}. "
+                "Push it first, then try again."
+            )
+        if target_ref not in remote_refs:
+            raise GitError(
+                f"Target branch {plan.target_branch} is not published on remote {plan.remote}. "
+                "Publish the target branch first, then try again."
+            )
+        if remote_refs[source_ref] != plan.guard.expected_head.lower():
+            raise GitError(
+                f"Remote source branch {plan.source_branch} is not at the current HEAD. "
+                "Push your latest commits first, or fetch and reconcile if the remote has advanced."
+            )
+
+        # Network verification can take time. Recheck both the captured refs and
+        # all local remote/mapping choices before handing control to a provider.
+        refreshed_plans = self.pull_request_plans(plan.guard)
+        if plan not in refreshed_plans:
+            raise GitError(
+                "Pull request repository or branch mapping changed. Refresh and choose it again."
+            )
+        return _create_hosted_pull_request(
+            self.root,
+            plan.repository,
+            plan.source_branch,
+            plan.target_branch,
+            title,
+            description,
+        )
 
     def _checkout_remote_ref(
         self,

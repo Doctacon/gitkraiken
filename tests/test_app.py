@@ -21,6 +21,7 @@ from gitkraiken.commit_files import CommitFileTree
 from gitkraiken.demo import create_demo
 from gitkraiken.dialogs import ActionPicker, BranchContextMenu, MessageDialog, PromptDialog
 from gitkraiken.pane_splitter import PaneSplitter
+from gitkraiken.pull_request_dialog import PullRequestDialog
 from gitkraiken.resizable_table import ResizableDataTable
 from gitkraiken.sidebar import ReferenceSidebar, SidebarSelection
 
@@ -1626,6 +1627,106 @@ async def test_context_copy_branch_link_uses_remote_source_not_tracking_alias(br
         await settle(app, pilot)
         assert not app._last_error
         assert app.clipboard == "https://github.com/org/repo/tree/release%2Ftest"
+
+
+@pytest.mark.parametrize("target", ["refs/heads/test", "refs/remotes/origin/test"])
+@pytest.mark.parametrize(
+    ("remote_url", "created_url"),
+    [
+        ("git@github.com:org/repo.git", "https://github.com/org/repo/pull/7"),
+        (
+            "git@ssh.dev.azure.com:v3/org/project/repo",
+            "https://dev.azure.com/org/project/_git/repo/pullrequest/7",
+        ),
+    ],
+)
+async def test_right_click_creates_pr_from_feature_to_clicked_target(
+    branch_repo, git_run, monkeypatch, target, remote_url, created_url
+):
+    git_run(branch_repo, "switch", "-c", "feature/payments")
+    git_run(branch_repo, "push", "-u", "origin", "feature/payments")
+    git_run(branch_repo, "remote", "set-url", "origin", remote_url)
+    before = git(branch_repo, "rev-parse", "HEAD")
+    requests = []
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(150, 45)) as pilot:
+        await settle(app, pilot)
+
+        def create(plan, title, description):
+            requests.append((plan, title, description))
+            return created_url
+
+        monkeypatch.setattr(app.repo, "create_pull_request", create)
+        await click_reference(app, pilot, target, button=3)
+        actions = dict(action for action in app.screen.actions if action)
+        assert actions["create-pr"].endswith("from feature/payments…")
+        await choose_option(app, pilot, "create-pr")
+        await settle(app, pilot)
+        dialog = app.screen
+        assert isinstance(dialog, PullRequestDialog)
+        assert dialog.plan.source_branch == "feature/payments"
+        assert dialog.plan.target_branch == "test"
+        assert not requests
+        dialog.query_one("#pr-title", Input).value = "Payments [literal]"
+        dialog.query_one("#pr-description", TextArea).load_text("Summary\n\nDetails")
+        await pilot.click("#pr-submit")
+        await settle(app, pilot)
+        assert requests == [(dialog.plan, "Payments [literal]", "Summary\n\nDetails")]
+        assert dialog.created_url == created_url
+        await pilot.click("#pr-copy")
+        assert app.clipboard == created_url
+        await pilot.click("#pr-cancel")
+        await settle(app, pilot)
+        assert created_url in str(app.query_one("#status-line").renderable)
+        assert git(branch_repo, "branch", "--show-current") == "feature/payments"
+        assert git(branch_repo, "rev-parse", "HEAD") == before
+
+
+async def test_pr_form_rejects_external_checkout_and_preserves_input(branch_repo, git_run):
+    git_run(branch_repo, "remote", "set-url", "origin", "https://github.com/org/repo.git")
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await settle(app, pilot)
+        await click_reference(app, pilot, "refs/heads/test", button=3)
+        await choose_option(app, pilot, "create-pr")
+        await settle(app, pilot)
+        dialog = app.screen
+        assert isinstance(dialog, PullRequestDialog)
+        dialog.query_one("#pr-title", Input).value = "Keep this draft"
+        await pilot.press("ctrl+o", "ctrl+b", "ctrl+p", "ctrl+r")
+        assert app.screen is dialog
+        git_run(branch_repo, "switch", "test")
+        await pilot.click("#pr-submit")
+        await settle(app, pilot)
+        assert "Branch changed" in dialog.query_one("#pr-feedback").renderable.plain
+        assert dialog.query_one("#pr-title", Input).value == "Keep this draft"
+        assert not dialog.created_url
+        assert git(branch_repo, "branch", "--show-current") == "test"
+
+
+async def test_pr_ambiguous_repository_prompts_before_composer(branch_repo, git_run):
+    git_run(branch_repo, "config", "--unset", "branch.main.remote")
+    git_run(branch_repo, "config", "--unset", "branch.main.merge")
+    git_run(branch_repo, "config", "--unset", "branch.test.remote")
+    git_run(branch_repo, "config", "--unset", "branch.test.merge")
+    git_run(branch_repo, "remote", "set-url", "origin", "https://github.com/org/repo.git")
+    git_run(branch_repo, "remote", "add", "team", "https://dev.azure.com/org/project/_git/repo")
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await settle(app, pilot)
+        await click_reference(app, pilot, "refs/heads/test", button=3)
+        await choose_option(app, pilot, "create-pr")
+        await settle(app, pilot)
+        assert isinstance(app.screen, ActionPicker)
+        assert "CREATE PULL REQUEST IN" == app.screen.heading
+        assert len(app.screen.actions) == 2
+        await choose_option(app, pilot, "1")
+        await settle(app, pilot)
+        assert isinstance(app.screen, PullRequestDialog)
+        assert app.screen.plan.remote == "team"
+        assert app.screen.plan.repository.provider == "Azure DevOps"
+        await pilot.press("escape")
+        assert len(app.screen_stack) == 1
 
 
 async def test_commit_selection_waits_for_chained_diff_workers(demo_repo, monkeypatch):
