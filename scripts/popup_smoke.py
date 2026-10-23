@@ -1,7 +1,8 @@
 """Exercise the actual popup CLI through an attached PTY on a custom tmux socket.
 
 Run with: uv run python scripts/popup_smoke.py [--hotkey]
---hotkey sources the generated config and presses prefix+g to open/close/reopen.
+--hotkey also verifies prefix+g can still detach an explicitly requested popup.
+Pane-local hotkey launch/resize/toggle behavior is covered by pane_smoke.py.
 Uses zsh when available to catch its special handling of unquoted '=name'.
 """
 
@@ -167,13 +168,10 @@ def main(*, use_hotkey: bool = False) -> None:
             app_pid: int | None = None
             popup_client_pids: list[int] = []
             for run in range(2):
-                if use_hotkey:
-                    os.write(master, b"\x02g")
-                else:
-                    command = shlex.join([sys.executable, "-m", "gitkraiken", "--popup", str(root)])
-                    command += f"; printf 'POPUP_{run}_EXIT:%s\\n' \"$?\""
-                    tmux("send-keys", "-t", "host", "-l", command)
-                    tmux("send-keys", "-t", "host", "Enter")
+                command = shlex.join([sys.executable, "-m", "gitkraiken", "--popup", str(root)])
+                command += f"; printf 'POPUP_{run}_EXIT:%s\\n' \"$?\""
+                tmux("send-keys", "-t", "host", "-l", command)
+                tmux("send-keys", "-t", "host", "Enter")
 
                 inner = ""
                 inner_pid = 0
@@ -317,11 +315,9 @@ def main(*, use_hotkey: bool = False) -> None:
                     tmux("detach-client", "-t", inner)
 
                 def popup_detached(run_number: int = run) -> bool:
-                    if use_hotkey:
-                        return (
-                            target not in tmux("list-clients", "-F", "#{session_name}").splitlines()
-                        )
-                    return f"POPUP_{run_number}_EXIT:0" in capture("host")
+                    return target not in tmux(
+                        "list-clients", "-F", "#{session_name}"
+                    ).splitlines() and f"POPUP_{run_number}_EXIT:0" in capture("host")
 
                 wait_for(popup_detached, "Popup did not detach cleanly", timeout=3)
                 assert len(tmux("list-sessions", "-F", "#{session_name}").splitlines()) == 2
@@ -329,7 +325,7 @@ def main(*, use_hotkey: bool = False) -> None:
                 os.kill(app_pid, 0)
             assert len(set(popup_client_pids)) == 2, "Reopen unexpectedly reused a popup client PID"
             print(
-                f"PASS: {'prefix+g' if use_hotkey else 'CLI'} keeps outer client PID "
+                f"PASS: explicit popup ({'prefix+g detach' if use_hotkey else 'CLI'}) keeps outer client PID "
                 f"{attached.pid} and app PID {app_pid} alive throughout; popup client PIDs "
                 f"{popup_client_pids} each stay alive while attached and change on reopen; "
                 "headers detached HEAD → test → main; detach/reopen works "
@@ -378,5 +374,7 @@ def main(*, use_hotkey: bool = False) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--hotkey", action="store_true", help="test the generated prefix+g binding")
+    parser.add_argument(
+        "--hotkey", action="store_true", help="test prefix+g detaching an explicit popup"
+    )
     main(use_hotkey=parser.parse_args().hotkey)

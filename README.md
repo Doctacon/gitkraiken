@@ -11,7 +11,9 @@ GitHub and Azure DevOps repositories through your existing Git authentication.
 For **macOS or Linux (including WSL2)**. Requires **Git 2.31+**, **Python 3.13+**, and
 [uv](https://docs.astral.sh/uv/).
 A true-color terminal at **120×40 or larger** is recommended; 170 columns gives
-all three panels room. No special font is required.
+all three panels room. Smaller tmux panes adapt automatically: below 85 columns,
+the inspector collapses; use `Ctrl+Right` to show it or `Ctrl+Left` to return to
+refs. Either side panel can remain alongside history at 60 columns. No special font is required.
 
 ```sh
 git clone https://github.com/Doctacon/gitkraiken.git
@@ -219,7 +221,7 @@ invented root. Wide graphs scroll horizontally rather than clipping away lanes.
 This uses ordinary terminal characters, not image protocols or a special font,
 so it works in tmux and Windows Terminal/WSL. It is smoother routing, not a
 pixel-rendered Bézier graph. The choice lasts for the running workspace, including
-when its tmux popup is detached.
+when its tmux pane is hidden or its explicit popup is detached.
 
 ### Controls
 
@@ -285,10 +287,29 @@ tmux source-file ~/.tmux.conf
 
 Use your configured prefix (normally **Ctrl+B**, release, then **g**):
 
-- In a repository pane, **prefix + g** opens/resumes that repo in a popup.
-- Inside the popup, **prefix + g** again closes it without losing its state.
+- In a repository pane, **prefix + g** opens/resumes GitKraiken **in that pane's
+  exact space**. Other panes remain visible and interactive; normal tmux pane
+  resizing immediately resizes the app.
+- **prefix + g** again returns to your original shell/editor without losing the
+  app's state. The original process stays running while the app is visible.
+- **Ctrl+Q** quits GitKraiken and restores the original pane. App-process crashes
+  also restore it. Use these controls rather than tmux's destructive `kill-pane`
+  or `kill-window` commands, which remove the pane itself.
+- Each originating pane/repository pair has its own workspace, so opening the
+  same repo from two panes does not move or resize the other workspace.
 - It uses the pane's current directory, including subdirectories of a repo.
 - Outside a repository it shows an error on the invoking client's status line.
+
+The toggle parks the inactive pane in a detached `gitkraiken-pane-…` session.
+Do not kill that session while it holds your shell/editor. Quitting the app
+cleans it up automatically. If the original process exits while parked, there is
+no process to restore. `--popup` remains an explicit full-client overlay option;
+inside an explicit popup, **prefix + g** still detaches it. Normal **prefix + d**
+in pane-local mode detaches your entire tmux client, as usual.
+
+Existing generated hotkeys pick up this behavior after updating the installation
+and quitting/reopening old workspaces. No binding change is required unless the
+installation's Python path changed.
 
 The generated binding contains the absolute Python path, so it works even when
 an existing tmux server cannot find `gitkraiken` or `uv` on its `PATH`. It targets
@@ -406,7 +427,8 @@ uv run ruff check .
 uv run ruff format --check .
 uv run python scripts/tmux_smoke.py  # isolated server; leaves your tmux sessions alone
 uv run python scripts/popup_smoke.py # real checkout, live popup/PID, detach/reopen
-uv run python scripts/popup_smoke.py --hotkey # generated config + actual prefix+g presses
+uv run python scripts/popup_smoke.py --hotkey # prefix+g still detaches explicit popups
+uv run python scripts/pane_smoke.py  # pane-local prefix+g, live resize, toggle, quit/crash recovery
 uv build
 ```
 
@@ -420,7 +442,9 @@ PR tests cover branch targeting, provider argv/payloads, guarded creation, failu
 recovery, and copyable result links using mocked provider commands (no live PRs).
 Checkout and notification regressions enable toast rendering explicitly; Textual
 otherwise disables notifications in tests. Popup smoke checks exercise real Git
-checkouts and verify that the application process and popup stay alive.
+checkouts and verify that the application process and popup stay alive. Pane smoke
+checks use a real PTY and three-pane layout to verify containment, native resizing,
+independent workspaces, shell/app state preservation, and quit/crash restoration.
 Authentication against your organization's private remotes must still be verified
 with your credentials; none were requested or accessed during development.
 

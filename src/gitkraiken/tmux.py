@@ -9,6 +9,8 @@ import shlex
 import shutil
 import subprocess
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -41,6 +43,10 @@ def app_command(root: Path) -> str:
     return "exec " + shlex.join([sys.executable, "-m", "gitkraiken", str(root.resolve())])
 
 
+def _tmux_quote(command: str) -> str:
+    return '"' + command.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$") + '"'
+
+
 def config() -> str:
     """Emit a tmux config line for THIS installation, with no PATH dependency.
 
@@ -53,9 +59,9 @@ def config() -> str:
     # hashes in an installation path, then quote for its shell and tmux's parser.
     command = shlex.join([sys.executable.replace("#", "##"), "-m", "gitkraiken.tmux"])
     command += " --socket #{q:socket_path} --client #{q:client_name} --pane #{q:pane_id}"
-    quoted = '"' + command.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$") + '"'
+    quoted = _tmux_quote(command)
     return (
-        "# GitKraiken: prefix + g opens this pane's repo; repeat inside the popup to detach.\n"
+        "# GitKraiken: prefix + g toggles this pane's repo in place; other panes stay visible.\n"
         "# Generated for this machine. Regenerate after moving/reinstalling the Python environment.\n"
         f"bind-key -T prefix g run-shell -b {quoted}\n"
     )
@@ -65,10 +71,20 @@ def hotkey(*, socket: str, client: str, pane: str) -> None:
     """Handle the binding on its originating server, pane and attached client."""
     from .git import Repository
 
-    marker = _run(
-        "display-message", "-p", "-t", pane, "#{@gitkraiken_popup}", socket=socket
-    ).stdout.strip()
-    if marker == "1":
+    markers = _run(
+        "display-message",
+        "-p",
+        "-t",
+        pane,
+        "#{@gitkraiken_popup}\t#{@gitkraiken_origin}",
+        socket=socket,
+    ).stdout.removesuffix("\n")
+    popup, _, origin = markers.partition("\t")
+    if origin:
+        with _pane_lock(origin, socket=socket):
+            _run("swap-pane", "-d", "-Z", "-s", origin, "-t", pane, socket=socket)
+        return
+    if popup == "1":
         _run("detach-client", "-t", client, socket=socket)
         return
     directory = _run(
@@ -76,28 +92,154 @@ def hotkey(*, socket: str, client: str, pane: str) -> None:
     ).stdout.removesuffix("\n")
     if not directory:
         raise TmuxError("Could not determine the current pane's directory.")
-    launch(Repository(directory).root, popup=True, client=client, socket=socket)
+    launch_pane(Repository(directory).root, pane=pane, socket=socket)
+
+
+@contextmanager
+def _pane_lock(origin: str, *, socket: str) -> Iterator[None]:
+    """Serialize startup, toggles and exit restoration for one originating pane."""
+    channel = f"gitkraiken-pane-{origin}"
+    _run("wait-for", "-L", channel, socket=socket)
+    try:
+        yield
+    finally:
+        _run("wait-for", "-U", channel, socket=socket, check=False)
+
+
+def _pane_value(pane: str, value: str, *, socket: str, check: bool = True) -> str:
+    return _run(
+        "display-message", "-p", "-t", pane, value, socket=socket, check=check
+    ).stdout.strip()
+
+
+def launch_pane(root: Path, *, pane: str, socket: str) -> None:
+    """Swap a persistent app into exactly this pane's slot, parking its live process.
+
+    Unlike a popup, a real pane receives native terminal resizes and does not
+    obstruct other panes. Each origin/repository pair owns a detached parking
+    session; neither the user's shell nor any neighboring pane is respawned.
+    """
+    root = root.resolve()
+    session = f"gitkraiken-pane-{pane.removeprefix('%')}-{workspace_id(root)}"
+    with _pane_lock(pane, socket=socket):
+        app = _pane_value(f"={session}:", "#{@gitkraiken_app}", socket=socket, check=False)
+        if not app:
+            size = _pane_value(pane, "#{pane_width}\t#{pane_height}", socket=socket)
+            width, height = size.split("\t")
+            # Bootstrap with a harmless process. Install the death hook before
+            # starting the app, so even an immediate startup failure is restored.
+            created = _run(
+                "new-session",
+                "-d",
+                "-P",
+                "-F",
+                "#{session_id}\t#{pane_id}",
+                "-s",
+                session,
+                "-x",
+                width,
+                "-y",
+                height,
+                "-c",
+                str(root),
+                "sleep 86400",
+                socket=socket,
+            ).stdout.strip()
+            parking, app = created.split("\t")
+            try:
+                _run("set-option", "-t", parking, "destroy-unattached", "off", socket=socket)
+                _run("set-option", "-t", parking, "status", "off", socket=socket)
+                _run("set-option", "-t", parking, "@gitkraiken_app", app, socket=socket)
+                _run("set-option", "-p", "-t", app, "@gitkraiken_origin", pane, socket=socket)
+                _run("set-option", "-p", "-t", app, "@gitkraiken_parking", parking, socket=socket)
+                _run("set-option", "-p", "-t", app, "remain-on-exit", "on", socket=socket)
+                restore = shlex.join(
+                    [
+                        token.replace("#", "##")
+                        for token in [
+                            sys.executable,
+                            "-m",
+                            "gitkraiken.tmux",
+                            "--socket",
+                            socket,
+                            "--pane",
+                            app,
+                            "--restore",
+                        ]
+                    ]
+                )
+                _run(
+                    "set-hook",
+                    "-p",
+                    "-t",
+                    app,
+                    "pane-died",
+                    "run-shell -b " + _tmux_quote(restore),
+                    socket=socket,
+                )
+                _run(
+                    "respawn-pane",
+                    "-k",
+                    "-t",
+                    app,
+                    "-c",
+                    str(root),
+                    app_command(root),
+                    socket=socket,
+                )
+            except Exception:
+                # Setup has not moved any user process yet.
+                _run("kill-pane", "-t", app, socket=socket, check=False)
+                raise
+        # Do not kill the app on a swap error: a timed-out client may have already
+        # completed the swap, leaving the user's process in the parking session.
+        _run("swap-pane", "-d", "-Z", "-s", app, "-t", pane, socket=socket)
+
+
+def restore_pane(*, pane: str, socket: str) -> None:
+    """Handle Ctrl+Q, startup failure or a killed app without losing the origin."""
+    origin = _pane_value(pane, "#{@gitkraiken_origin}", socket=socket, check=False)
+    if not origin:
+        return  # Another cleanup already removed the app pane.
+    with _pane_lock(origin, socket=socket):
+        parking = _pane_value(pane, "#{@gitkraiken_parking}", socket=socket, check=False)
+        current = _pane_value(pane, "#{session_id}", socket=socket, check=False)
+        if not current or not parking:
+            return
+        if _pane_value(pane, "#{pane_dead}", socket=socket, check=False) != "1":
+            return  # A user may have respawned the pane before this hook ran.
+        original_session = _pane_value(origin, "#{session_id}", socket=socket, check=False)
+        if current != parking and original_session == parking:
+            # -d preserves the active slot: no focus theft if the user moved to a
+            # neighbor while the app was exiting. -Z preserves existing zoom.
+            _run("swap-pane", "-d", "-Z", "-s", origin, "-t", pane, socket=socket)
+        # Kill only our dead application, never the parking session (which may
+        # still contain a user's process). Hidden app exits need no swap at all.
+        _run("kill-pane", "-t", pane, socket=socket, check=False)
 
 
 def hotkey_main() -> None:
     """Internal entrypoint for generated run-shell bindings, not an interactive app."""
     parser = argparse.ArgumentParser(description="GitKraiken tmux hotkey handler")
     parser.add_argument("--socket", required=True)
-    parser.add_argument("--client", required=True)
+    parser.add_argument("--client", default="")
     parser.add_argument("--pane", required=True)
+    parser.add_argument("--restore", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     from .git import GitError
 
     try:
-        hotkey(socket=args.socket, client=args.client, pane=args.pane)
+        if args.restore:
+            restore_pane(socket=args.socket, pane=args.pane)
+        else:
+            hotkey(socket=args.socket, client=args.client, pane=args.pane)
     except (GitError, TmuxError, OSError, ValueError) as error:
         # A run-shell job has no interactive terminal. Put errors on the invoking
         # client's status line instead of opening tmux's command-output pane.
         message = str(error).splitlines()[0]
         _run(
             "display-message",
-            "-c",
-            args.client,
+            *(["-c", args.client] if args.client else ["-t", args.pane]),
             "-d",
             "5000",
             "GitKraiken: " + message.replace("#", "##"),

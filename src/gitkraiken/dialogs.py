@@ -295,7 +295,8 @@ class HelpDialog(ModalScreen[None]):
                         "Drag pane dividers to resize the sidebar or inspector.\n"
                         "Drag the divider below files to resize the file/diff split.\n"
                         "Drag a column header's right-edge │ to resize it.\n"
-                        "Sizes are remembered for this running session.\n\n"
+                        "Sizes are remembered for this running session.\n"
+                        "Small panes show one side panel at a time; use Ctrl+Left/Right.\n\n"
                         "Smooth graph: rounded bends and spaced, colored lanes.\n"
                         "Broken horizontal lines pass behind vertical lanes;\n"
                         "crossings are not joins. Dotted tails mean more history.\n"
@@ -329,8 +330,10 @@ class HelpDialog(ModalScreen[None]):
                         "Resolve conflicts in your editor, stage, then Continue.\n\n"
                         "Credentials: existing SSH agent or Git credential helper.\n"
                         "No automatic fetch or network traffic. Local refresh every 5s.\n"
-                        "tmux popup: prefix + d detaches; prefix + g also works\n"
-                        "when you have installed the generated tmux binding."
+                        "tmux hotkey: prefix + g toggles in this pane. Your original\n"
+                        "shell/editor keeps running; Ctrl+Q quits and restores it.\n"
+                        "Explicit --popup: prefix + d or prefix + g detaches.\n"
+                        "The hotkey requires the generated tmux binding."
                     )
                 )
             yield Button("Close", id="cancel")

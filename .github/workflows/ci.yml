@@ -19,9 +19,10 @@ jobs:
       - run: uv run pytest
       - name: Install tmux for Linux integration checks
         run: sudo apt-get update && sudo apt-get install -y tmux
-      - name: Test tmux windows, popups, and prefix+g
+      - name: Test tmux windows, popups, and pane-local prefix+g
         run: |
           uv run python scripts/tmux_smoke.py
           uv run python scripts/popup_smoke.py
           uv run python scripts/popup_smoke.py --hotkey
+          uv run python scripts/pane_smoke.py
       - run: uv build

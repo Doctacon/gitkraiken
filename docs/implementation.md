@@ -126,9 +126,19 @@ hosted PR creation uses authenticated GitHub/Azure CLIs; see [pull requests](pul
   `--tmux-config` prints an opt-in prefix+g binding using the installation's Python
   path. The binding passes only client/pane/socket identifiers to `tmux.hotkey`;
   repository paths are discovered through argv-based tmux queries, not inserted
-  into shell source. It opens the originating pane's repo on the originating
-  client, or detaches a client in a marked GitKraiken popup session. Configuration
-  is generated separately on each machine; no user config is edited automatically.
+  into shell source. The hotkey swaps a real application pane into the origin's
+  layout cell with `swap-pane -d -Z`. A detached parking session per origin/repo
+  holds the inactive app or the original live shell/editor, so neighbors stay
+  visible and native pane resizes reach Textual. Pane IDs survive swapping;
+  app-pane markers record its origin and parking session. A per-origin `wait-for`
+  lock serializes startup, toggles and cleanup. The app gets `remain-on-exit` and
+  a pane-local `pane-died` hook before launch: quit/crash swaps back only a parked
+  origin, then removes only the dead app pane (never the user's session/process).
+  Cleanup does not change focus or zoom. Destructive tmux `kill-pane`/`kill-window`
+  commands bypass process-exit restoration; no invasive global hooks intercept
+  them. Explicit `--tmux` windows and `--popup` sessions are unchanged; the hotkey
+  still detaches a client in a marked popup session. Configuration is generated
+  separately on each machine; no user config is edited automatically.
 
 ## Main screen
 
@@ -158,7 +168,11 @@ Hover tooltip popups are globally hidden, including in modal menus; normal mouse
 highlighting and explicit clicks remain active. Worktree has staged/unstaged files,
 diff and commit composer. Include context actions for commits/refs/stashes, quick
 command picker, shortcuts/help, visible pending-operation and conflict controls.
-At narrow sizes allow panel toggles. Actions require explicit invocation but no
+Below 85 columns automatically hide the inspector; Ctrl+Right swaps it into the
+side-panel slot and Ctrl+Left returns to refs, keeping history visible. Automatic
+collapse does not erase explicit collapse or splitter-size preferences when growing
+again. At 60 columns hide secondary toolbar buttons (still available in Actions).
+Actions require explicit invocation but no
 second confirmation. All repo data is plain text, not
 Rich markup. Keep controls actually wired; omit unsupported feature promises.
 

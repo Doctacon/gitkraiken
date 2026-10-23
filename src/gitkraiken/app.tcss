@@ -278,6 +278,22 @@ TabPane { padding: 1; }
 .narrow .tool, .narrow #open, .narrow #help, .narrow #refresh { width: 5; min-width: 5; }
 .narrow #graph-filter { min-width: 12; }
 
+/* Below 85 columns, the three workspace minima cannot fit side by side.
+   History remains continuously available; the existing Ctrl+Arrow shortcuts
+   let people swap either side panel into the available slot. */
+.pane-constrained #inspector-panel, .pane-constrained #inspector-splitter { display: none; }
+.pane-constrained.responsive-inspector #refs-panel,
+.pane-constrained.responsive-inspector #refs-splitter,
+.pane-constrained.responsive-history-only #refs-panel,
+.pane-constrained.responsive-history-only #refs-splitter { display: none; }
+.pane-constrained.responsive-inspector #inspector-panel { display: block; }
+.pane-constrained.responsive-inspector #inspector-splitter { display: block; }
+
+/* Keep the pane toolbar useful instead of clipping ten terse controls. */
+.pane-tight #fetch, .pane-tight #pull, .pane-tight #push, .pane-tight #branch,
+.pane-tight #stash, .pane-tight #pop { display: none; }
+.pane-tight #actions { width: 9; min-width: 9; }
+
 ModalScreen { align: center middle; background: #000000 65%; }
 /* Branch and commit context menus are anchored dropdowns, not dimmed dialogs. */
 BranchContextMenu { align: left top; background: transparent; }

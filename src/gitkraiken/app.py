@@ -364,8 +364,21 @@ class GitKraikenApp(App[None]):
     def on_resize(self, event: events.Resize) -> None:
         # Layout classes belong to the workspace, not whichever modal is active.
         workspace = self.screen_stack[0]
-        workspace.set_class(event.size.width < 140, "compact")
-        workspace.set_class(event.size.width < 105, "narrow")
+        width = event.size.width
+        workspace.set_class(width < 140, "compact")
+        workspace.set_class(width < 105, "narrow")
+        workspace.set_class(width <= 60, "pane-tight")
+
+        # At narrow tmux widths the three pane minima cannot coexist. Keep the
+        # graph (the primary workspace) whole, initially borrowing the inspector.
+        # Ctrl+Right can swap it back in without making the workspace overflow.
+        constrained = width < 85
+        was_constrained = workspace.has_class("pane-constrained")
+        workspace.set_class(constrained, "pane-constrained")
+        if not constrained:
+            workspace.remove_class("responsive-inspector", "responsive-history-only")
+        elif not was_constrained:
+            workspace.remove_class("responsive-inspector", "responsive-history-only")
         if self.is_mounted and self.snapshot_data:
             self.call_after_refresh(self.repaint_history)
 
@@ -1670,14 +1683,48 @@ class GitKraikenApp(App[None]):
         self.query_one("#graph-table").focus()
 
     def action_toggle_refs(self) -> None:
-        self.query_one("#refs-panel").toggle_class("collapsed")
-        self.query_one("#refs-splitter").toggle_class("collapsed")
+        workspace = self.screen_stack[0]
+        refs = self.query_one("#refs-panel")
+        splitter = self.query_one("#refs-splitter")
+        if workspace.has_class("pane-constrained"):
+            if workspace.has_class("responsive-inspector"):
+                # In a narrow pane Ctrl+Left switches back from inspection to refs.
+                workspace.remove_class("responsive-inspector", "responsive-history-only")
+                refs.remove_class("collapsed")
+                splitter.remove_class("collapsed")
+            elif refs.has_class("collapsed") or workspace.has_class("responsive-history-only"):
+                workspace.remove_class("responsive-history-only")
+                refs.remove_class("collapsed")
+                splitter.remove_class("collapsed")
+            else:
+                refs.add_class("collapsed")
+                splitter.add_class("collapsed")
+                workspace.add_class("responsive-history-only")
+        else:
+            refs.toggle_class("collapsed")
+            splitter.toggle_class("collapsed")
         self.call_after_refresh(self._fit_panes)
         self.call_after_refresh(self.repaint_history)
 
     def action_toggle_inspector(self) -> None:
-        self.query_one("#inspector-panel").toggle_class("collapsed")
-        self.query_one("#inspector-splitter").toggle_class("collapsed")
+        workspace = self.screen_stack[0]
+        inspector = self.query_one("#inspector-panel")
+        splitter = self.query_one("#inspector-splitter")
+        if workspace.has_class("pane-constrained"):
+            if workspace.has_class("responsive-inspector"):
+                inspector.add_class("collapsed")
+                splitter.add_class("collapsed")
+                workspace.remove_class("responsive-inspector")
+            else:
+                # Inspecting at this width temporarily hides refs, rather than
+                # squeezing the history below its usable minimum.
+                inspector.remove_class("collapsed")
+                splitter.remove_class("collapsed")
+                workspace.remove_class("responsive-history-only")
+                workspace.add_class("responsive-inspector")
+        else:
+            inspector.toggle_class("collapsed")
+            splitter.toggle_class("collapsed")
         self.call_after_refresh(self._fit_panes)
         self.call_after_refresh(self.repaint_history)
 
