@@ -3,12 +3,13 @@ from __future__ import annotations
 import random
 
 import pytest
-from rich.color import ColorTriplet
+from rich.color import Color
 from rich.console import Console
 from rich.text import Text
 
 from gitkraiken.graph import GraphRow, render_history
 from gitkraiken.models import Commit, HistoryLine
+from gitkraiken.theme import GRAPH_PALETTE
 
 
 def commit(oid: str, *parents: str) -> Commit:
@@ -264,7 +265,7 @@ def test_lane_colors_are_stable_and_nodes_match_their_rails() -> None:
     first_color = rows[0].graph.get_style_at_offset(console, 1).color
     continued_color = rows[1].graph.get_style_at_offset(console, 1).color
     second_lane_color = rows[2].graph.get_style_at_offset(console, 5).color
-    assert first_color.triplet == ColorTriplet(98, 214, 197)
+    assert first_color == Color.parse(GRAPH_PALETTE[0])
     assert continued_color == first_color
     assert second_lane_color != first_color
 

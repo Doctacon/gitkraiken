@@ -31,21 +31,21 @@ class PullRequestDialog(ModalScreen[str | None]):
         height: 32;
         max-height: 95%;
         padding: 1 2;
-        border: round #3d7c82;
-        background: #142632;
+        border: round #4f8790;
+        background: #ffffff;
     }
     PullRequestDialog #pr-content { height: 1fr; min-height: 1; }
     PullRequestDialog.created > #pr-dialog { height: 18; }
     PullRequestDialog #pr-form, PullRequestDialog #pr-result { height: auto; }
-    PullRequestDialog .pr-field-label { margin-top: 1; color: #83aaa9; }
+    PullRequestDialog .pr-field-label { margin-top: 1; color: #36505b; }
     PullRequestDialog #pr-title { margin-bottom: 0; }
     PullRequestDialog #pr-description {
         height: 8;
-        border: round #294f59;
-        background: #0d1821;
+        border: round #a8c1c7;
+        background: #f5fafa;
     }
-    PullRequestDialog #pr-feedback { height: auto; margin-top: 1; color: #ee939b; }
-    PullRequestDialog #pr-feedback.copied { color: #62d6c5; }
+    PullRequestDialog #pr-feedback { height: auto; margin-top: 1; color: #b13a48; }
+    PullRequestDialog #pr-feedback.copied { color: #007c78; }
     PullRequestDialog #pr-url { width: 1fr; height: auto; margin-top: 1; }
     PullRequestDialog #pr-result { display: none; }
     PullRequestDialog.created #pr-form, PullRequestDialog.created .dialog-detail { display: none; }
@@ -83,7 +83,7 @@ class PullRequestDialog(ModalScreen[str | None]):
                     yield Label("Title (required)", classes="pr-field-label")
                     yield Input(placeholder="Summarize this change", id="pr-title")
                     yield Label("Description (optional · Markdown)", classes="pr-field-label")
-                    yield TextArea(id="pr-description")
+                    yield TextArea(id="pr-description", theme="github_light")
                     yield Static(
                         "Uses pushed branches; does not push or merge.\n"
                         "Add reviewers, work items and tags in the web UI afterward.",

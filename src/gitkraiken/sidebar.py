@@ -100,7 +100,7 @@ class ReferenceSidebar(Widget):
         width: 1fr;
         min-width: 0;
         height: 1fr;
-        background: #101c27;
+        background: #edf4f5;
         layout: vertical;
     }
     ReferenceSidebar > Input {
@@ -108,26 +108,27 @@ class ReferenceSidebar(Widget):
         min-height: 1;
         margin: 0;
         padding: 0 1;
-        background: #09131c;
+        background: #ffffff;
         border: none;
-        color: #d8edf2;
+        color: #14232c;
     }
-    ReferenceSidebar > Input:focus { background: #102632; border: none; }
+    ReferenceSidebar > Input:focus { background: #f6fcfc; border: none; }
     ReferenceSidebar > Tree {
         height: 1fr;
         margin: 1 0 0 0;
         padding: 0;
-        background: #101c27;
-        color: #b7cad7;
+        background: #edf4f5;
+        color: #14232c;
         scrollbar-size-vertical: 1;
         scrollbar-size-horizontal: 1;
     }
-    ReferenceSidebar > Tree > .tree--guides { color: #21455b; }
-    ReferenceSidebar > Tree > .tree--guides-hover { color: #347087; }
-    ReferenceSidebar > Tree > .tree--guides-selected { color: #62d6c5; }
+    ReferenceSidebar > Tree > .tree--guides { color: #8aa5ad; }
+    ReferenceSidebar > Tree > .tree--guides-hover { color: #48616c; }
+    ReferenceSidebar > Tree > .tree--guides-selected { color: #006d77; }
+    ReferenceSidebar > Tree > .tree--cursor,
     ReferenceSidebar > Tree:focus > .tree--cursor {
-        background: #16465a;
-        color: #f2fbfc;
+        background: #d8eeee;
+        color: #14232c;
         text-style: none;
     }
     """
@@ -336,9 +337,9 @@ class ReferenceSidebar(Widget):
         label = item.label.rsplit("/", 1)[-1] if item.kind == "local" else item.label
         text = Text(label, no_wrap=True, overflow="ellipsis")
         if getattr(node, "_sidebar_current", False):
-            text.stylize("bold #62d6c5")
+            text.stylize("bold #006d77")
         if active:
-            text.stylize("reverse bold #e8fbff")
+            text.stylize("bold underline #14232c")
         node.set_label(text)
 
     def _add_leaf(

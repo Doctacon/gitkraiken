@@ -9,14 +9,15 @@ from rich.style import Style
 from rich.text import Text
 
 from .models import Ref, Snapshot
+from .theme import MUTED, PROVIDER_COLORS, TEAL
 
-_LOCAL = "#62d6c5"
-_MUTED = "#7e91a4"
+_LOCAL = TEAL
+_MUTED = MUTED
 _PROVIDERS = {
-    "GitHub": ("🐙", "#c5a6ef"),
-    "Azure DevOps": ("☁", "#83b9ef"),
-    "GitLab": ("🦊", "#f2c779"),
-    "Git": ("↗", "#83b9ef"),
+    "GitHub": ("🐙", PROVIDER_COLORS["GitHub"]),
+    "Azure DevOps": ("☁", PROVIDER_COLORS["Azure DevOps"]),
+    "GitLab": ("🦊", PROVIDER_COLORS["GitLab"]),
+    "Git": ("↗", PROVIDER_COLORS["Git"]),
 }
 
 
@@ -62,9 +63,9 @@ def build_ref_badges(snapshot: Snapshot, selected_ref: str = "") -> dict[str, Re
             if provider in providers or (provider == "Git" and providers - _PROVIDERS.keys()):
                 text.append(icon + " ", style=color)
         if any(ref.kind == "tag" for ref in refs):
-            text.append("◇ ", style="#f2c779")
+            text.append("◇ ", style="#9a5a00")
         if stashes[oid]:
-            text.append("▣ ", style="#c5a6ef")
+            text.append("▣ ", style="#7049a8")
 
         labels: list[tuple[str, str, str]] = []
         if is_head:
@@ -74,7 +75,7 @@ def build_ref_badges(snapshot: Snapshot, selected_ref: str = "") -> dict[str, Re
             if not any(ref.current for ref in refs):
                 labels.append(("HEAD", f"bold {_LOCAL}", ""))
         for ref in refs:
-            style = f"bold {_LOCAL}" if ref.current else "#b4cbd1"
+            style = f"bold {_LOCAL}" if ref.current else "#36505b"
             if ref.full_name == selected_ref:
                 style += " bold underline"
             labels.append((ref.name, style, ref.full_name))
@@ -91,7 +92,7 @@ def build_ref_badges(snapshot: Snapshot, selected_ref: str = "") -> dict[str, Re
             else:
                 description.append(f"◇ Tag: {ref.full_name}\n")
         for stash in stashes[oid]:
-            style = "#c5a6ef bold underline" if stash.ref == selected_ref else "#c5a6ef"
+            style = "#7049a8 bold underline" if stash.ref == selected_ref else "#7049a8"
             labels.append((stash.ref, style, ""))
             description.append(f"▣ {stash.ref}: {stash.subject}\n")
         for index, (name, style, full_ref) in enumerate(labels):

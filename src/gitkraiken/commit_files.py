@@ -15,6 +15,7 @@ from textual.widgets import Tree
 from textual.widgets._tree import TreeNode
 
 from .models import FileChange
+from .theme import TEAL
 
 
 @dataclass(frozen=True)
@@ -181,7 +182,7 @@ class CommitFileTree(Tree[FileChange | _Directory]):
     def _label(file: FileChange) -> Text:
         name = file.path.rsplit("/", 1)[-1]
         text = Text(f"{file.index} {name}", no_wrap=True, overflow="ellipsis")
-        text.stylize("bold #78d5c8", 0, len(file.index))
+        text.stylize(f"bold {TEAL}", 0, len(file.index))
         return text
 
     def _capture_expanded(self) -> None:

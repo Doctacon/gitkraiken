@@ -132,8 +132,14 @@ async def test_real_repository_mount_and_commit_diff(demo_repo):
         app.jump_to(oid)
         await settle(app, pilot)
         assert app.query_one("#inspector-tabs", TabbedContent).active == "details-tab"
-        assert app.query_one(CommitFileTree).selected_file
-        assert "diff --git" in str(app.query_one("#commit-diff", Static).render())
+        selected = app.query_one(CommitFileTree).selected_file
+        assert selected
+        preview = app.query_one("#commit-diff", Static).renderable.plain
+        assert "@@" in preview
+        assert "diff --git" not in preview
+        assert not any(line.startswith(("index ", "--- ", "+++ ")) for line in preview.splitlines())
+        # The presentation filter must not alter the raw repository patch.
+        assert app.repo.diff(selected.path, oid=oid).startswith("diff --git ")
 
 
 async def test_hover_tooltips_stay_hidden_in_workspace_and_context_menu(demo_repo):
@@ -461,7 +467,10 @@ async def test_mixed_index_worktree_file_has_two_diff_choices(demo_repo):
         assert "UNSTAGED_ONLY" not in str(app.query_one("#diff-view", Static).render())
         app.inspect_worktree_file(*next(row for row in rows if not row[1]))
         await settle(app, pilot)
-        assert "UNSTAGED_ONLY" in str(app.query_one("#diff-view", Static).render())
+        preview = app.query_one("#diff-view", Static).renderable.plain
+        assert "UNSTAGED_ONLY" in preview
+        assert "diff --git" not in preview
+        assert "@@" in preview
 
 
 async def test_empty_repository_and_narrow_screen(tmp_path):
@@ -1139,7 +1148,10 @@ async def test_compact_commit_header_gives_space_to_file_tree(git_repo, git_run,
         await pilot.press("j")
         await settle(app, pilot)
         assert tree.selected_file.path == paths[1]
-        assert "select 1 as metric" in str(app.query_one("#commit-diff", Static).render())
+        preview = app.query_one("#commit-diff", Static).renderable.plain
+        assert "select 1 as metric" in preview
+        assert "diff --git" not in preview
+        assert "+++ b/" not in preview
         parent = nodes[0].parent
         parent.collapse()
         await pilot.pause()
@@ -1758,6 +1770,6 @@ async def test_commit_selection_waits_for_chained_diff_workers(demo_repo, monkey
         monkeypatch.setattr(app.repo, "diff", slow_diff)
         app.jump_to(next(iter(app._commits)))
         await settle(app, pilot)
-        assert "diff --git" in str(app.query_one("#commit-diff", Static).render()), [
-            worker.group for worker in app.workers
-        ]
+        preview = app.query_one("#commit-diff", Static).renderable.plain
+        assert "@@" in preview, [worker.group for worker in app.workers]
+        assert "diff --git" not in preview

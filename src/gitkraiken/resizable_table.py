@@ -60,7 +60,7 @@ class ResizableDataTable(DataTable):
         grip = Segment(
             "│",
             Style(
-                color="#62d6c5" if key == self._resize_key else "#456575",
+                color="#006d77" if key == self._resize_key else "#78939c",
                 meta={"row": -1, "column": column_index, "resize_column": key},
             )
             + base_style.background_style,

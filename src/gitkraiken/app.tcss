@@ -1,14 +1,17 @@
-/* GitKraiken — dark, deliberately quiet framing for colored commit lanes. */
+/* GitKraiken — bright, quiet framing for high-contrast colored commit lanes. */
 Screen {
-    background: #0c131c;
-    color: #d6e2e5;
+    background: #f7fbfc;
+    color: #14232c;
 }
 
 /* Never let hover popups cover the workspace or dialogs. Textual toggles
    display inline, so hide visibility instead (also excludes mouse hit-testing). */
 Tooltip { visibility: hidden; }
 
-Static, Label { color: #d6e2e5; }
+Static, Label { color: #14232c; }
+ModalScreen Input { background: #ffffff; color: #14232c; border: tall #a8c1c7; }
+ModalScreen Input:focus { border: tall #006d77; }
+Input > .input--placeholder, Input > .input--suggestion { color: #48616c; }
 Button { min-width: 0; border: none; }
 Button:focus { text-style: bold; }
 
@@ -16,34 +19,34 @@ Button:focus { text-style: bold; }
 #repo-header, #brand {
     height: 2;
     padding: 0 2;
-    background: #142432;
-    color: #ecf8f7;
+    background: #e4f0f1;
+    color: #10242b;
     content-align: left middle;
     text-style: bold;
 }
-#repo-path { color: #8fa5ad; text-style: none; }
+#repo-path { color: #48616c; text-style: none; }
 #toolbar {
     height: 3;
     padding: 1 1 0 1;
-    background: #101d29;
-    border-bottom: tall #213744;
+    background: #edf4f5;
+    border-bottom: tall #b7cdd1;
 }
 .tool, #open, #help, #refresh {
     height: 1;
     min-width: 7;
     margin-right: 1;
     padding: 0 1;
-    background: #1a303d;
-    color: #c5d6d9;
+    background: #dbecee;
+    color: #18323a;
 }
 .tool:hover, .tool:focus, #open:hover, #open:focus, #help:hover, #help:focus,
 #refresh:hover, #refresh:focus {
-    background: #28515a;
-    color: #f3ffff;
+    background: #c4e2e4;
+    color: #10242b;
 }
 .tool.primary, #refresh {
-    background: #137b78;
-    color: #efffff;
+    background: #007c78;
+    color: #ffffff;
     text-style: bold;
 }
 /* Horizontal containers otherwise consume the vertical free space in history-panel. */
@@ -54,18 +57,18 @@ Button:focus { text-style: bold; }
     height: 1;
     padding: 0 1;
     border: none;
-    background: #09131c;
-    color: #e1eff0;
+    background: #ffffff;
+    color: #14232c;
 }
-#graph-filter:focus { background: #102632; border: none; }
+#graph-filter:focus { background: #f6fcfc; border: none; }
 #search-next, #clear-search {
     width: 6;
     min-width: 6;
     height: 1;
     margin-left: 1;
     padding: 0;
-    background: #1a303d;
-    color: #8bd9cf;
+    background: #dbecee;
+    color: #006d77;
 }
 
 #graph-style {
@@ -74,10 +77,10 @@ Button:focus { text-style: bold; }
     height: 1;
     margin-left: 1;
     padding: 0;
-    background: #1a303d;
-    color: #8bd9cf;
+    background: #dbecee;
+    color: #006d77;
 }
-#graph-style:hover, #graph-style:focus { background: #28515a; color: #f3ffff; }
+#graph-style:hover, #graph-style:focus { background: #c4e2e4; color: #10242b; }
 
 /* Pending work deserves colour, but never the entire screen. */
 #operation-banner {
@@ -85,9 +88,9 @@ Button:focus { text-style: bold; }
     display: none;
     height: 2;
     padding: 0 2;
-    background: #51351f;
-    color: #ffe0a7;
-    border-bottom: tall #8e6033;
+    background: #fff3df;
+    color: #6b4300;
+    border-bottom: tall #c68a35;
 }
 #operation-text { width: 1fr; content-align: left middle; text-style: bold; }
 .operation-button {
@@ -95,70 +98,70 @@ Button:focus { text-style: bold; }
     height: 1;
     margin: 0 0 0 1;
     padding: 0 1;
-    background: #754a29;
-    color: #ffe5b3;
+    background: #f5d8a3;
+    color: #5c3900;
 }
-.operation-button:hover, .operation-button:focus { background: #a26731; color: #fff8e6; }
+.operation-button:hover, .operation-button:focus { background: #e7bd74; color: #432900; }
 
 #workspace { height: 1fr; }
 #refs-panel {
     width: 25;
     min-width: 15;
     padding: 1;
-    background: #101c27;
+    background: #edf4f5;
 }
 #history-panel {
     width: 1fr;
     min-width: 34;
     padding: 0;
-    background: #0d151e;
+    background: #f8fbfb;
 }
 #inspector-panel {
     width: 46;
     min-width: 25;
     padding: 0;
-    background: #101a24;
+    background: #f3f8f9;
 }
 #history-heading {
     height: 1;
     margin: 0;
     padding: 0 1;
-    color: #73cbbf;
+    color: #006d77;
     text-style: bold;
-    background: #142430;
+    background: #e7f1f2;
 }
-#history-caption { height: 1; padding: 0 1; color: #78919a; background: #101d28; }
+#history-caption { height: 1; padding: 0 1; color: #48616c; background: #edf4f5; }
 
 /* A quiet canvas keeps lane colors readable, including on the selected row. */
 #graph-table {
     height: 1fr;
     border: none;
-    background: #0d151e;
+    background: #f8fbfb;
 }
 #graph-table > .datatable--header {
-    background: #142632;
-    color: #86a5ac;
+    background: #e7f2f3;
+    color: #36505b;
     text-style: bold;
 }
-#graph-table > .datatable--header-hover { background: #193440; }
+#graph-table > .datatable--header-hover { background: #d8eeee; }
 #graph-table > .datatable--cursor {
-    background: #1a414c;
-    color: #f1ffff;
+    background: #d8eeee;
+    color: #14232c;
 }
-#graph-table > .datatable--hover { background: #142935; }
+#graph-table > .datatable--hover { background: #edf7f8; }
 #load-more {
     width: 1fr;
     height: 2;
     padding: 0 1;
-    background: #132a35;
-    color: #7edbd0;
+    background: #e2f1f2;
+    color: #006d77;
     text-style: bold;
 }
-#load-more:hover, #load-more:focus { background: #1b4b54; color: #f1ffff; }
+#load-more:hover, #load-more:focus { background: #b9dfe1; color: #14232c; }
 
-TabbedContent { height: 1fr; background: #101a24; }
-TabbedContent ContentTab { color: #8fa5ad; background: #142531; }
-TabbedContent ContentTab.-active { color: #baf1e9; background: #1b3540; text-style: bold; }
+TabbedContent { height: 1fr; background: #f3f8f9; }
+TabbedContent ContentTab { color: #48616c; background: #e4f0f1; }
+TabbedContent ContentTab.-active { color: #005f68; background: #d8eeee; text-style: bold; }
 #inspector-tabs > ContentSwitcher, TabPane { height: 1fr; }
 TabPane { padding: 1; }
 #commit-changes, #wip-changes, #wip-preview { height: 1fr; }
@@ -172,7 +175,7 @@ TabPane { padding: 1; }
     max-height: 4;
     overflow-y: hidden;
     padding: 0 1;
-    color: #dce9ec;
+    color: #14232c;
 }
 /* Root header plus eight file rows fit in the normal inspector. */
 #commit-file-tree {
@@ -180,34 +183,34 @@ TabPane { padding: 1; }
     min-height: 5;
     margin-top: 1;
     padding: 0 1;
-    border: round #294653;
-    background: #0c141c;
-    color: #b9d5d5;
+    border: round #a8c1c7;
+    background: #ffffff;
+    color: #18323a;
     scrollbar-size-vertical: 1;
     scrollbar-size-horizontal: 1;
 }
-#commit-file-tree > .tree--guides { color: #21455b; }
-#commit-file-tree > .tree--guides-hover { color: #347087; }
-#commit-file-tree > .tree--guides-selected { color: #62d6c5; }
-#commit-file-tree:focus > .tree--cursor {
-    background: #16465a;
-    color: #f2fbfc;
+#commit-file-tree > .tree--guides { color: #8aa5ad; }
+#commit-file-tree > .tree--guides-hover { color: #48616c; }
+#commit-file-tree > .tree--guides-selected { color: #006d77; }
+#commit-file-tree > .tree--cursor, #commit-file-tree:focus > .tree--cursor {
+    background: #d8eeee;
+    color: #14232c;
     text-style: none;
 }
-#diff-title { height: 1; min-height: 1; color: #82a8ae; text-style: bold; }
+#diff-title { height: 1; min-height: 1; color: #36505b; text-style: bold; }
 /* Scroll containers own the flexible height; their Static child stays content-sized. */
 #commit-diff-scroll, #diff-scroll {
     height: 1fr;
     min-height: 5;
     padding: 0 1;
     overflow-y: auto;
-    background: #091119;
-    border-left: tall #244551;
+    background: #ffffff;
+    border-left: tall #a8c1c7;
 }
 #commit-diff, #diff-view {
     height: auto;
     min-height: 1;
-    color: #b9d5d5;
+    color: #18323a;
 }
 
 /* Working copy: files first, then enough room to inspect and describe a change. */
@@ -217,54 +220,54 @@ TabPane { padding: 1; }
     height: 1;
     margin-right: 1;
     padding: 0 1;
-    background: #20424a;
-    color: #c9e5e2;
+    background: #d8eeee;
+    color: #18323a;
 }
 .wip-actions Button:hover, .wip-actions Button:focus, #stage-all:hover,
-#stage-all:focus, #unstage-all:hover, #unstage-all:focus { background: #28616a; color: #f2ffff; }
-#discard { background: #6b3335; color: #ffe0df; }
-#discard:hover, #discard:focus { background: #94494a; color: #fff5f4; }
+#stage-all:focus, #unstage-all:hover, #unstage-all:focus { background: #b9dfe1; color: #10242b; }
+#discard { background: #fde8e8; color: #8d2635; }
+#discard:hover, #discard:focus { background: #f4caca; color: #651d28; }
 #wip-table {
     height: 8;
     min-height: 3;
-    border: round #294653;
-    background: #0d151d;
+    border: round #a8c1c7;
+    background: #ffffff;
 }
 #wip-table > .datatable--header {
-    background: #172b36;
-    color: #85a8ae;
+    background: #e5eff1;
+    color: #36505b;
     text-style: bold;
 }
 #wip-table > .datatable--cursor {
-    background: #1a4750;
-    color: #f1ffff;
+    background: #d8eeee;
+    color: #14232c;
 }
-.composer-label { height: 1; margin-top: 1; color: #83aaa9; }
+.composer-label { height: 1; margin-top: 1; color: #36505b; }
 #commit-message {
     height: 4;
     margin-top: 0;
-    border: round #315964;
-    background: #0c151e;
-    color: #e2efef;
+    border: round #8eabb2;
+    background: #ffffff;
+    color: #14232c;
 }
-#commit-message:focus { border: round #2aa69b; }
+#commit-message:focus { border: round #007c78; }
 #commit {
     width: 1fr;
     height: 2;
     margin-top: 1;
-    background: #137b78;
-    color: #efffff;
+    background: #007c78;
+    color: #ffffff;
     text-style: bold;
 }
-#commit:hover, #commit:focus { background: #1a9b91; }
+#commit:hover, #commit:focus { background: #006d77; }
 
 #status-line, #key-hint {
     height: 1;
     padding: 0 2;
-    background: #091119;
-    color: #728b94;
+    background: #ffffff;
+    color: #48616c;
 }
-#status-line { color: #8aa3a9; }
+#status-line { color: #36505b; }
 .collapsed, .refs-hidden #refs-panel, .refs-hidden #refs-splitter,
 .inspector-hidden #inspector-panel, .inspector-hidden #inspector-splitter { display: none; }
 
@@ -294,7 +297,7 @@ TabPane { padding: 1; }
 .pane-tight #stash, .pane-tight #pop { display: none; }
 .pane-tight #actions { width: 9; min-width: 9; }
 
-ModalScreen { align: center middle; background: #000000 65%; }
+ModalScreen { align: center middle; background: #36505b 28%; }
 /* Branch and commit context menus are anchored dropdowns, not dimmed dialogs. */
 BranchContextMenu { align: left top; background: transparent; }
 #action-picker, #prompt-dialog {
@@ -302,11 +305,11 @@ BranchContextMenu { align: left top; background: transparent; }
     height: auto;
     max-height: 22;
     padding: 1 2;
-    border: round #3d7c82;
-    background: #142632;
+    border: round #4f8790;
+    background: #e7f2f3;
 }
-.dialog-title { margin-bottom: 1; color: #b9f4ea; text-style: bold; }
-.dialog-detail { margin-bottom: 1; color: #c3d3d7; }
-#action-options { height: auto; max-height: 14; border: round #294f59; background: #0d1821; }
+.dialog-title { margin-bottom: 1; color: #006d77; text-style: bold; }
+.dialog-detail { margin-bottom: 1; color: #36505b; }
+#action-options { height: auto; max-height: 14; border: round #a8c1c7; background: #f5fafa; }
 .dialog-buttons { height: 3; margin-top: 1; align: right middle; }
 .dialog-buttons Button { margin-left: 1; }

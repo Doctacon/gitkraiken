@@ -41,26 +41,34 @@ from .pull_requests import PullRequestError, PullRequestPlan
 from .ref_badges import RefBadges, build_ref_badges
 from .resizable_table import ResizableDataTable
 from .sidebar import ReferenceSidebar, SidebarSelection
-
-TEAL = "#62d6c5"
-MUTED = "#7e91a4"
+from .theme import MUTED, TEAL, TEXT
 
 
 def patch_text(patch: str) -> Text:
-    """Color a plain patch without interpreting markup or terminal escape sequences."""
+    """Render a literal file diff without Git's redundant transport headers.
+
+    Only hide headers before a hunk: removed/added content can itself start
+    with ``---`` / ``+++``. Keep binary, rename, and mode-change summaries.
+    The underlying repository patch is unchanged.
+    """
     text = Text()
+    in_header = False
     for line in patch.splitlines(keepends=True):
+        if line.startswith(("diff --git ", "diff --cc ", "diff --combined ")):
+            in_header = True
+            continue
+        if in_header and line.startswith(("index ", "--- ", "+++ ")):
+            continue
         style = None
-        if line.startswith(("diff ", "index ", "--- ", "+++ ")):
-            style = "bold #8baac4"
-        elif line.startswith("@@"):
-            style = "#c5a6ef"
+        if line.startswith("@@"):
+            in_header = False
+            style = "#7049a8"
         elif line.startswith("+"):
-            style = "#9ed8a5"
+            style = "#28733a"
         elif line.startswith("-"):
-            style = "#ee939b"
+            style = "#b13a48"
         text.append(line, style)
-    return text
+    return text if text else Text("No textual changes (mode-only change or empty file).")
 
 
 class HistoryTable(ResizableDataTable):
@@ -166,6 +174,7 @@ class GitKraikenApp(App[None]):
 
     def __init__(self, path: str | Path) -> None:
         super().__init__()
+        self.theme = "textual-light"
         self.path = Path(path)
         self.repo: Repository | None = None
         self.snapshot_data: Snapshot | None = None
@@ -298,7 +307,7 @@ class GitKraikenApp(App[None]):
                                 with VerticalScroll(id="diff-scroll"):
                                     yield Static("Working directory is clean.", id="diff-view")
                         yield Label("COMMIT MESSAGE", classes="composer-label")
-                        yield TextArea(id="commit-message")
+                        yield TextArea(id="commit-message", theme="github_light")
                         yield Button("Commit staged changes", id="commit", variant="primary")
         yield Static("Ready", id="status-line")
         yield Static(
@@ -432,8 +441,8 @@ class GitKraikenApp(App[None]):
         self.snapshot_data = snapshot
         header = Text(" GITKRAIKEN ", style=f"bold {TEAL}")
         if "DEMO" in self.title:
-            header.append(" DEMO ", style="bold #f2c779")
-        header.append(f" / {snapshot.root.name}  ", style="bold #e1e7ef")
+            header.append(" DEMO ", style="bold #9a5a00")
+        header.append(f" / {snapshot.root.name}  ", style=f"bold {TEXT}")
         header.append(f"⑂ {snapshot.branch or 'detached HEAD'}", style=TEAL)
         header.append(f"   ↑{snapshot.ahead} ↓{snapshot.behind}", style=MUTED)
         if snapshot.upstream:
@@ -1045,7 +1054,7 @@ class GitKraikenApp(App[None]):
             self._commits[commit.oid] = commit
             badges = self._ref_badges.get(commit.oid)
             refs = badges.text if badges else Text()
-            message = Text(commit.subject, style="#dce3ed", no_wrap=True, overflow="ellipsis")
+            message = Text(commit.subject, style=TEXT, no_wrap=True, overflow="ellipsis")
             table.add_row(
                 row.graph,
                 refs,
@@ -1087,7 +1096,7 @@ class GitKraikenApp(App[None]):
                 key = f"{'s' if staged else 'u'}-{number}"
                 self._file_rows[key] = (file, staged)
                 state = "CONFLICT" if file.conflicted else ("STAGED" if staged else "UNSTAGED")
-                color = "#f2c779" if file.conflicted else (TEAL if staged else "#a3b1c4")
+                color = "#9a5a00" if file.conflicted else (TEAL if staged else MUTED)
                 table.add_row(Text(state, style=color), Text(file.path), key=key)
                 if (
                     self._selected_file
@@ -1161,7 +1170,7 @@ class GitKraikenApp(App[None]):
                     return
                 local_date = format_commit_date(commit.date, full=True)
                 text = Text(
-                    commit.subject + "\n", style="bold #dce3ed", no_wrap=True, overflow="ellipsis"
+                    commit.subject + "\n", style=f"bold {TEXT}", no_wrap=True, overflow="ellipsis"
                 )
                 text.append(f"{commit.author} · {commit.short_id}\n{local_date}", style=MUTED)
                 metadata = Text(
@@ -1228,9 +1237,7 @@ class GitKraikenApp(App[None]):
                 and epoch == self._diff_token
                 and generation == self._generation
             ):
-                self.query_one(target, Static).update(
-                    patch_text(patch or "No textual changes (mode-only change or empty file).")
-                )
+                self.query_one(target, Static).update(patch_text(patch))
                 self.query_one("#commit-diff-scroll" if oid else "#diff-scroll").scroll_home(
                     animate=False
                 )

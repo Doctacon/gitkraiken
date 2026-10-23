@@ -83,14 +83,14 @@ class MessageDialog(ModalScreen[str | None]):
         height: auto;
         max-height: 24;
         padding: 1 2;
-        border: round #3d7c82;
-        background: #142632;
+        border: round #4f8790;
+        background: #ffffff;
     }
     MessageDialog #message-value {
         height: 10;
         max-height: 14;
-        border: round #294f59;
-        background: #0d1821;
+        border: round #a8c1c7;
+        background: #f5fafa;
     }
     MessageDialog .dialog-buttons { height: 3; margin-top: 1; align: right middle; }
     MessageDialog .dialog-buttons Button { margin-left: 1; }
@@ -103,7 +103,7 @@ class MessageDialog(ModalScreen[str | None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="message-dialog"):
             yield Label(Text(self.heading), classes="dialog-title")
-            yield TextArea(self.value, id="message-value")
+            yield TextArea(self.value, id="message-value", theme="github_light")
             with Horizontal(classes="dialog-buttons"):
                 yield Button("Cancel", id="cancel")
                 yield Button("Save", id="confirm", variant="primary")
@@ -153,17 +153,17 @@ class BranchContextMenu(ModalScreen[str | None]):
         height: 3;
         max-width: 100%;
         padding: 0 1;
-        border: round #3d7c82;
-        background: #142632;
-        color: #d6e2e5;
+        border: round #4f8790;
+        background: #ffffff;
+        color: #14232c;
         scrollbar-size: 1 1;
     }
     BranchContextMenu > #branch-context-menu:focus {
-        border: round #62d6c5;
+        border: round #006d77;
     }
     BranchContextMenu > #branch-context-menu > .option-list--option-highlighted {
-        background: #16465a;
-        color: #f2fbfc;
+        background: #d8eeee;
+        color: #14232c;
         text-style: none;
     }
     """

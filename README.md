@@ -1,8 +1,9 @@
 # GitKraiken
 
 A GitKraken-inspired Git workspace for your **terminal and tmux**, built with Python
-and Textual. Local-first, mouse-friendly, keyboard-driven. Works with private
-GitHub and Azure DevOps repositories through your existing Git authentication.
+and Textual. Local-first, mouse-friendly, keyboard-driven, with a high-contrast
+light palette for bright environments. Works with private GitHub and Azure DevOps
+repositories through your existing Git authentication.
 
 ![GitKraiken showing a real repository's branches, commit graph and diff](docs/assets/workspace.png)
 
@@ -64,7 +65,9 @@ intentionally rejected.
   batches of 300, up to 5,000 commits. History stays unified across branch
   selections and checkouts; sidebar search never changes graph topology.
 - **Right:** selected commit's title and compact author/date/SHA, an expanded
-  changed-file tree, and a syntax-colored unified diff. Fold directories with a
+  changed-file tree, and a syntax-colored unified diff. Diff previews hide redundant
+  `diff --git`, index, and `---` / `+++` path headers, while keeping hunk locations
+  and binary, rename, or mode-change summaries. Fold directories with a
   click or Space; file labels show just the filename. Commit descriptions do not
   consume the file list's space. Merge commits are compared to their first parent.
   The **Working directory** tab has separate staged/unstaged entries,

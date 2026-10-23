@@ -9,26 +9,14 @@ from rich.cells import cell_len
 from rich.text import Text
 
 from .models import Commit, HistoryLine
+from .theme import GRAPH_PALETTE
 
 GraphStyle = Literal["smooth", "compact"]
 
 _TRANSLATION = str.maketrans({"*": "●", "|": "│", "/": "╱", "\\": "╲", "_": "─"})
 _PITCH = 4
 _INSET = 1
-_PALETTE = (
-    "#62d6c5",
-    "#c5a6ef",
-    "#f2c779",
-    "#9ed8a5",
-    "#ee939b",
-    "#83b9ef",
-    "#e5a8d8",
-    "#76c7a0",
-    "#f0a36f",
-    "#aab8f0",
-    "#d5b66f",
-    "#8fcad0",
-)
+_PALETTE = GRAPH_PALETTE
 
 
 @dataclass(frozen=True)

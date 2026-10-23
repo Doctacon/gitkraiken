@@ -46,7 +46,7 @@ class PaneSplitter(Widget):
     PaneSplitter {
         width: 1;
         height: 1fr;
-        color: #456575;
+        color: #78939c;
         background: transparent;
     }
 
@@ -56,8 +56,8 @@ class PaneSplitter(Widget):
     }
 
     PaneSplitter:hover, PaneSplitter.-dragging {
-        color: #62d6c5;
-        background: #193440;
+        color: #006d77;
+        background: #d8eeee;
     }
     """
 
