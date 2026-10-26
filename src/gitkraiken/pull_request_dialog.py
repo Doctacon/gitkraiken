@@ -11,7 +11,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Link, Static, TextArea
 
 from .clipboard import CopyResult, copy_text
-from .pull_requests import PullRequestPlan
+from .pull_requests import PullRequest, PullRequestPlan
 
 
 class _PullRequestLink(Link):
@@ -170,3 +170,88 @@ class PullRequestDialog(ModalScreen[str | None]):
             self.run_worker(self._copy_url(), exit_on_error=False)
         elif event.button.id == "pr-cancel":
             self.action_cancel()
+
+
+class PullRequestDetailsDialog(ModalScreen[None]):
+    """Read-only PR summary; opening the provider and copying are explicit actions."""
+
+    BINDINGS = [("escape", "close", "Close")]
+
+    DEFAULT_CSS = """
+    PullRequestDetailsDialog > #pr-details {
+        width: 76;
+        max-width: 100%;
+        height: 22;
+        max-height: 95%;
+        padding: 1 2;
+        border: round #4f8790;
+        background: #ffffff;
+    }
+    PullRequestDetailsDialog #pr-details-content { height: 1fr; min-height: 1; }
+    PullRequestDetailsDialog #pr-details-title { height: auto; text-style: bold; margin-bottom: 1; }
+    PullRequestDetailsDialog #pr-details-meta { height: auto; color: #36505b; }
+    PullRequestDetailsDialog #pr-details-url { height: auto; margin-top: 1; color: #48616c; }
+    PullRequestDetailsDialog #pr-details-link { height: auto; margin-top: 1; color: #006d77; }
+    PullRequestDetailsDialog #pr-details-feedback { height: auto; margin-top: 1; }
+    PullRequestDetailsDialog #pr-details-feedback.copied { color: #007c78; }
+    PullRequestDetailsDialog .dialog-buttons { height: 3; margin-top: 1; align: right middle; }
+    PullRequestDetailsDialog .dialog-buttons Button { margin-left: 1; min-width: 10; }
+    """
+
+    def __init__(self, request: PullRequest) -> None:
+        super().__init__()
+        self.request = request
+        self._copying = False
+
+    def compose(self) -> ComposeResult:
+        request = self.request
+        with Vertical(id="pr-details"):
+            yield Label(
+                f"{'DRAFT' if request.draft else 'OPEN'} PULL REQUEST  #{request.number}",
+                classes="dialog-title",
+            )
+            with VerticalScroll(id="pr-details-content"):
+                yield Static(Text(request.title), id="pr-details-title")
+                yield Static(
+                    Text(
+                        f"{request.source_branch} → {request.target_branch}\n"
+                        f"Author: {request.author or 'Unknown'}\n"
+                        "Review, comment, or merge in your browser."
+                    ),
+                    id="pr-details-meta",
+                )
+                yield Static(Text(request.url), id="pr-details-url")
+                yield _PullRequestLink("Open in browser ↗", url=request.url, id="pr-details-link")
+                yield Static("", id="pr-details-feedback")
+            with Horizontal(classes="dialog-buttons"):
+                yield Button("Copy URL", id="pr-details-copy")
+                yield Button("Close", id="pr-details-close", variant="primary")
+
+    def on_mount(self) -> None:
+        self.query_one("#pr-details-link").focus()
+
+    def action_close(self) -> None:
+        self.dismiss(None)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        event.stop()
+        if event.button.id == "pr-details-close":
+            self.action_close()
+        elif event.button.id == "pr-details-copy" and not self._copying:
+            self._copying = True
+            event.button.disabled = True
+            feedback = self.query_one("#pr-details-feedback", Static)
+            feedback.remove_class("copied")
+            feedback.update("Copying URL…")
+            self.run_worker(self._copy_url(), exit_on_error=False)
+
+    async def _copy_url(self) -> None:
+        button = self.query_one("#pr-details-copy", Button)
+        feedback = self.query_one("#pr-details-feedback", Static)
+        try:
+            result = await copy_text(self.app, self.request.url)
+            feedback.update(result.value)
+            feedback.set_class(result is CopyResult.SYSTEM, "copied")
+        finally:
+            self._copying = False
+            button.disabled = False

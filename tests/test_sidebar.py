@@ -6,7 +6,8 @@ from textual.app import App, ComposeResult
 from textual.widgets import Input, Tree
 from ui_helpers import click, post_click
 
-from gitkraiken.models import Ref, Remote, Snapshot, Stash
+from gitkraiken.models import Ref, Remote, Snapshot, Stash, Worktree
+from gitkraiken.pull_requests import HostedRepository, PullRequest, PullRequestListing
 from gitkraiken.sidebar import ReferenceSidebar, SidebarSelection
 
 
@@ -16,6 +17,9 @@ class SidebarApp(App[None]):
         self.selections = []
         self.checkouts = []
         self.contexts = []
+        self.worktree_opens = []
+        self.worktree_creates = []
+        self.pr_loads = []
 
     def compose(self) -> ComposeResult:
         yield ReferenceSidebar()
@@ -28,6 +32,15 @@ class SidebarApp(App[None]):
 
     def on_reference_sidebar_context_requested(self, event):
         self.contexts.append(event)
+
+    def on_reference_sidebar_worktree_open_requested(self, event):
+        self.worktree_opens.append(event)
+
+    def on_reference_sidebar_worktree_create_requested(self, event):
+        self.worktree_creates.append(event)
+
+    def on_reference_sidebar_pull_requests_requested(self, event):
+        self.pr_loads.append(event)
 
 
 async def hit_point(sidebar, pilot, key, *, caret=False):
@@ -425,3 +438,204 @@ async def test_local_namespaces_and_branch_labels_with_children_remain_distinct(
         sidebar.update_snapshot(replace(data, stashes=()), app.selections[-1].selection)
         await pilot.pause()
         assert sidebar._tree_nodes[key].is_expanded
+
+
+async def test_compact_views_keep_worktree_actions_and_pr_loading_explicit():
+    app = SidebarApp()
+    async with app.run_test(size=(15, 20)) as pilot:
+        sidebar = app.query_one(ReferenceSidebar)
+        worktree = Worktree(Path("/repo/linked"), "a" * 40, "topic")
+        data = Snapshot(Path("/repo"), "main", head="a" * 40, worktrees=(worktree,))
+        sidebar.update_snapshot(data, None)
+        await pilot.click("#sidebar-view-worktrees")
+        await pilot.pause()
+        assert "/repo/linked" in sidebar._tree_nodes
+        assert not sidebar.query_one("#sidebar-worktree-new").disabled
+        tree, point = await hit_point(sidebar, pilot, "/repo/linked")
+        await click(pilot, tree, point)
+        await pilot.click("#sidebar-worktree-open")
+        await pilot.click("#sidebar-worktree-new")
+        assert app.worktree_opens[-1].selection.target == "/repo/linked"
+        assert app.worktree_creates[-1].root == Path("/repo")
+
+        await pilot.click("#sidebar-view-prs")
+        await pilot.pause()
+        assert sidebar.query_one("#sidebar-prs-load").label.plain == "Load PRs"
+        await pilot.click("#sidebar-prs-load")
+        assert app.pr_loads[-1].root == Path("/repo")
+        sidebar.update_pull_requests((), loading=False)
+        assert sidebar._tree.root.children[0].data.key == "group:prs-unsupported"
+
+
+async def test_worktree_double_click_keeps_the_target_under_the_pointer():
+    app = SidebarApp()
+    async with app.run_test(size=(23, 20)) as pilot:
+        sidebar = app.query_one(ReferenceSidebar)
+        worktree = Worktree(Path("/repo/a-long-linked-worktree-path"), "a" * 40, "topic")
+        sidebar.update_snapshot(replace(snapshot(), worktrees=(worktree,)), None)
+        await pilot.click("#sidebar-view-worktrees")
+        tree, point = await hit_point(sidebar, pilot, str(worktree.path))
+        screen_point = (tree.region.x + point[0], tree.region.y + point[1])
+        await post_click(pilot, tree, point)
+        # A physical double-click stays at the same screen position, even if a
+        # selected-item detail area would otherwise move the tree between clicks.
+        await post_click(pilot, app.screen, screen_point, chain=2)
+        assert len(app.worktree_opens) == 1
+        assert app.worktree_opens[0].selection.target == str(worktree.path)
+        assert not app.checkouts
+
+
+def pr_listing(*requests: PullRequest, error: str = "") -> PullRequestListing:
+    return PullRequestListing(
+        "origin",
+        HostedRepository("GitHub", "https://example.test/repo", "repo"),
+        requests,
+        error,
+    )
+
+
+async def test_tabs_render_complete_labels_at_every_supported_width_and_never_load_prs():
+    app = SidebarApp()
+    async with app.run_test(size=(13, 20)) as pilot:
+        sidebar = app.query_one(ReferenceSidebar)
+        sidebar.update_snapshot(snapshot(), None)
+        for width in (13, 14, 16, 18, 20, 23, 25):
+            await pilot.resize_terminal(width, 20)
+            await pilot.pause()
+            labels = {
+                "all": "All refs",
+                "local": "Local",
+                "remote": "Remote",
+                "worktrees": "Trees" if width < 18 else "Worktrees",
+                "prs": "PRs",
+            }
+            for name, label in labels.items():
+                # Textual Button's intrinsic padding must not truncate even one character.
+                button = sidebar.query_one(f"#sidebar-view-{name}")
+                assert button.render_line(0).text.strip() == label, (width, name)
+        for tab in ("local", "remote", "worktrees", "prs", "all"):
+            await pilot.click(f"#sidebar-view-{tab}")
+        assert not app.pr_loads
+
+
+async def test_sidebar_error_details_really_scroll_and_remain_scrollable_after_refresh():
+    app = SidebarApp()
+    async with app.run_test(size=(16, 20)) as pilot:
+        sidebar = app.query_one(ReferenceSidebar)
+        sidebar.update_snapshot(snapshot(), None)
+        await pilot.click("#sidebar-view-prs")
+        message = "GitHub CLI [gh] is required. Install gh and run gh auth login for github.com."
+        sidebar.update_pull_requests((pr_listing(error=message),))
+        await pilot.pause()
+        details = sidebar.query_one("#sidebar-state-scroll")
+        assert details.max_scroll_y > 0
+        assert details.show_vertical_scrollbar
+        details.focus()
+        await pilot.press("end")
+        await pilot.pause()
+        assert details.scroll_y == details.max_scroll_y
+        strips = app.screen._compositor.render_strips()
+        visible = "".join(strip.text for strip in strips[details.region.y : details.region.bottom])
+        assert "github.com" in visible
+        sidebar.set_busy(False)
+        sidebar.update_snapshot(snapshot(), None)
+        await pilot.pause()
+        assert details.scroll_y == details.max_scroll_y
+
+
+@pytest.mark.parametrize(
+    ("view", "group", "query"),
+    [("worktrees", "group:worktrees", "topic"), ("prs", "group:prs:origin", "#42")],
+)
+async def test_new_view_search_temporarily_reveals_collapsed_groups(view, group, query):
+    app = SidebarApp()
+    async with app.run_test(size=(23, 20)) as pilot:
+        sidebar = app.query_one(ReferenceSidebar)
+        worktree = Worktree(Path("/repo/linked"), "a" * 40, "topic")
+        sidebar.update_snapshot(replace(snapshot(), worktrees=(worktree,)), None)
+        sidebar.update_pull_requests(
+            (pr_listing(PullRequest(42, "Topic", "https://example.test/pr/42", "topic", "main")),)
+        )
+        await pilot.click(f"#sidebar-view-{view}")
+        sidebar._tree_nodes[group].collapse()
+        await pilot.pause()
+        search = sidebar.query_one(Input)
+        search.value = query
+        await pilot.pause()
+        assert sidebar._tree_nodes[group].is_expanded
+        search.value = ""
+        await pilot.pause()
+        assert sidebar._tree_nodes[group].is_collapsed
+
+
+async def test_typed_worktree_and_pr_filters_preserve_hidden_selection_and_states():
+    app = SidebarApp()
+    linked = Worktree(
+        Path("/repo/feature tree"),
+        "b" * 40,
+        "topic",
+        current=True,
+        locked=True,
+        lock_reason="in use",
+    )
+    detached = Worktree(
+        Path("/repo/detached"), "c" * 40, detached=True, prunable=True, prune_reason="missing"
+    )
+    bare = Worktree(Path("/repo/bare"), bare=True)
+    data = replace(snapshot(), worktrees=(linked, detached, bare))
+    pr = PullRequest(
+        42, "Navigation", "https://example.test/pr/42", "feature/sidebar", "main", "octocat", True
+    )
+    async with app.run_test(size=(30, 20)) as pilot:
+        sidebar = app.query_one(ReferenceSidebar)
+        sidebar.update_snapshot(data, None)
+        sidebar.update_pull_requests((pr_listing(pr),))
+        await pilot.click("#sidebar-view-worktrees")
+        await pilot.pause()
+        assert "current" in sidebar._tree_nodes[str(linked.path)].data.label
+        assert "locked" in sidebar._tree_nodes[str(linked.path)].data.label
+        assert "detached" in sidebar._tree_nodes[str(detached.path)].data.label
+        assert "prunable" in sidebar._tree_nodes[str(detached.path)].data.label
+        assert "bare repository" in sidebar._tree_nodes[str(bare.path)].data.label
+        tree, point = await hit_point(sidebar, pilot, str(linked.path))
+        await click(pilot, tree, point)
+        assert not sidebar.query_one("#sidebar-worktree-open").disabled
+        search = sidebar.query_one("#ref-filter", Input)
+        search.value = "feature tree"
+        await pilot.pause()
+        assert str(linked.path) in sidebar._tree_nodes
+        assert str(detached.path) not in sidebar._tree_nodes
+        selected = sidebar.get_selection(str(linked.path))
+        assert selected and selected.kind == "linked-worktree"
+        await pilot.click("#sidebar-view-prs")
+        search.value = "octocat"
+        await pilot.pause()
+        assert pr.url in sidebar._tree_nodes
+        assert sidebar.get_pull_request(pr.url) == pr
+        for term in ("42", "#42", "feature/sidebar", "main", "octocat", "draft"):
+            search.value = term
+            await pilot.pause()
+            assert pr.url in sidebar._tree_nodes
+
+
+async def test_pr_remote_reset_and_busy_state_disable_sidebar_actions():
+    app = SidebarApp()
+    data = replace(snapshot(), worktrees=(Worktree(Path("/repo/linked"), "a" * 40, "topic"),))
+    pr = PullRequest(7, "Title", "https://example.test/pr/7", "topic", "main")
+    async with app.run_test(size=(30, 20)) as pilot:
+        sidebar = app.query_one(ReferenceSidebar)
+        sidebar.update_snapshot(data, None)
+        sidebar.update_pull_requests((pr_listing(pr),))
+        assert sidebar.get_pull_request(pr.url) == pr
+        sidebar.set_busy(True)
+        await pilot.click("#sidebar-view-worktrees")
+        assert sidebar.query_one("#sidebar-worktree-new").disabled
+        assert sidebar.query_one("#sidebar-worktree-open").disabled
+        await pilot.click("#sidebar-view-prs")
+        assert sidebar.query_one("#sidebar-prs-load").disabled
+        sidebar.set_busy(False)
+        sidebar.update_snapshot(
+            replace(data, remotes=(Remote("other", "https://example.test/other"),)), None
+        )
+        assert sidebar.get_pull_request(pr.url) is None
+        assert sidebar._pull_request_listings is None

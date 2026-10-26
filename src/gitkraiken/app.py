@@ -32,11 +32,11 @@ from .commit_files import CommitFileTree
 from .context_actions import ContextTarget, context_actions, remote_link
 from .dates import format_commit_date
 from .dialogs import ActionPicker, BranchContextMenu, HelpDialog, MessageDialog, PromptDialog
-from .git import Repository
+from .git import GitError, Repository
 from .graph import GraphRow, GraphStyle, render_history
 from .models import Action, Commit, FileChange, HistoryLine, Snapshot
 from .pane_splitter import PaneGroup, PaneSplitter
-from .pull_request_dialog import PullRequestDialog
+from .pull_request_dialog import PullRequestDetailsDialog, PullRequestDialog
 from .pull_requests import PullRequestError, PullRequestPlan
 from .ref_badges import RefBadges, build_ref_badges
 from .resizable_table import ResizableDataTable
@@ -528,13 +528,17 @@ class GitKraikenApp(App[None]):
     ) -> None:
         event.stop()
         selection = self._current_sidebar_selection(event.root, event.selection)
-        if selection is None:
+        if selection is None or (self.busy and selection.kind == "pull-request"):
             return
         self._sidebar_selection = selection
         self._reveal_ref_key = None
         self.query_one(ReferenceSidebar).set_active(selection)
         if selection.kind == "worktree":
             self.jump_to("wip")
+        elif selection.kind == "linked-worktree":
+            self.status(f"{selection.target} · double-click or Open to switch worktrees")
+        elif selection.kind == "pull-request":
+            self.status(f"Selected {selection.label}")
         elif selection.kind == "all":
             self.action_clear_filter()
             self.status("Unified graph · all local and remote branches")
@@ -545,6 +549,105 @@ class GitKraikenApp(App[None]):
             self.status(f"Selected {selection.label} · tip is outside the loaded unified graph")
         self._update_reference_badges()
         self.update_search(jump=False)
+        if selection.kind == "pull-request":
+            request = self.query_one(ReferenceSidebar).get_pull_request(selection.key)
+            if request is not None:
+                self.push_screen(PullRequestDetailsDialog(request))
+
+    def on_reference_sidebar_worktree_open_requested(
+        self, event: ReferenceSidebar.WorktreeOpenRequested
+    ) -> None:
+        event.stop()
+        selection = self._current_sidebar_selection(event.root, event.selection)
+        snapshot = self.snapshot_data
+        if self.busy or selection is None or selection.kind != "linked-worktree" or not snapshot:
+            return
+        worktree = next(
+            (item for item in snapshot.worktrees if str(item.path) == selection.target), None
+        )
+        if worktree is None or worktree.bare or worktree.prunable:
+            return
+        if worktree.current:
+            self.jump_to("wip")
+            self.status(f"Already open: {worktree.path}")
+            return
+        self.open_repository(str(worktree.path), worktree=True)
+
+    def on_reference_sidebar_worktree_create_requested(
+        self, event: ReferenceSidebar.WorktreeCreateRequested
+    ) -> None:
+        event.stop()
+        snapshot, repo = self.snapshot_data, self.repo
+        if (
+            self.busy
+            or len(self.screen_stack) > 1
+            or repo is None
+            or snapshot is None
+            or event.root != repo.root
+            or not snapshot.head
+            or snapshot.operation
+            or snapshot.conflicts
+        ):
+            return
+        self._handle_context_action("create-worktree", ContextTarget(snapshot.head), snapshot, repo)
+
+    def on_reference_sidebar_pull_requests_requested(
+        self, event: ReferenceSidebar.PullRequestsRequested
+    ) -> None:
+        event.stop()
+        repo, snapshot = self.repo, self.snapshot_data
+        if (
+            self.busy
+            or len(self.screen_stack) > 1
+            or repo is None
+            or snapshot is None
+            or event.root != repo.root
+        ):
+            return
+        if self._selected_kind == "pull-request":
+            self._clear_reference_selection()
+        self.query_one(ReferenceSidebar).update_pull_requests(None, loading=True)
+        self.set_busy(True, "Loading open pull requests…")
+        self.run_worker(
+            self._load_pull_requests(repo, snapshot), group="repository", exit_on_error=False
+        )
+
+    async def _load_pull_requests(self, repo: Repository, requested: Snapshot) -> None:
+        """Explicit hosted read, isolated from the automatic local refresh loop."""
+        sidebar = self.screen_stack[0].query_one(ReferenceSidebar)
+        try:
+            async with self._serial:
+                listings = await asyncio.to_thread(repo.open_pull_requests)
+                snapshot = await asyncio.to_thread(repo.snapshot, self.limit)
+            if self.repo is not repo:
+                return
+            # Help can be opened during a slow hosted read. The next local
+            # poll reconciles workspace changes after it closes; never repaint
+            # the active modal as though it were the repository screen.
+            if snapshot != self.snapshot_data and len(self.screen_stack) == 1:
+                await self.apply_snapshot(snapshot)
+            if snapshot.remotes != requested.remotes:
+                sidebar.update_pull_requests(None)
+                self.status(
+                    "Remotes changed while loading PRs. Load again for the new destinations."
+                )
+                return
+            sidebar.update_pull_requests(listings)
+            self._last_error = ""
+            count = sum(len(listing.requests) for listing in listings)
+            failures = sum(bool(listing.error) for listing in listings)
+            if not listings:
+                self.status("Open PRs require a GitHub.com or Azure DevOps remote")
+            elif failures:
+                self.status(f"Loaded {count} open PRs · {failures} remote(s) unavailable; see PRs")
+            else:
+                self.status(f"Loaded {count} open pull requests")
+        except Exception as error:
+            if self.repo is repo:
+                sidebar.update_pull_requests(None)
+                self.show_error(str(error))
+        finally:
+            self.set_busy(False)
 
     def on_reference_sidebar_checkout_requested(
         self, event: ReferenceSidebar.CheckoutRequested
@@ -832,6 +935,12 @@ class GitKraikenApp(App[None]):
                     self.busy = False
 
             def closed(url: str | None) -> None:
+                if url:
+                    # Creation invalidates the cached list, but never triggers
+                    # another network request without an explicit Load/Refresh.
+                    if self._selected_kind == "pull-request":
+                        self._clear_reference_selection()
+                    self.query_one(ReferenceSidebar).update_pull_requests(None)
                 self.update_controls()
                 self.status(f"Pull request created: {url}" if url else "Pull request cancelled")
 
@@ -1592,43 +1701,49 @@ class GitKraikenApp(App[None]):
     def update_controls(self) -> None:
         if not self.is_mounted:
             return
-        for button in self.query(Button):
+        workspace = self.screen_stack[0]
+        for button in workspace.query(Button):
             button.disabled = self.busy and button.id not in {"help", "search-next", "graph-style"}
         if self.snapshot_data:
             files = self.snapshot_data.files
             selected = self._selected_file
-            self.query_one("#stage", Button).disabled = self.busy or not selected or selected[1]
-            self.query_one("#unstage", Button).disabled = (
+            workspace.query_one("#stage", Button).disabled = (
+                self.busy or not selected or selected[1]
+            )
+            workspace.query_one("#unstage", Button).disabled = (
                 self.busy or not selected or not selected[1]
             )
-            self.query_one("#discard", Button).disabled = (
+            workspace.query_one("#discard", Button).disabled = (
                 self.busy
                 or not selected
                 or selected[1]
                 or selected[0].index == "?"
                 or selected[0].conflicted
             )
-            self.query_one("#stage-all", Button).disabled = self.busy or not any(
+            workspace.query_one("#stage-all", Button).disabled = self.busy or not any(
                 f.unstaged for f in files
             )
-            self.query_one("#unstage-all", Button).disabled = self.busy or not any(
+            workspace.query_one("#unstage-all", Button).disabled = self.busy or not any(
                 f.staged for f in files
             )
-            self.query_one("#commit", Button).disabled = (
+            workspace.query_one("#commit", Button).disabled = (
                 self.busy or not any(f.staged for f in files) or bool(self.snapshot_data.conflicts)
             )
-            self.query_one("#continue", Button).disabled = self.busy or bool(
+            workspace.query_one("#continue", Button).disabled = self.busy or bool(
                 self.snapshot_data.conflicts
             )
             for ident in ("fetch", "pull", "push"):
-                self.query_one(f"#{ident}", Button).disabled = (
+                workspace.query_one(f"#{ident}", Button).disabled = (
                     self.busy or not self.snapshot_data.remotes
                 )
-            self.query_one("#pop", Button).disabled = self.busy or not self.snapshot_data.stashes
-        self.query_one("#search-next", Button).disabled = not self._search_matches
+            workspace.query_one("#pop", Button).disabled = (
+                self.busy or not self.snapshot_data.stashes
+            )
+        workspace.query_one("#search-next", Button).disabled = not self._search_matches
+        workspace.query_one(ReferenceSidebar).set_busy(self.busy)
 
     def status(self, message: str) -> None:
-        self.query_one("#status-line", Static).update(
+        self.screen_stack[0].query_one("#status-line", Static).update(
             Text(message.splitlines()[0] if message else "Ready")
         )
 
@@ -1644,15 +1759,34 @@ class GitKraikenApp(App[None]):
                 PromptDialog("OPEN LOCAL REPOSITORY", "/path/to/repository"), self.open_repository
             )
 
-    def open_repository(self, path: str | None) -> None:
+    def open_repository(self, path: str | None, *, worktree: bool = False) -> None:
         if not path or self.busy or len(self.screen_stack) > 1:
             return
+        previous_repo = self.repo
+        destination = Path(path).expanduser()
         self.set_busy(True, "Opening repository…")
 
         async def open_path() -> None:
             try:
                 async with self._serial:
-                    repo = await asyncio.to_thread(Repository, Path(path).expanduser())
+                    if worktree:
+                        # A visible entry may have been removed externally since
+                        # the last snapshot. Never discover its parent instead.
+                        entries = (
+                            await asyncio.to_thread(previous_repo.worktrees)
+                            if previous_repo is not None
+                            else ()
+                        )
+                        if not any(
+                            item.path == destination and not item.bare and not item.prunable
+                            for item in entries
+                        ):
+                            raise GitError(
+                                "Worktree is no longer available. Refresh and try again."
+                            )
+                    repo = await asyncio.to_thread(Repository, destination)
+                    if worktree and repo.root != destination.resolve():
+                        raise GitError("Worktree moved or was removed. Refresh and try again.")
                     snapshot = await asyncio.to_thread(repo.snapshot)
                 self.repo, self.path = repo, repo.root
                 self._clear_reference_selection()

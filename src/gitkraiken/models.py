@@ -33,6 +33,20 @@ class Stash:
 
 
 @dataclass(frozen=True)
+class Worktree:
+    path: Path
+    head: str = ""
+    branch: str = ""
+    current: bool = False
+    bare: bool = False
+    detached: bool = False
+    locked: bool = False
+    lock_reason: str = ""
+    prunable: bool = False
+    prune_reason: str = ""
+
+
+@dataclass(frozen=True)
 class FileChange:
     path: str
     index: str = " "
@@ -97,6 +111,7 @@ class Snapshot:
     operation: str = ""  # merge, rebase, cherry-pick, revert, am, or empty
     # True when history may have more commits; user can explicitly load more.
     has_more: bool = False
+    worktrees: tuple[Worktree, ...] = ()
 
     @property
     def conflicts(self) -> tuple[FileChange, ...]:

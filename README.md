@@ -9,7 +9,7 @@ repositories through your existing Git authentication.
 
 ## Run
 
-For **macOS or Linux (including WSL2)**. Requires **Git 2.31+**, **Python 3.13+**, and
+For **macOS or Linux (including WSL2)**. Requires **Git 2.36+**, **Python 3.13+**, and
 [uv](https://docs.astral.sh/uv/).
 A true-color terminal at **120×40 or larger** is recommended; 170 columns gives
 all three panels room. Smaller tmux panes adapt automatically: below 85 columns,
@@ -47,14 +47,25 @@ intentionally rejected.
 
 ## The main screen
 
-- **Left:** a searchable reference tree. Collapse Repository, Local, Remotes,
-  individual remotes, and branch namespaces such as `feature/jlott` using
-  their carets. Tags and Stashes also collapse. Search reveals matching paths;
-  clearing it restores your folds.
+- **Left:** a searchable navigator with **All refs**, **Local**, **Remote**,
+  **Worktrees**, and **PRs** tabs. Local/Remote focus on those branches; All refs
+  also includes Repository, Tags, and Stashes. Collapse sections, individual
+  remotes, and branch namespaces such as `feature/jlott` using their carets.
+  Search reveals matching paths; clearing it restores your folds. Switching tabs
+  never filters the commit graph or clears your selected branch.
   **Single-click selects action context without moving or filtering the graph.**
   **Double-click a local/remote branch label to check it out immediately.**
   **Right-click a branch for checkout, integration, creation, reset, upstream,
   rename/delete, pull request creation, and copy actions.**
+  **Worktrees** lists the main and linked working trees, their branches/paths,
+  current checkout, detached HEAD, and locked/prunable status. Double-click an
+  available worktree or select it and choose **Open** to switch the workspace
+  without checking out or changing files in either tree. **New** creates a worktree
+  at HEAD on a new branch or detached HEAD; the current workspace stays open.
+  **PRs → Load PRs** explicitly loads open requests (including drafts) from supported
+  GitHub.com and Azure DevOps fetch remotes. Click a PR or press Enter to inspect
+  its title, author, source/target branches, and open/copy its browser link.
+  Use **Refresh** there to update the list; local refresh never polls providers.
 - **Center:** a colored commit graph with rounded bends, branch/tag labels,
   authors, date/time, subjects and SHAs. Dates show `YYYY-MM-DD HH:MM` in your computer's
   local timezone, including daylight-saving rules for that date. All branches share
@@ -95,7 +106,10 @@ The graph column cannot shrink enough to hide lanes.
 Hover tooltip popups are disabled throughout the workspace and menus.
 
 Local state refreshes every five seconds while no dialog or operation is active.
-Network requests happen **only when you ask**. Large patches are clipped with a
+Network requests happen **only when you ask**. PR browsing uses optional authenticated
+`gh` / `az` CLIs, not Git's SSH credentials; see [setup](docs/pull-requests.md).
+Worktree discovery requires Git 2.36+ for unambiguous paths, including spaces and newlines.
+Large patches are clipped with a
 visible notice; binary files have a summary, not a binary-patch dump.
 
 ### Branch pointers and navigation

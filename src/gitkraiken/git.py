@@ -27,9 +27,17 @@ from .models import (
     Remote,
     Snapshot,
     Stash,
+    Worktree,
 )
-from .pull_requests import HostedRepository, PullRequestError, PullRequestPlan, hosted_repository
+from .pull_requests import (
+    HostedRepository,
+    PullRequestError,
+    PullRequestListing,
+    PullRequestPlan,
+    hosted_repository,
+)
 from .pull_requests import create_pull_request as _create_hosted_pull_request
+from .pull_requests import list_open_pull_requests as _list_open_pull_requests
 
 _NETWORK_TIMEOUT = 60.0
 _LOCAL_TIMEOUT = 30.0
@@ -360,7 +368,8 @@ class Repository:
             cwd=None,
             operation="repository discovery",
         )
-        root_text = _decode(top.stdout).rstrip("\n")
+        # Remove Git's record terminator, not newlines belonging to the path.
+        root_text = _decode(top.stdout).removesuffix("\n")
         if not root_text:
             raise GitError("Git did not report a worktree root.")
         self.root = Path(root_text).resolve()
@@ -639,6 +648,68 @@ class Repository:
         if value.startswith(("http://", "https://")):
             return value
         return ""
+
+    def worktrees(self) -> tuple[Worktree, ...]:
+        """Return Git's registered worktrees without touching their contents."""
+        result = self._git(
+            ["worktree", "list", "--porcelain", "-z"],
+            ok_codes=(0, 129),
+            operation="list worktrees",
+        )
+        if result.returncode == 129:
+            raise GitError("Listing worktrees requires Git 2.36 or newer.")
+        worktrees: list[Worktree] = []
+        fields: list[str] = []
+
+        def append_record(record: list[str]) -> None:
+            values: dict[str, str] = {}
+            markers: set[str] = set()
+            for field in record:
+                key, separator, value = field.partition(" ")
+                if separator:
+                    values[key] = value
+                else:
+                    markers.add(key)
+            raw_path = values.get("worktree", "")
+            if not raw_path:
+                return
+            path = Path(raw_path)
+            try:
+                current = path.resolve() == self.root
+            except OSError:
+                current = False
+            head = values.get("HEAD", "")
+            if head and not head.strip("0"):
+                head = ""
+            detached = "detached" in markers
+            branch_ref = values.get("branch", "")
+            branch = ""
+            if not detached and branch_ref.startswith("refs/heads/"):
+                branch = branch_ref.removeprefix("refs/heads/")
+            worktrees.append(
+                Worktree(
+                    path=path,
+                    head=head,
+                    branch=branch,
+                    current=current,
+                    bare="bare" in markers,
+                    detached=detached,
+                    locked="locked" in markers or "locked" in values,
+                    lock_reason=values.get("locked", ""),
+                    prunable="prunable" in markers or "prunable" in values,
+                    prune_reason=values.get("prunable", ""),
+                )
+            )
+
+        for field in _decode(result.stdout).split("\x00"):
+            if field:
+                fields.append(field)
+            elif fields:
+                append_record(fields)
+                fields = []
+        if fields:
+            append_record(fields)
+        return tuple(worktrees)
 
     def _stashes(self) -> tuple[Stash, ...]:
         result = self._git(
@@ -929,6 +1000,7 @@ class Repository:
             history=history,
             operation=self._operation(),
             has_more=has_more,
+            worktrees=self.worktrees(),
         )
 
     def _commit(self, oid: str) -> Commit:
@@ -1298,6 +1370,37 @@ class Repository:
                 right.repository.casefold(),
             )
         return False
+
+    def open_pull_requests(self) -> tuple[PullRequestListing, ...]:
+        """List requests for each distinct supported fetch repository."""
+        repositories: list[tuple[str, HostedRepository]] = []
+        for remote in sorted(self._remote_names()):
+            repository = self._hosted_remote(remote)
+            if repository is None:
+                continue
+            if any(
+                self._same_hosted_repository(repository, existing) for _, existing in repositories
+            ):
+                continue
+            repositories.append((remote, repository))
+
+        listings: list[PullRequestListing] = []
+        for remote, repository in repositories:
+            try:
+                requests = _list_open_pull_requests(self.root, repository)
+            except PullRequestError as error:
+                listings.append(
+                    PullRequestListing(remote=remote, repository=repository, error=str(error))
+                )
+            else:
+                listings.append(
+                    PullRequestListing(
+                        remote=remote,
+                        repository=repository,
+                        requests=requests,
+                    )
+                )
+        return tuple(listings)
 
     def _safe_pull_request_remote(self, name: str) -> HostedRepository:
         repository = self._hosted_remote(name)

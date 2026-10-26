@@ -3,7 +3,7 @@
 A Python 3.13+ / Textual 1.x application, launched with `uv run gitkraiken [PATH]`.
 No web server, hosted service, built-in account management, or token database.
 Existing Git credential helpers / SSH configuration handle Git access. Optional
-hosted PR creation uses authenticated GitHub/Azure CLIs; see [pull requests](pull-requests.md).
+hosted PR browsing/creation uses authenticated GitHub/Azure CLIs; see [pull requests](pull-requests.md).
 
 ## Ownership / seams
 
@@ -11,13 +11,21 @@ hosted PR creation uses authenticated GitHub/Azure CLIs; see [pull requests](pul
 - `git.py`: synchronous `Repository(path)` discovers the worktree root, rejects bare
   repos with a friendly `GitError`. `root: Path`. All Git I/O stays here. Methods:
   - `snapshot(limit: int = 300, ref: str = "") -> Snapshot`: status, refs, remotes,
-    stashes, current operation, bounded chronological history. Empty `ref` means all
+    stashes, worktrees, current operation, bounded chronological history. Empty `ref` means all
     refs plus HEAD (including detached HEAD); nonempty ref shows its ancestry. The UI
     always uses the unified, empty-ref form; reference selection never filters it.
     A full lightweight author-epoch/OID scan selects the globally newest `limit`
     commits before bounded metadata loading; limiting Git's traversal first would
     miss newer ancestors with skewed author dates. The returned history is newest
     first by author instant (`%at`), with raw `%aI` dates retained for display.
+  - `worktrees() -> tuple[Worktree, ...]`: local `git worktree list --porcelain -z`
+    (Git 2.36+), preserving literal paths and detached/bare/locked/prunable metadata.
+    The UI can open an available entry without mutating either checkout. Opening
+    revalidates registration and exact discovered root; stale entries cannot fall
+    back to a parent repository. Worktree creation reuses guarded context actions.
+  - `open_pull_requests() -> tuple[PullRequestListing, ...]`: explicit hosted reads
+    for supported fetch remotes, deduplicated by hosted identity. Each listing
+    carries requests or a safe per-repository error; never called by snapshot/polling.
   - `detail(oid: str) -> CommitDetail`: full commit message, first-parent changes
     (root commits work), stat. `FileChange.index` holds committed change type.
   - `diff(path: str = "", *, staged: bool = False, oid: str = "") -> str`: plaintext
@@ -91,7 +99,11 @@ hosted PR creation uses authenticated GitHub/Azure CLIs; see [pull requests](pul
   optional spacers and flattens required connector lines into separate rows. Legacy
   native ANSI input remains supported. No Git I/O, widget state, topology clipping,
   or new dependencies.
-- `sidebar.py`: mounted-once Input + Tree over a `Snapshot`; no Git I/O. Typed
+- `sidebar.py`: compact All refs / Local / Remote / Worktrees / PRs view tabs,
+  mounted-once Input + Tree over a `Snapshot`; no Git I/O. Worktree open/create
+  and PR load requests are typed messages. PR results are supplied separately,
+  with loading, empty, unsupported and per-repository failure states. Root/remotes
+  changes invalidate hosted data; tab/filter changes preserve action context. Typed
   `SidebarSelection` messages carry full targets, OIDs, exact remote ownership,
   and repository root. Fold/cursor keys are semantic, not TreeNode IDs. A complete
   selection index is independent of search visibility. Stash identity uses OID.
@@ -99,7 +111,9 @@ hosted PR creation uses authenticated GitHub/Azure CLIs; see [pull requests](pul
   refresh preserves the query and viewport, while a new repository resets them.
   Actual Click chains distinguish selection from immediate checkout; only two
   primary-button label clicks on the same branch qualify. Rebuilds invalidate
-  pending double-clicks. Right-click branch labels emit ContextRequested with an
+  pending double-clicks. Linked worktrees have a separate selection kind from the
+  current Working directory; double-click or Open navigates to an available tree.
+  PR selection opens a read-only detail modal. Right-click branch labels emit ContextRequested with an
   exact ref, repository root and screen position; other nodes/carets are inert.
   Carets, categories, Enter, and navigation never check out.
 - `ref_badges.py`: pure typed pointer grouping by OID from refs, remotes, and stashes,
@@ -111,11 +125,13 @@ hosted PR creation uses authenticated GitHub/Azure CLIs; see [pull requests](pul
   Grouped literal action labels depend on local/remote/current/detached/operation
   state, not the previous inspector selection. Credential-free provider links are
   generated only for supported URL shapes and encode remote source branch names.
-- `pull_requests.py`: strict hosted-repository URL parsing, immutable PR plans,
-  and noninteractive provider CLI adapters (`gh api`, `az repos pr create`). Explicit
+- `pull_requests.py`: strict hosted-repository URL parsing, immutable PR plans/listings,
+  and noninteractive provider CLI adapters (`gh api`, `az repos pr create/list`). Open
+  listings use pagination and validate response schemas, constructing browser URLs
+  from trusted repository identity and positive PR numbers. Explicit
   repository and branch fields, literal argv/JSON payloads, bounded timeout, no
   automatic retries. Credentials remain CLI-owned; failure output is not echoed.
-- `pull_request_dialog.py`: title/description composer and persistent success link
+- `pull_request_dialog.py`: read-only PR summary, title/description composer and persistent success link
   with copy/open affordances. Modal owns in-flight controls; the app shares its
   operation lock/busy flag. Duplicate submission and cancellation are blocked until
   the request settles. Errors keep the draft; Escape cancels before submission.
@@ -151,8 +167,11 @@ hosted PR creation uses authenticated GitHub/Azure CLIs; see [pull requests](pul
 
 GitKraken-inspired, original terminal implementation: dark blue/charcoal palette,
 teal active branch, colored graph lanes, compact toolbar, left refs tree, center
-scrollable graph, right selected commit details / staging. Ref tree: local, remotes,
-tags, stashes. Center: WIP, Smooth/Compact graph, badges, subjects and SHA;
+scrollable graph, right selected commit details / staging. Sidebar tabs: All refs,
+Local, Remote, Worktrees, PRs. All refs includes tags and stashes; other tabs focus
+on one collection without changing graph scope. Worktrees show paths and status,
+with Open/New actions. PRs load only on explicit request and expose a detail modal
+with browser/copy actions. Center: WIP, Smooth/Compact graph, badges, subjects and SHA;
 filter/search, load-more. Smooth is the default; `g`, the visible graph-style button,
 and Actions switch styles without losing selection or search. Cache graph layout
 across resize/search; preserve lane colors under selection. Multiline Smooth rows

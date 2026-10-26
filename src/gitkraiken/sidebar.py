@@ -13,18 +13,22 @@ from typing import Literal
 from rich.text import Text
 from textual import events, on
 from textual.app import ComposeResult
+from textual.containers import Container, Horizontal, VerticalScroll
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import Input, Tree
+from textual.widgets import Button, Input, Static, Tree
 from textual.widgets._tree import TreeNode
 
-from .models import Ref, Snapshot, Stash
+from .models import Ref, Snapshot, Stash, Worktree
+from .pull_requests import PullRequest, PullRequestListing
 
 
 @dataclass(frozen=True)
 class SidebarSelection:
     key: str
-    kind: Literal["all", "worktree", "local", "remote", "tag", "stash"]
+    kind: Literal[
+        "all", "worktree", "linked-worktree", "pull-request", "local", "remote", "tag", "stash"
+    ]
     label: str
     target: str = ""
     oid: str = ""
@@ -38,6 +42,17 @@ class _Group:
     key: str
     label: str
     tooltip: str = ""
+
+
+class _SidebarButton(Button):
+    """Textual's Button adds two cells of padding even when CSS padding is zero."""
+
+    def render(self) -> Text:
+        label = self.label.copy()
+        label.stylize_before(self.rich_style)
+        label.justify = "center"
+        label.no_wrap = True
+        return label
 
 
 class _ReferenceTree(Tree[SidebarSelection | _Group]):
@@ -103,6 +118,47 @@ class ReferenceSidebar(Widget):
         background: #edf4f5;
         layout: vertical;
     }
+    ReferenceSidebar > #sidebar-views {
+        layout: vertical;
+        height: 3;
+        padding: 0;
+        background: #d8eeee;
+    }
+    ReferenceSidebar .view-row {
+        layout: horizontal;
+        height: 1;
+    }
+    ReferenceSidebar .view-tab {
+        width: 1fr;
+        min-width: 0;
+        height: 1;
+        min-height: 1;
+        padding: 0;
+        border: none;
+        background: #d8eeee;
+        color: #36505b;
+    }
+    ReferenceSidebar .view-tab.active {
+        background: #ffffff;
+        color: #006d77;
+        text-style: bold;
+    }
+    ReferenceSidebar > #sidebar-actions {
+        height: 1;
+        layout: horizontal;
+        padding: 0 1;
+        background: #edf4f5;
+    }
+    ReferenceSidebar > #sidebar-actions Button {
+        width: 1fr;
+        min-width: 0;
+        height: 1;
+        min-height: 1;
+        padding: 0;
+        border: none;
+        background: #d8eeee;
+        color: #14232c;
+    }
     ReferenceSidebar > Input {
         height: 1;
         min-height: 1;
@@ -113,6 +169,22 @@ class ReferenceSidebar(Widget):
         color: #14232c;
     }
     ReferenceSidebar > Input:focus { background: #f6fcfc; border: none; }
+    ReferenceSidebar > #sidebar-state-scroll {
+        display: none;
+        height: auto;
+        max-height: 4;
+        margin: 0 1;
+        padding: 0 1;
+        background: #fff8e8;
+        color: #5c4322;
+        scrollbar-size-vertical: 1;
+    }
+    /* Selection details must not move the target between two physical clicks. */
+    ReferenceSidebar > #sidebar-state-scroll.worktree-state { height: 4; }
+    ReferenceSidebar #sidebar-state {
+        height: auto;
+        color: #5c4322;
+    }
     ReferenceSidebar > Tree {
         height: 1fr;
         margin: 1 0 0 0;
@@ -145,6 +217,22 @@ class ReferenceSidebar(Widget):
             self.root = root
             super().__init__()
 
+    class WorktreeOpenRequested(Message):
+        def __init__(self, selection: SidebarSelection, root: Path) -> None:
+            self.selection = selection
+            self.root = root
+            super().__init__()
+
+    class WorktreeCreateRequested(Message):
+        def __init__(self, root: Path) -> None:
+            self.root = root
+            super().__init__()
+
+    class PullRequestsRequested(Message):
+        def __init__(self, root: Path) -> None:
+            self.root = root
+            super().__init__()
+
     class ContextRequested(Message):
         def __init__(
             self,
@@ -171,13 +259,120 @@ class ReferenceSidebar(Widget):
         self._click_latch: tuple[str, bool] | None = None
         self._filter = ""
         self._snapshot: Snapshot | None = None
+        self._view = "all"
+        self._busy = False
+        self._pull_request_listings: tuple[PullRequestListing, ...] | None = None
+        self._pull_requests_loading = False
+        self._pull_requests: dict[str, PullRequest] = {}
+        self._view_positions: dict[str, tuple[str | None, float]] = {}
 
     def compose(self) -> ComposeResult:
+        # Labels are shortened only at the narrowest supported sidebar width.
+        with Container(id="sidebar-views"):
+            with Horizontal(classes="view-row"):
+                yield _SidebarButton("All refs", id="sidebar-view-all", classes="view-tab")
+            with Horizontal(classes="view-row"):
+                yield _SidebarButton("Local", id="sidebar-view-local", classes="view-tab")
+                yield _SidebarButton("Remote", id="sidebar-view-remote", classes="view-tab")
+            with Horizontal(classes="view-row"):
+                yield _SidebarButton("Worktrees", id="sidebar-view-worktrees", classes="view-tab")
+                yield _SidebarButton("PRs", id="sidebar-view-prs", classes="view-tab")
+        with Container(id="sidebar-actions"):
+            yield _SidebarButton("New", id="sidebar-worktree-new")
+            yield _SidebarButton("Open", id="sidebar-worktree-open")
+            yield _SidebarButton("Load PRs", id="sidebar-prs-load")
         yield Input(placeholder="Filter refs…", id="ref-filter")
+        with VerticalScroll(id="sidebar-state-scroll", can_focus=True):
+            yield Static("", id="sidebar-state")
         yield self._tree
 
     def get_selection(self, key: str) -> SidebarSelection | None:
         return self._leaves.get(key)
+
+    def get_pull_request(self, key: str) -> PullRequest | None:
+        """Return PR data by its SidebarSelection.key, even while hidden."""
+        return self._pull_requests.get(key)
+
+    def set_busy(self, busy: bool) -> None:
+        self._busy = busy
+        self._sync_controls()
+
+    def update_pull_requests(
+        self, listings: tuple[PullRequestListing, ...] | None, *, loading: bool = False
+    ) -> None:
+        """Render supplied PR results only; selecting the tab never fetches."""
+        self._pull_request_listings = listings
+        self._pull_requests_loading = loading
+        self._pull_requests = {}
+        if listings:
+            for listing in listings:
+                for request in listing.requests:
+                    self._pull_requests[request.url] = request
+        if self._snapshot is not None:
+            self._rebuild(self._snapshot)
+        self._sync_controls()
+
+    def _sync_controls(self) -> None:
+        if not self.is_mounted:
+            return
+        snapshot = self._snapshot
+        selected = self._leaves.get(self._active_key or "")
+        can_open = bool(
+            selected and selected.kind == "linked-worktree" and self._worktree_openable(selected)
+        )
+        can_new = bool(
+            snapshot and snapshot.head and not snapshot.operation and not snapshot.conflicts
+        )
+        self.query_one("#sidebar-worktree-open", Button).disabled = self._busy or not can_open
+        self.query_one("#sidebar-worktree-new", Button).disabled = self._busy or not can_new
+        self.query_one("#sidebar-prs-load", Button).disabled = (
+            self._busy or self._pull_requests_loading or not snapshot
+        )
+        labels = {
+            "all": "All refs",
+            "local": "Local",
+            "remote": "Remote",
+            "worktrees": "Trees" if self.size.width < 18 else "Worktrees",
+            "prs": "PRs",
+        }
+        for name in ("all", "local", "remote", "worktrees", "prs"):
+            button = self.query_one(f"#sidebar-view-{name}", Button)
+            button.label = labels[name]
+            button.set_class(name == self._view, "active")
+        self.query_one("#sidebar-worktree-new", Button).display = self._view == "worktrees"
+        self.query_one("#sidebar-worktree-open", Button).display = self._view == "worktrees"
+        load = self.query_one("#sidebar-prs-load", Button)
+        load.display = self._view == "prs"
+        load.label = "Refresh" if self._pull_request_listings is not None else "Load PRs"
+        state = self.query_one("#sidebar-state", Static)
+        message = ""
+        if self._view == "worktrees":
+            message = (
+                selected.label
+                if selected and selected.kind == "linked-worktree"
+                else "Select a worktree to see its path. Open or double-click to switch."
+            )
+        elif self._view == "prs":
+            if self._pull_requests_loading:
+                message = "Loading open pull requests…"
+            elif self._pull_request_listings is None:
+                message = "Load open pull requests with Load PRs. Nothing is fetched when opening this tab."
+            elif not self._pull_request_listings:
+                message = "PR listing supports GitHub.com and Azure DevOps. No supported remote is configured."
+            else:
+                errors = [
+                    f"{listing.remote}: {listing.error}"
+                    for listing in self._pull_request_listings
+                    if listing.error
+                ]
+                if errors:
+                    message = "\n".join(errors)
+        if state.renderable != Text(message):
+            state.update(Text(message))
+            self.query_one("#sidebar-state-scroll", VerticalScroll).scroll_home(animate=False)
+        state_scroll = self.query_one("#sidebar-state-scroll")
+        state_scroll.set_class(self._view == "worktrees", "worktree-state")
+        state_scroll.display = bool(message)
 
     def set_active(self, selection: SidebarSelection | None) -> None:
         """Style a selection in-place; this intentionally doesn't alter scroll."""
@@ -187,19 +382,32 @@ class ReferenceSidebar(Widget):
             node = self._tree_nodes.get(key) if key else None
             if node is not None and isinstance(node.data, SidebarSelection):
                 self._set_leaf_label(node, node.data, key == self._active_key)
+        self._sync_controls()
 
     def update_snapshot(
         self, snapshot: Snapshot, active: SidebarSelection | None
     ) -> SidebarSelection | None:
         """Synchronously reconcile a snapshot and return the still-valid selection."""
         root_changed = self._root is not None and self._root != snapshot.root
-        signature = (snapshot.root, snapshot.refs, snapshot.remotes, snapshot.stashes)
+        remotes_changed = self._snapshot is not None and self._snapshot.remotes != snapshot.remotes
+        signature = (
+            snapshot.root,
+            snapshot.refs,
+            snapshot.remotes,
+            snapshot.stashes,
+            snapshot.worktrees,
+        )
         self._root = snapshot.root
+        if root_changed or remotes_changed:
+            self._pull_request_listings = None
+            self._pull_requests_loading = False
+            self._pull_requests = {}
         if root_changed:
             active = None
             self._active_key = None
             self._tree.move_cursor(None, animate=False)
             self._expanded.clear()
+            self._view_positions.clear()
             self._click_latch = None
             self._filter = ""
             if self.is_mounted:
@@ -210,6 +418,7 @@ class ReferenceSidebar(Widget):
             self._signature = signature
         reconciled = self._reconcile(active)
         self.set_active(reconciled)
+        self._sync_controls()
         return reconciled
 
     def _reconcile(self, active: SidebarSelection | None) -> SidebarSelection | None:
@@ -226,6 +435,44 @@ class ReferenceSidebar(Widget):
                 None,
             )
         return self._leaves.get(active.key)
+
+    @on(Button.Pressed, ".view-tab")
+    def _view_pressed(self, event: Button.Pressed) -> None:
+        event.stop()
+        self._view_positions[self._view] = (self._cursor_key(), self._tree.scroll_offset.y)
+        self._view = event.button.id.removeprefix("sidebar-view-")
+        self._click_latch = None
+        if self._snapshot is not None:
+            cursor_key, scroll_y = self._view_positions.get(self._view, (None, 0.0))
+            self._rebuild(self._snapshot, cursor_key=cursor_key, scroll_y=scroll_y)
+        self._sync_controls()
+
+    @on(Button.Pressed, "#sidebar-worktree-new")
+    def _new_worktree(self, event: Button.Pressed) -> None:
+        event.stop()
+        if self._snapshot is not None and not event.button.disabled:
+            self.post_message(self.WorktreeCreateRequested(self._snapshot.root))
+
+    @on(Button.Pressed, "#sidebar-worktree-open")
+    def _open_worktree(self, event: Button.Pressed) -> None:
+        event.stop()
+        selection = self._leaves.get(self._active_key or "")
+        if (
+            self._root is not None
+            and selection
+            and self._worktree_openable(selection)
+            and not event.button.disabled
+        ):
+            self.post_message(self.WorktreeOpenRequested(selection, self._root))
+
+    @on(Button.Pressed, "#sidebar-prs-load")
+    def _load_prs(self, event: Button.Pressed) -> None:
+        event.stop()
+        if self._root is not None and not event.button.disabled:
+            self.post_message(self.PullRequestsRequested(self._root))
+
+    def on_resize(self, event: events.Resize) -> None:
+        self._sync_controls()
 
     @on(Input.Changed, "#ref-filter")
     def _filter_changed(self, event: Input.Changed) -> None:
@@ -279,11 +526,13 @@ class ReferenceSidebar(Widget):
             if (
                 label_hit
                 and isinstance(data, SidebarSelection)
-                and data.kind in {"local", "remote"}
                 and first == (data.key, True)
                 and self._root is not None
             ):
-                self.post_message(self.CheckoutRequested(data, self._root))
+                if data.kind in {"local", "remote"}:
+                    self.post_message(self.CheckoutRequested(data, self._root))
+                elif data.kind == "linked-worktree" and self._worktree_openable(data):
+                    self.post_message(self.WorktreeOpenRequested(data, self._root))
             return
         self._click_latch = (data.key, label_hit) if isinstance(data, SidebarSelection) else None
         self._tree.cursor_line = node.line
@@ -363,9 +612,16 @@ class ReferenceSidebar(Widget):
         self._tree_nodes[key] = node
         return node
 
-    def _rebuild(self, snapshot: Snapshot, *, reset_scroll: bool = False) -> None:
-        cursor_key = self._cursor_key()
-        scroll_y = self._tree.scroll_offset.y
+    def _rebuild(
+        self,
+        snapshot: Snapshot,
+        *,
+        reset_scroll: bool = False,
+        cursor_key: str | None = None,
+        scroll_y: float | None = None,
+    ) -> None:
+        cursor_key = self._cursor_key() if cursor_key is None else cursor_key
+        scroll_y = self._tree.scroll_offset.y if scroll_y is None else scroll_y
         # Textual 1.0 retains cursor nodes across remove_children, and new
         # nodes have line=-1 until layout. Clear the old pointer and materialize
         # lines before restoring the semantic cursor, not an obsolete row ID.
@@ -389,14 +645,35 @@ class ReferenceSidebar(Widget):
         refs = tuple(ref for ref in snapshot.refs if self._matches_ref(ref))
         stashes = tuple(stash for stash in snapshot.stashes if self._matches_stash(stash))
         self._tree_nodes.clear()
-        # Action context is independent of sidebar visibility. A search must
-        # never turn a still-existing selected reference into a deleted one.
+        # Action context is independent of the visible tab and search.
         self._leaves = {item.key: item for item in map(self._selection, snapshot.refs)}
         self._leaves.update(
             {item.key: item for item in map(self._stash_selection, snapshot.stashes)}
         )
+        self._leaves.update(
+            {item.key: item for item in map(self._worktree_selection, snapshot.worktrees)}
+        )
+        self._leaves.update(
+            {
+                "worktree:worktree": SidebarSelection(
+                    "worktree:worktree", "worktree", "Working directory", "worktree"
+                ),
+                "all:all": SidebarSelection("all:all", "all", "All history"),
+            }
+        )
+        self._leaves.update(
+            {url: self._pr_selection(pr) for url, pr in self._pull_requests.items()}
+        )
         self._tree.root.remove_children()
         root = self._tree.root
+        if self._view == "worktrees":
+            self._build_worktrees(root, snapshot)
+            self._finish_build()
+            return
+        if self._view == "prs":
+            self._build_pull_requests(root)
+            self._finish_build()
+            return
         repo = self._group(root, "group:repository", "Repository", default=True)
         self._add_leaf(
             repo, SidebarSelection("worktree:worktree", "worktree", "Working directory", "worktree")
@@ -406,11 +683,16 @@ class ReferenceSidebar(Widget):
         local_refs = sorted(
             (ref for ref in refs if ref.kind == "local"), key=lambda x: x.name.casefold()
         )
-        local = self._group(root, "group:local", f"Local ({len(local_refs)})", default=True)
-        self._add_ref_paths(local, local_refs)
+        if self._view in {"all", "local"}:
+            local = self._group(root, "group:local", f"Local ({len(local_refs)})", default=True)
+            self._add_ref_paths(local, local_refs)
 
         remote_refs = [ref for ref in refs if ref.kind == "remote"]
-        remotes = self._group(root, "group:remotes", f"Remotes ({len(remote_refs)})", default=True)
+        remotes = (
+            self._group(root, "group:remotes", f"Remotes ({len(remote_refs)})", default=True)
+            if self._view in {"all", "remote"}
+            else None
+        )
         configured = {remote.name: remote for remote in snapshot.remotes}
         buckets: dict[str, list[Ref]] = {name: [] for name in configured}
         unassigned: list[Ref] = []
@@ -418,7 +700,7 @@ class ReferenceSidebar(Widget):
             (buckets[ref.remote] if ref.remote in configured else unassigned).append(ref)
         for owner in sorted(buckets, key=str.casefold):
             remote_bucket = buckets[owner]
-            if not remote_bucket and self._filter:
+            if remotes is None or (not remote_bucket and self._filter):
                 continue
             remote = configured[owner]
             group = self._group(
@@ -429,25 +711,41 @@ class ReferenceSidebar(Widget):
                 tooltip=f"{remote.provider}: {remote.url}",
             )
             self._add_ref_paths(group, remote_bucket, remote_owner=owner)
-        if unassigned:
+        if unassigned and remotes is not None:
             group = self._group(
                 remotes, "group:unassigned", f"Unassigned ({len(unassigned)})", default=False
             )
             self._add_ref_paths(group, unassigned, remote_owner="")
 
-        tags = sorted((ref for ref in refs if ref.kind == "tag"), key=lambda x: x.name.casefold())
-        tag_group = self._group(root, "group:tags", f"Tags ({len(tags)})", default=False)
-        for ref in tags:
-            self._add_leaf(tag_group, self._selection(ref))
-        stash_group = self._group(root, "group:stashes", f"Stashes ({len(stashes)})", default=False)
-        for stash in stashes:
-            self._add_leaf(stash_group, self._stash_selection(stash))
-        if self._filter and not refs and not stashes:
+        if self._view == "all":
+            tags = sorted(
+                (ref for ref in refs if ref.kind == "tag"), key=lambda x: x.name.casefold()
+            )
+            tag_group = self._group(root, "group:tags", f"Tags ({len(tags)})", default=False)
+            for ref in tags:
+                self._add_leaf(tag_group, self._selection(ref))
+            stash_group = self._group(
+                root, "group:stashes", f"Stashes ({len(stashes)})", default=False
+            )
+            for stash in stashes:
+                self._add_leaf(stash_group, self._stash_selection(stash))
+        visible_matches = (
+            bool(local_refs)
+            if self._view == "local"
+            else bool(remote_refs)
+            if self._view == "remote"
+            else bool(refs or stashes)
+        )
+        if self._filter and not visible_matches:
             root.add(
                 Text("No matching references", no_wrap=True),
                 _Group("group:no-matches", "No matching references"),
                 allow_expand=False,
             )
+        self._finish_build()
+
+    def _finish_build(self) -> None:
+        root = self._tree.root
         if self._filter:
             for node in self._tree_nodes.values():
                 if isinstance(node.data, SidebarSelection):
@@ -503,6 +801,170 @@ class ReferenceSidebar(Widget):
                 self._set_leaf_label(node, item, item.key == self._active_key)
             else:
                 paths[token] = self._add_leaf(parent_node, item, current=ref.current)
+
+    def _build_worktrees(self, root: TreeNode, snapshot: Snapshot) -> None:
+        worktrees = [wt for wt in snapshot.worktrees if self._matches_worktree(wt)]
+        group = self._group(root, "group:worktrees", f"Worktrees ({len(worktrees)})", default=True)
+        for worktree in worktrees:
+            item = self._worktree_selection(worktree)
+            node = self._add_leaf(group, item, current=worktree.current)
+            # Keep unavailable states obvious without inventing a second interaction.
+            if worktree.bare or worktree.prunable:
+                node.set_label(Text(item.label, style="#7b5b4f", no_wrap=True, overflow="ellipsis"))
+        if not worktrees:
+            root.add(
+                Text(
+                    "No matching worktrees" if self._filter else "No linked worktrees", no_wrap=True
+                ),
+                _Group("group:no-worktrees", "No linked worktrees"),
+                allow_expand=False,
+            )
+
+    def _build_pull_requests(self, root: TreeNode) -> None:
+        if self._pull_requests_loading:
+            root.add(
+                Text("Loading pull requests…", no_wrap=True),
+                _Group("group:prs-loading", "Loading"),
+                allow_expand=False,
+            )
+            return
+        if self._pull_request_listings is None:
+            root.add(
+                Text("Load open pull requests", no_wrap=True),
+                _Group("group:prs-unloaded", "Not loaded"),
+                allow_expand=False,
+            )
+            return
+        if not self._pull_request_listings:
+            root.add(
+                Text("No supported remotes", no_wrap=True),
+                _Group("group:prs-unsupported", "No supported remotes"),
+                allow_expand=False,
+            )
+            return
+        any_requests = False
+        for listing in self._pull_request_listings:
+            remote = listing.remote
+            requests = [pr for pr in listing.requests if self._matches_pr(pr)]
+            group = self._group(
+                root, f"group:prs:{remote}", f"{remote} ({len(requests)})", default=True
+            )
+            error = listing.error
+            if error:
+                # Text is intentionally literal: remote diagnostics may contain brackets.
+                group.add_leaf(
+                    Text("Could not load — see details above", no_wrap=True),
+                    _Group(f"group:prs-error:{remote}", error),
+                )
+            elif not requests:
+                group.add_leaf(
+                    Text("No open pull requests", no_wrap=True),
+                    _Group(f"group:prs-empty:{remote}", "No open pull requests"),
+                )
+            for request in requests:
+                any_requests = True
+                self._add_leaf(group, self._pr_selection(request))
+        if self._filter and not any_requests:
+            root.add(
+                Text("No matching pull requests", no_wrap=True),
+                _Group("group:no-prs", "No matching pull requests"),
+                allow_expand=False,
+            )
+
+    @staticmethod
+    def _worktree_selection(worktree: Worktree) -> SidebarSelection:
+        path = Path(worktree.path)
+        branch = worktree.branch
+        head = worktree.head
+        markers = []
+        if worktree.current:
+            markers.append("current")
+        if worktree.detached:
+            markers.append("detached")
+        if worktree.locked:
+            markers.append("locked")
+        if worktree.prunable:
+            markers.append("prunable")
+        if worktree.bare:
+            markers.append("bare")
+        if worktree.bare:
+            detail = "bare repository"
+        elif worktree.detached:
+            detail = "detached"
+        elif branch:
+            # An unborn repository can still report its symbolic branch name.
+            detail = branch
+        elif not head:
+            detail = "unborn HEAD"
+        else:
+            detail = "no branch"
+        reason = worktree.lock_reason or worktree.prune_reason
+        # State leads so unavailable/current status remains visible in narrow panes;
+        # the complete branch and path remain available through filtering and tooltip.
+        label = (
+            (f"{', '.join(markers)} · " if markers else "")
+            + f"{detail} · {path}"
+            + (f" · {reason}" if reason else "")
+        )
+        return SidebarSelection(str(path), "linked-worktree", label, str(path), head)
+
+    @staticmethod
+    def _pr_selection(request: PullRequest) -> SidebarSelection:
+        draft = "Draft · " if request.draft else ""
+        return SidebarSelection(
+            request.url, "pull-request", f"{draft}#{request.number} {request.title}", request.url
+        )
+
+    def _worktree_openable(self, selection: SidebarSelection) -> bool:
+        if selection.kind != "linked-worktree" or self._snapshot is None:
+            return False
+        return any(
+            str(wt.path) == selection.target and not wt.bare and not wt.prunable
+            for wt in self._snapshot.worktrees
+        )
+
+    def _matches_worktree(self, worktree: Worktree) -> bool:
+        if not self._filter:
+            return True
+        state = (
+            "current" if worktree.current else "",
+            "detached" if worktree.detached else "",
+            "locked" if worktree.locked else "",
+            "prunable" if worktree.prunable else "",
+            "bare" if worktree.bare else "",
+            "unborn" if not worktree.head and not worktree.bare else "",
+        )
+        return (
+            self._filter
+            in " ".join(
+                (
+                    str(worktree.path),
+                    worktree.branch,
+                    worktree.lock_reason,
+                    worktree.prune_reason,
+                    *state,
+                )
+            ).casefold()
+        )
+
+    def _matches_pr(self, request: PullRequest) -> bool:
+        if not self._filter:
+            return True
+        state = "draft" if request.draft else "open"
+        return (
+            self._filter
+            in " ".join(
+                (
+                    str(request.number),
+                    f"#{request.number}",
+                    request.title,
+                    request.author,
+                    request.source_branch,
+                    request.target_branch,
+                    state,
+                )
+            ).casefold()
+        )
 
     @staticmethod
     def _selection(ref: Ref) -> SidebarSelection:

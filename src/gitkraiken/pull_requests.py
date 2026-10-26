@@ -1,4 +1,4 @@
-"""Hosted-repository parsing and headless pull-request creation clients."""
+"""Hosted-repository parsing and headless pull-request listing/creation clients."""
 
 from __future__ import annotations
 
@@ -13,6 +13,8 @@ from urllib.parse import quote, unquote_to_bytes, urlsplit
 from .models import Action
 
 _CLI_TIMEOUT = 60.0
+_LIST_PAGE_SIZE = 100
+_MAX_LIST_PAGES = 100
 _BAD_PERCENT_RE = re.compile(r"%(?![0-9A-Fa-f]{2})")
 _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
 
@@ -38,6 +40,25 @@ class PullRequestPlan:
     source_branch: str
     target_branch: str
     guard: Action
+
+
+@dataclass(frozen=True)
+class PullRequest:
+    number: int
+    title: str
+    url: str
+    source_branch: str
+    target_branch: str
+    author: str = ""
+    draft: bool = False
+
+
+@dataclass(frozen=True)
+class PullRequestListing:
+    remote: str
+    repository: HostedRepository
+    requests: tuple[PullRequest, ...] = ()
+    error: str = ""
 
 
 class PullRequestError(RuntimeError):
@@ -212,6 +233,235 @@ def _cli_environment() -> dict[str, str]:
         }
     )
     return env
+
+
+def _repository_component(value: str, provider: str) -> str:
+    if (
+        not isinstance(value, str)
+        or not value
+        or value in {".", ".."}
+        or "/" in value
+        or "\\" in value
+        or _CONTROL_RE.search(value)
+    ):
+        raise PullRequestError(f"The {provider} repository identity is incomplete.")
+    return value
+
+
+def _listing_response(stdout: bytes) -> object:
+    try:
+        return json.loads(stdout.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise PullRequestError(
+            "The service returned a malformed pull request listing response."
+        ) from error
+
+
+def _required_string(item: dict[str, object], field: str) -> str:
+    value = item.get(field)
+    if not isinstance(value, str) or not value or "\x00" in value:
+        raise PullRequestError("The service returned a malformed pull request listing response.")
+    return value
+
+
+def _author(item: dict[str, object], field: str) -> str:
+    value = item.get(field)
+    if value is None:
+        return ""
+    if not isinstance(value, dict):
+        raise PullRequestError("The service returned a malformed pull request listing response.")
+    key = "login" if field == "user" else "displayName"
+    author = value.get(key)
+    if author is not None and not isinstance(author, str):
+        raise PullRequestError("The service returned a malformed pull request listing response.")
+    if isinstance(author, str) and author:
+        if "\x00" in author:
+            raise PullRequestError(
+                "The service returned a malformed pull request listing response."
+            )
+        return author
+    if field == "createdBy":
+        fallback = value.get("uniqueName")
+        if fallback is None:
+            return ""
+        if not isinstance(fallback, str) or "\x00" in fallback:
+            raise PullRequestError(
+                "The service returned a malformed pull request listing response."
+            )
+        return fallback
+    return ""
+
+
+def _draft(item: dict[str, object], field: str) -> bool:
+    value = item.get(field)
+    if not isinstance(value, bool):
+        raise PullRequestError("The service returned a malformed pull request listing response.")
+    return value
+
+
+def _listing_id(item: dict[str, object], field: str) -> int:
+    value = item.get(field)
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise PullRequestError("The service returned a malformed pull request listing response.")
+    return value
+
+
+def _run_listing(argv: list[str], root: Path, tool: str, setup: str) -> bytes:
+    try:
+        result = subprocess.run(
+            argv,
+            cwd=root,
+            env=_cli_environment(),
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            timeout=_CLI_TIMEOUT,
+            check=False,
+        )
+    except FileNotFoundError as error:
+        raise PullRequestError(f"{tool} is required. {setup}") from error
+    except subprocess.TimeoutExpired as error:
+        raise PullRequestError("Pull request listing timed out. Try again.") from error
+    except OSError as error:
+        raise PullRequestError(
+            f"Could not run {tool}. Check its installation and try again."
+        ) from error
+    if result.returncode != 0:
+        raise PullRequestError(
+            f"{tool} could not list pull requests. {setup} Check repository access."
+        )
+    return result.stdout
+
+
+def _github_page(stdout: bytes, web_url: str) -> list[PullRequest]:
+    response = _listing_response(stdout)
+    if not isinstance(response, list) or len(response) > _LIST_PAGE_SIZE:
+        raise PullRequestError("The service returned a malformed pull request listing response.")
+    requests: list[PullRequest] = []
+    for raw_item in response:
+        if not isinstance(raw_item, dict):
+            raise PullRequestError(
+                "The service returned a malformed pull request listing response."
+            )
+        number = _listing_id(raw_item, "number")
+        head = raw_item.get("head")
+        base = raw_item.get("base")
+        if not isinstance(head, dict) or not isinstance(base, dict):
+            raise PullRequestError(
+                "The service returned a malformed pull request listing response."
+            )
+        requests.append(
+            PullRequest(
+                number=number,
+                title=_required_string(raw_item, "title"),
+                url=f"{web_url}/pull/{number}",
+                source_branch=_required_string(head, "ref"),
+                target_branch=_required_string(base, "ref"),
+                author=_author(raw_item, "user"),
+                draft=_draft(raw_item, "draft"),
+            )
+        )
+    return requests
+
+
+def _azure_page(stdout: bytes, web_url: str) -> list[PullRequest]:
+    response = _listing_response(stdout)
+    if not isinstance(response, list) or len(response) > _LIST_PAGE_SIZE:
+        raise PullRequestError("The service returned a malformed pull request listing response.")
+    requests: list[PullRequest] = []
+    for raw_item in response:
+        if not isinstance(raw_item, dict):
+            raise PullRequestError(
+                "The service returned a malformed pull request listing response."
+            )
+        number = _listing_id(raw_item, "pullRequestId")
+        source = _required_string(raw_item, "sourceRefName")
+        target = _required_string(raw_item, "targetRefName")
+        if not source.startswith("refs/heads/") or not source.removeprefix("refs/heads/"):
+            raise PullRequestError(
+                "The service returned a malformed pull request listing response."
+            )
+        if not target.startswith("refs/heads/") or not target.removeprefix("refs/heads/"):
+            raise PullRequestError(
+                "The service returned a malformed pull request listing response."
+            )
+        requests.append(
+            PullRequest(
+                number=number,
+                title=_required_string(raw_item, "title"),
+                url=f"{web_url}/pullrequest/{number}",
+                source_branch=source.removeprefix("refs/heads/"),
+                target_branch=target.removeprefix("refs/heads/"),
+                author=_author(raw_item, "createdBy"),
+                draft=_draft(raw_item, "isDraft"),
+            )
+        )
+    return requests
+
+
+def list_open_pull_requests(root: Path, repository: HostedRepository) -> tuple[PullRequest, ...]:
+    """List all open/active requests through an authenticated provider CLI."""
+    requests: list[PullRequest] = []
+    if repository.provider == "GitHub":
+        owner = _repository_component(repository.owner, "GitHub")
+        name = _repository_component(repository.repository, "GitHub")
+        web_url = f"https://github.com/{_encoded(owner)}/{_encoded(name)}"
+        tool = "GitHub CLI (gh)"
+        setup = "Install gh and run 'gh auth login' for github.com."
+        for page in range(1, _MAX_LIST_PAGES + 1):
+            endpoint = (
+                f"repos/{_encoded(owner)}/{_encoded(name)}/pulls"
+                f"?state=open&per_page={_LIST_PAGE_SIZE}&page={page}"
+            )
+            stdout = _run_listing(
+                ["gh", "api", "--hostname", "github.com", "--method", "GET", endpoint],
+                root,
+                tool,
+                setup,
+            )
+            page_requests = _github_page(stdout, web_url)
+            requests.extend(page_requests)
+            if len(page_requests) < _LIST_PAGE_SIZE:
+                return tuple(requests)
+    elif repository.provider == "Azure DevOps":
+        organization = _repository_component(repository.organization, "Azure DevOps")
+        project = _repository_component(repository.project, "Azure DevOps")
+        name = _repository_component(repository.repository, "Azure DevOps")
+        organization_url = f"https://dev.azure.com/{_encoded(organization)}"
+        web_url = f"{organization_url}/{_encoded(project)}/_git/{_encoded(name)}"
+        tool = "Azure CLI with the azure-devops extension"
+        setup = (
+            "Install az, run 'az extension add --name azure-devops', then run "
+            "'az login' or 'az devops login'."
+        )
+        for page in range(_MAX_LIST_PAGES):
+            skip = page * _LIST_PAGE_SIZE
+            argv = [
+                "az",
+                "repos",
+                "pr",
+                "list",
+                f"--organization={organization_url}",
+                f"--project={project}",
+                f"--repository={name}",
+                "--status=active",
+                f"--top={_LIST_PAGE_SIZE}",
+                f"--skip={skip}",
+                "--detect=false",
+                "--output=json",
+                "--only-show-errors",
+            ]
+            stdout = _run_listing(argv, root, tool, setup)
+            page_requests = _azure_page(stdout, web_url)
+            requests.extend(page_requests)
+            if len(page_requests) < _LIST_PAGE_SIZE:
+                return tuple(requests)
+    else:
+        raise PullRequestError("Unsupported pull request provider.")
+
+    raise PullRequestError(
+        f"Pull request listing reached the safety limit of "
+        f"{_LIST_PAGE_SIZE * _MAX_LIST_PAGES} requests."
+    )
 
 
 def _positive_id(stdout: bytes, field: str) -> int:

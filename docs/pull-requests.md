@@ -1,6 +1,25 @@
-# Creating pull requests
+# Browsing and creating pull requests
 
-## Workflow
+## Browse open pull requests
+
+Choose **PRs** in the left sidebar, then **Load PRs**. This explicitly contacts each
+supported GitHub.com or Azure DevOps fetch repository, using the CLI authentication
+below. Multiple remotes for the same hosted repository are listed only once.
+Closed, merged, completed, and abandoned PRs are excluded; open drafts are included.
+Results include the PR number, title, author, draft state, and source/target branches.
+Filter by any of these fields, then click a PR or press Enter for its read-only
+summary and **Open in browser** / **Copy URL** actions. Reviewing and merging remain
+in the provider's web UI; browsing never fetches branches or checks out a PR.
+
+Use the PR panel's **Refresh** to reload. Changing tabs and the five-second local
+refresh do not contact a provider. Lists are session-local, reset when the repository
+or remotes change, and invalidated after creating a PR. Each remote has its own
+empty/error state, so one unavailable provider does not hide successful results.
+Unsupported remotes show a setup explanation rather than an empty-looking success.
+Provider listings are paginated; oversized or malformed responses produce an explicit
+error rather than silently presenting a partial list.
+
+## Creation workflow
 
 1. Check out your feature branch and **Push** its commits first.
 2. Right-click the target branch, such as `test` or `origin/test`, in the sidebar
@@ -26,8 +45,8 @@ before retrying. GitKraiken never retries creation automatically.
 
 ## One-time authentication
 
-Git operations still use your existing SSH agent or Git credential helper. Creating
-hosted PRs is a separate API operation: an SSH key alone is not API authentication.
+Git operations still use your existing SSH agent or Git credential helper. Browsing
+and creating hosted PRs use separate API operations: an SSH key alone is not API authentication.
 Install and authenticate the appropriate optional CLI in a normal terminal:
 
 ```sh
@@ -41,11 +60,12 @@ az login
 az devops login --organization https://dev.azure.com/YOUR_ORG
 ```
 
-Use an account with permission to create PRs in the repository. These tools own
+Use an account with repository read access for browsing, and permission to create PRs
+for the composer. These tools own
 credentials; GitKraiken does not collect or store tokens. The app does not launch
 login prompts or automatically install the Azure extension. Missing tools, failed
-authentication, or provider rejection are reported in the form. Git authentication
-must also work for the branch checks performed on submission.
+authentication, or provider rejection are reported in the PR list or composer. Git
+authentication must also work for the branch checks performed on submission.
 
 ## Branch and repository rules
 
@@ -73,7 +93,16 @@ must also work for the branch checks performed on submission.
 The provider adapter in `src/gitkraiken/pull_requests.py` uses argv-based,
 noninteractive subprocesses with a 60-second timeout. Tests mock hosted commands;
 no real PRs or accounts are touched. Repository preparation and source-tip checks
-live in `Repository`; the Textual composer is `pull_request_dialog.py`.
+live in `Repository`; the Textual composer and read-only summary are in
+`pull_request_dialog.py`. Open-list clients use `gh api` (GET, `state=open`) and
+`az repos pr list` (`--status=active`), with explicit repository identities and
+pagination. Browser URLs are built from those identities and validated positive
+PR numbers, never trusted from provider response URLs.
+
+- [GitHub list-pull-requests API](https://docs.github.com/en/rest/pulls/pulls#list-pull-requests):
+  open-state filtering, pagination, and source/base branch metadata.
+- [Azure CLI `az repos pr list`](https://learn.microsoft.com/en-us/cli/azure/repos/pr?view=azure-cli-latest#az-repos-pr-list):
+  active-state filtering, explicit organization/project/repository, and `--skip` / `--top` pagination.
 
 - [GitHub CLI `gh api`](https://cli.github.com/manual/gh_api): authenticated API
   requests; explicit hostname/method; `--input -` accepts a JSON body on stdin.
