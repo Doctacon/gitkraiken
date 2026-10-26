@@ -69,7 +69,7 @@ class Commit:
 
 @dataclass(frozen=True)
 class HistoryLine:
-    graph: str  # Git's native ANSI graph, retained for Compact rendering.
+    graph: str  # Empty for chronological history; optional legacy native ANSI graph.
     commit: Commit | None = None  # Connector-only rows are not actionable commits.
 
 

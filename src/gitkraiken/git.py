@@ -6,12 +6,14 @@ passed as an argv sequence; callers cannot supply command-line fragments.
 
 from __future__ import annotations
 
+import heapq
 import os
 import re
 import shlex
 import stat
 import subprocess
 import tempfile
+from io import BytesIO
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlsplit, urlunsplit
 
@@ -810,47 +812,84 @@ class Repository:
             if head and not any(item.oid == head for item in refs):
                 revision_args.append(head)
 
-        fmt = "%x1e%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%s"
-        result = self._git(
+        # Scan only the cheap timestamp/OID index for every reachable commit.
+        # Git's traversal position is the deterministic tie-breaker for commits
+        # with the same author timestamp, independent of the checked-out ref.
+        index_result = self._git(
             [
                 "log",
-                "--graph",
-                "--color=always",
-                "--date=iso-strict",
-                f"--max-count={limit + 1}",
-                f"--format={fmt}",
+                "--author-date-order",
+                "--no-show-signature",
+                "--no-patch",
+                "--no-decorate",
+                "--no-notes",
+                "--no-color",
+                "--format=%at%x00%H",
                 *revision_args,
             ],
-            operation="read history",
+            operation="read history index",
         )
+
+        def index_records():
+            for position, raw_line in enumerate(BytesIO(index_result.stdout)):
+                raw_line = raw_line.rstrip(b"\n")
+                if not raw_line:
+                    continue
+                fields = raw_line.split(b"\x00", 1)
+                if len(fields) != 2:
+                    raise GitError("Git returned a malformed history index.")
+                timestamp, raw_oid = fields
+                try:
+                    yield int(timestamp), position, raw_oid.decode("ascii")
+                except (UnicodeDecodeError, ValueError) as error:
+                    raise GitError("Git returned a malformed history index.") from error
+
+        selected = heapq.nsmallest(
+            limit + 1,
+            index_records(),
+            key=lambda item: (-item[0], item[1]),
+        )
+        has_more = len(selected) > limit
+        selected_oids = [item[2] for item in selected[:limit]]
+        if not selected_oids:
+            return (), has_more
+
+        # Fetch full metadata only for the bounded selection. Do not depend on
+        # --no-walk preserving stdin order: map records back to the chosen OIDs.
+        fmt = "%x1e%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%s"
+        metadata_result = self._git(
+            [
+                "log",
+                "--no-walk=unsorted",
+                "--no-show-signature",
+                "--no-patch",
+                "--no-decorate",
+                "--no-notes",
+                "--no-color",
+                f"--format={fmt}",
+                "--stdin",
+            ],
+            operation="read history metadata",
+            input_bytes=("\n".join(selected_oids) + "\n").encode("ascii"),
+        )
+
         names_by_oid: dict[str, list[str]] = {}
         for item in refs:
             names_by_oid.setdefault(item.oid, []).append(item.name)
         if head:
             names_by_oid.setdefault(head, []).append("HEAD")
 
-        lines: list[HistoryLine] = []
-        commit_count = 0
-        has_more = False
+        commits_by_oid: dict[str, Commit] = {}
         # str.splitlines() treats the record-separator marker (0x1e) as a
         # line boundary, so split only on Git's actual output newline.
-        for raw_line in _decode(result.stdout).split("\n"):
-            if not raw_line:
+        for raw_line in _decode(metadata_result.stdout).split("\n"):
+            if not raw_line.startswith("\x1e"):
                 continue
-            if "\x1e" not in raw_line:
-                lines.append(HistoryLine(graph=raw_line))
-                continue
-            graph, payload = raw_line.split("\x1e", 1)
-            fields = payload.split("\x1f", 5)
+            fields = raw_line[1:].split("\x1f", 5)
             if len(fields) != 6:
-                lines.append(HistoryLine(graph=raw_line))
                 continue
-            commit_count += 1
-            if commit_count > limit:
-                has_more = True
-                break
             oid, parents, author, email, date, subject = fields
-            commit = Commit(
+            commits_by_oid[oid] = Commit(
                 oid=oid,
                 parents=tuple(parents.split()) if parents else (),
                 author=author,
@@ -859,8 +898,13 @@ class Repository:
                 subject=subject,
                 refs=tuple(dict.fromkeys(names_by_oid.get(oid, ()))),
             )
-            lines.append(HistoryLine(graph=graph, commit=commit))
-        return tuple(lines), has_more
+
+        missing = [oid for oid in selected_oids if oid not in commits_by_oid]
+        if missing:
+            raise GitError("Git returned incomplete history metadata.")
+        return tuple(
+            HistoryLine(graph="", commit=commits_by_oid[oid]) for oid in selected_oids
+        ), has_more
 
     def snapshot(self, limit: int = 300, ref: str = "") -> Snapshot:
         if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= _MAX_HISTORY:

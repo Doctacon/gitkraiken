@@ -57,9 +57,10 @@ intentionally rejected.
   rename/delete, pull request creation, and copy actions.**
 - **Center:** a colored commit graph with rounded bends, branch/tag labels,
   authors, date/time, subjects and SHAs. Dates show `YYYY-MM-DD HH:MM` in your computer's
-  local timezone, including daylight-saving rules for that date.
-  Working changes and connector-only rows have no author or date. Smooth mode draws Git's
-  actual parent relationships; Compact mode retains Git's native lane layout.
+  local timezone, including daylight-saving rules for that date. All branches share
+  one timeline, ordered by author timestamp: **newest at the top, oldest at the bottom**.
+  Working changes and connector-only rows have no author or date. Smooth and Compact
+  show the same timeline and actual parent relationships at different row densities.
   Search by message, author, ref or SHA and
   jump between matches **without removing graph connections**. Load history in
   batches of 300, up to 5,000 commits. History stays unified across branch
@@ -212,14 +213,18 @@ Press **g** or click **Smooth [g] / Compact [g]** above the graph to switch:
   shuffle sideways just because a neighboring branch ends. Each commit and its
   outgoing connectors form one selectable row, so arrows / `j` / `k` move directly
   between commits rather than stopping on empty connector lines.
-- **Compact**: the original, denser native Git graph with diagonal connectors.
-  Useful when you want to see more commits at once.
+- **Compact**: the same chronological graph without optional spacer lines, with
+  required connectors on separate rows. Useful when you want to see more commits at once.
 
-In Smooth mode, `─╴│╶─` is a crossing: the horizontal line passes **behind** the
+In both styles, `─╴│╶─` is a crossing: the horizontal line passes **behind** the
 vertical lane without joining it; a reminder appears above graphs with crossings.
 Rounded forks/joins represent real parent connections. Dotted tails (`┊`) continue
 beyond the loaded history, not to an
-invented root. Wide graphs scroll horizontally rather than clipping away lanes.
+invented root. If a parent has a newer author timestamp than its child (for example
+following a rebase or clock skew), `↑ parent <SHA>` names that parent above instead
+of drawing a false downward connection or moving the commit out of date order.
+Loading more history extends the same timeline. Wide graphs scroll horizontally
+rather than clipping away lanes.
 
 This uses ordinary terminal characters, not image protocols or a special font,
 so it works in tmux and Windows Terminal/WSL. It is smoother routing, not a

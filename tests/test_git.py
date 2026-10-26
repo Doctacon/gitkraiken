@@ -67,7 +67,7 @@ def test_history_detail_root_commit_detached_and_limit(git_repo: Path, git_run) 
     commits = [line.commit for line in snapshot.history if line.commit]
     assert [commit.oid for commit in commits] == [second]
     assert snapshot.has_more
-    assert snapshot.history[0].graph.startswith("*")
+    assert snapshot.history[0].graph == ""
 
     detail = repo.detail(first)
     assert detail.commit.subject == "first subject"
@@ -84,13 +84,13 @@ def test_history_detail_root_commit_detached_and_limit(git_repo: Path, git_run) 
     assert detached.history[0].commit.oid == first
 
 
-def test_history_graph_order_is_stable_when_checking_out_equal_timestamp_tips(
+def test_history_order_is_stable_when_checking_out_equal_timestamp_tips(
     git_repo: Path, git_run, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    commit_file(git_run, git_repo, "base.txt", "base\n", "base")
     timestamp = "2001-02-03T04:05:06+00:00"
     monkeypatch.setenv("GIT_AUTHOR_DATE", timestamp)
     monkeypatch.setenv("GIT_COMMITTER_DATE", timestamp)
+    base = commit_file(git_run, git_repo, "base.txt", "base\n", "base")
 
     git_run(git_repo, "switch", "-c", "left")
     commit_file(git_run, git_repo, "left.txt", "left\n", "left")
@@ -103,18 +103,129 @@ def test_history_graph_order_is_stable_when_checking_out_equal_timestamp_tips(
     repo.execute(Action("checkout", target="refs/heads/left"))
     after = repo.snapshot()
 
-    def geometry(snapshot) -> list[tuple[str, str]]:
-        return [
-            (line.graph, line.commit.oid if line.commit is not None else "")
-            for line in snapshot.history
-        ]
+    def history_oids(snapshot) -> list[str]:
+        return [line.commit.oid for line in snapshot.history if line.commit is not None]
 
-    assert geometry(after) == geometry(before)
+    assert history_oids(before)[-1] == base
+    assert history_oids(after) == history_oids(before)
     repo.execute(Action("checkout", target="refs/heads/right"))
-    assert geometry(repo.snapshot()) == geometry(before)
+    assert history_oids(repo.snapshot()) == history_oids(before)
 
 
-def test_native_merge_graph_has_real_topology(git_repo: Path, git_run) -> None:
+def test_history_is_one_newest_first_timeline_across_branches(
+    git_repo: Path, git_run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def dated_commit(day: int) -> str:
+        timestamp = f"2026-10-{day:02d}T12:00:00+00:00"
+        monkeypatch.setenv("GIT_AUTHOR_DATE", timestamp)
+        monkeypatch.setenv("GIT_COMMITTER_DATE", timestamp)
+        return commit_file(git_run, git_repo, f"day-{day}.txt", "content\n", f"day {day}")
+
+    base = dated_commit(1)
+    git_run(git_repo, "switch", "-c", "topic")
+    middle = dated_commit(3)
+    git_run(git_repo, "switch", "main")
+    older = dated_commit(2)
+    newest = dated_commit(4)
+
+    repo = Repository(git_repo)
+    commits = [line.commit for line in repo.snapshot().history if line.commit]
+    assert [item.date for item in commits] == sorted((item.date for item in commits), reverse=True)
+    expected = [newest, middle, older, base]
+    assert [item.oid for item in commits] == expected
+
+    for limit in range(1, len(expected) + 2):
+        page = repo.snapshot(limit=limit)
+        assert [line.commit.oid for line in page.history if line.commit] == expected[:limit]
+        assert page.has_more is (limit < len(expected))
+
+
+def test_history_includes_newer_hidden_ancestor_before_its_child(
+    git_repo: Path, git_run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("GIT_AUTHOR_DATE", "2035-01-01T00:00:00+00:00")
+    monkeypatch.setenv("GIT_COMMITTER_DATE", "2020-01-01T00:00:00+00:00")
+    parent = commit_file(git_run, git_repo, "parent.txt", "parent\n", "parent")
+    monkeypatch.setenv("GIT_AUTHOR_DATE", "2025-01-01T00:00:00+00:00")
+    monkeypatch.setenv("GIT_COMMITTER_DATE", "2021-01-01T00:00:00+00:00")
+    child = commit_file(git_run, git_repo, "child.txt", "child\n", "child")
+
+    repo = Repository(git_repo)
+    first_page = repo.snapshot(limit=1)
+    assert [line.commit.oid for line in first_page.history if line.commit] == [parent]
+    assert first_page.has_more
+
+    commits = [line.commit for line in repo.snapshot(limit=2).history if line.commit]
+    assert [commit.oid for commit in commits] == [parent, child]
+    assert commits[1].parents == (parent,)
+
+
+def test_history_uses_author_epoch_not_committer_date_or_displayed_offset(
+    git_repo: Path, git_run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("GIT_AUTHOR_DATE", "2000-01-01T00:00:00+00:00")
+    monkeypatch.setenv("GIT_COMMITTER_DATE", "2000-01-01T00:00:00+00:00")
+    base = commit_file(git_run, git_repo, "base.txt", "base\n", "base")
+
+    git_run(git_repo, "switch", "-c", "far-east")
+    east_date = "2024-01-01T10:00:00+14:00"
+    monkeypatch.setenv("GIT_AUTHOR_DATE", east_date)
+    monkeypatch.setenv("GIT_COMMITTER_DATE", "2040-01-01T00:00:00+00:00")
+    east = commit_file(git_run, git_repo, "east.txt", "east\n", "east")
+
+    git_run(git_repo, "switch", "main")
+    west_date = "2023-12-31T23:00:00-12:00"
+    monkeypatch.setenv("GIT_AUTHOR_DATE", west_date)
+    monkeypatch.setenv("GIT_COMMITTER_DATE", "2010-01-01T00:00:00+00:00")
+    west = commit_file(git_run, git_repo, "west.txt", "west\n", "west")
+
+    commits = [line.commit for line in Repository(git_repo).snapshot().history if line.commit]
+    assert [commit.oid for commit in commits] == [west, east, base]
+    assert {commit.oid: commit.date for commit in commits} == {
+        west: west_date,
+        east: east_date,
+        base: "2000-01-01T00:00:00Z",
+    }
+
+
+def test_history_reaches_remote_tag_and_detached_tips_and_honors_ref(
+    git_repo: Path, git_run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def dated_commit(day: int, name: str) -> str:
+        timestamp = f"2028-06-{day:02d}T00:00:00+00:00"
+        monkeypatch.setenv("GIT_AUTHOR_DATE", timestamp)
+        monkeypatch.setenv("GIT_COMMITTER_DATE", timestamp)
+        return commit_file(git_run, git_repo, f"{name}.txt", f"{name}\n", name)
+
+    base = dated_commit(1, "base")
+
+    git_run(git_repo, "switch", "-c", "remote-work")
+    remote_only = dated_commit(2, "remote")
+    git_run(git_repo, "update-ref", "refs/remotes/origin/only", remote_only)
+    git_run(git_repo, "switch", "main")
+    git_run(git_repo, "branch", "-D", "remote-work")
+
+    git_run(git_repo, "switch", "-c", "tag-work")
+    tag_only = dated_commit(3, "tag")
+    git_run(git_repo, "tag", "only-tag", tag_only)
+    git_run(git_repo, "switch", "main")
+    git_run(git_repo, "branch", "-D", "tag-work")
+
+    git_run(git_repo, "switch", "--detach", "main")
+    detached = dated_commit(4, "detached")
+
+    repo = Repository(git_repo)
+    commits = [line.commit for line in repo.snapshot().history if line.commit]
+    assert [commit.oid for commit in commits] == [detached, tag_only, remote_only, base]
+    assert "HEAD" in commits[0].refs
+
+    tag_history = [
+        line.commit.oid for line in repo.snapshot(ref="refs/tags/only-tag").history if line.commit
+    ]
+    assert tag_history == [tag_only, base]
+
+
+def test_history_merge_preserves_parent_metadata(git_repo: Path, git_run) -> None:
     base = commit_file(git_run, git_repo, "base.txt", "base\n", "base")
     git_run(git_repo, "switch", "-c", "topic")
     topic = commit_file(git_run, git_repo, "topic.txt", "topic\n", "topic")
@@ -128,8 +239,7 @@ def test_native_merge_graph_has_real_topology(git_repo: Path, git_run) -> None:
     by_oid = {commit.oid: commit for commit in commits}
     assert by_oid[merge].parents == (main, topic)
     assert {base, topic, main, merge} <= set(by_oid)
-    assert any(line.commit is None for line in snapshot.history)
-    assert any("|" in line.graph or "\\" in line.graph for line in snapshot.history)
+    assert all(line.commit is not None and line.graph == "" for line in snapshot.history)
 
 
 def test_status_and_diffs_handle_rename_and_special_literal_paths(git_repo: Path, git_run) -> None:

@@ -319,9 +319,99 @@ def test_repeated_parent_ids_are_deduplicated() -> None:
     assert_topology(rows, commits)
 
 
+@pytest.mark.parametrize("style", ["smooth", "compact"])
+def test_chronological_graph_marks_parents_above_without_dangling_lanes(style) -> None:
+    commits = (
+        commit("newer-parent"),
+        commit("child", "newer-parent", "older-parent"),
+        commit("older-parent"),
+    )
+    source = tuple(HistoryLine("", item) for item in commits)
+    rows = render_history(source, style)
+    commit_rows = tuple(row for row in rows if row.commit is not None)
+
+    assert tuple(row.commit for row in commit_rows) == commits
+    assert "↑ parent newer-pa" in commit_rows[1].graph.plain
+    assert "┊" not in "\n".join(physical(rows))
+    # Metadata stays intact even though an upward edge is a named backreference.
+    assert commit_rows[1].commit.parents == ("newer-parent", "older-parent")
+    assert traced_parents(group_commit_rows(rows)) == {
+        "newer-parent": set(),
+        "child": {"older-parent"},
+        "older-parent": set(),
+    }
+
+
+@pytest.mark.parametrize("style", ["smooth", "compact"])
+def test_chronological_graph_deduplicates_multiple_upward_parents(style) -> None:
+    commits = (
+        commit("first"),
+        commit("second"),
+        commit("child", "first", "second", "first"),
+    )
+    rows = render_history(tuple(HistoryLine("", item) for item in commits), style)
+    child = next(row for row in rows if row.commit and row.commit.oid == "child")
+    assert "↑ parent first, second" in child.graph.plain
+    assert "┊" not in child.graph.plain
+
+
+def test_generated_compact_graph_keeps_required_connectors_but_omits_spacers() -> None:
+    commits = (
+        commit("merge", "left", "right"),
+        commit("left", "base"),
+        commit("right", "base"),
+        commit("base"),
+    )
+    source = tuple(HistoryLine("", item) for item in commits)
+    rows = render_history(source, "compact")
+    assert all(row.height == 1 for row in rows)
+    assert all(row.graph.no_wrap for row in rows)
+    assert tuple(row.commit for row in rows if row.commit) == commits
+    assert any(row.commit is None for row in rows)
+    assert len(rows) < sum(row.height for row in render_history(source, "smooth"))
+    assert_topology(group_commit_rows(rows), commits)
+
+
+def group_commit_rows(rows: tuple[GraphRow, ...]) -> tuple[GraphRow, ...]:
+    """Group compact connector rows with their source for the topology tracer."""
+    grouped: list[GraphRow] = []
+    for row in rows:
+        if row.commit is not None:
+            grouped.append(GraphRow(row.graph.copy(), row.commit))
+        else:
+            grouped[-1].graph.append("\n").append(row.graph)
+    return tuple(grouped)
+
+
 def test_invalid_style_is_rejected() -> None:
     with pytest.raises(ValueError, match="Unknown graph style"):
         render_history((), "wide")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("style", ["smooth", "compact"])
+def test_shuffled_chronological_graphs_keep_forward_edges_and_name_upward_parents(style) -> None:
+    randomizer = random.Random(19_734)
+    for _ in range(40):
+        commits = [
+            commit(f"c{index}", *randomizer.sample([f"c{j}" for j in range(index)], min(index, 3)))
+            for index in range(12)
+        ]
+        randomizer.shuffle(commits)
+        positions = {item.oid: index for index, item in enumerate(commits)}
+        rows = render_history(tuple(HistoryLine("", item) for item in commits), style)
+        grouped = group_commit_rows(rows)
+        assert [row.commit for row in grouped] == commits
+        assert traced_parents(grouped) == {
+            item.oid: {p for p in item.parents if positions[p] > positions[item.oid]}
+            for item in commits
+        }
+        assert "┊" not in "\n".join(physical(rows))
+        for row in grouped:
+            above = [p for p in row.commit.parents if positions[p] < positions[row.commit.oid]]
+            if above:
+                assert "↑ parent " + ", ".join(above) in row.graph.plain
+            else:
+                assert "↑ parent " not in row.graph.plain
 
 
 def test_deterministic_random_valid_dags_have_exact_rendered_topology() -> None:
@@ -340,3 +430,5 @@ def test_deterministic_random_valid_dags_have_exact_rendered_topology() -> None:
         assert [row.graph.plain for row in first] == [row.graph.plain for row in second]
         assert_topology(first, tuple(commits))
         assert_prefixes_stitch(tuple(commits))
+        compact = render_history(tuple(HistoryLine("", item) for item in commits), "compact")
+        assert_topology(group_commit_rows(compact), tuple(commits))

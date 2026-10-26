@@ -223,6 +223,57 @@ async def test_history_author_and_date_time_columns_survive_style_and_size_chang
         assert app._selected_commit.date == "2024-02-03T04:05:06+05:30"
 
 
+async def test_graph_timeline_stays_newest_first_across_styles_and_load_more(
+    git_repo, git_run, monkeypatch, local_timezone
+):
+    local_timezone("UTC")
+
+    def dated_commit(day):
+        timestamp = f"2026-10-{day:02d}T12:00:00+00:00"
+        monkeypatch.setenv("GIT_AUTHOR_DATE", timestamp)
+        monkeypatch.setenv("GIT_COMMITTER_DATE", timestamp)
+        git_run(git_repo, "commit", "--allow-empty", "-m", f"day {day}")
+        return git(git_repo, "rev-parse", "HEAD")
+
+    base = dated_commit(1)
+    git_run(git_repo, "switch", "-c", "topic")
+    middle = dated_commit(3)
+    git_run(git_repo, "switch", "main")
+    older = dated_commit(2)
+    newest = dated_commit(4)
+    expected = [newest, middle, older, base]
+    app = GitKraikenApp(git_repo)
+    app.limit = 2
+    async with app.run_test(size=(170, 45)) as pilot:
+        await settle(app, pilot)
+        table = app.query_one("#graph-table", DataTable)
+
+        async def assert_timeline(count):
+            for _ in range(2):
+                commit_rows = [
+                    row.key.value for row in table.ordered_rows if row.key.value in app._commits
+                ]
+                assert commit_rows == expected[:count]
+                dates = [table.get_cell(oid, "date").plain for oid in commit_rows]
+                assert dates == sorted(dates, reverse=True)
+                assert list(app._commits) == expected[:count]
+                app.action_toggle_graph_style()
+                await settle(app, pilot)
+
+        assert app.snapshot_data.has_more
+        await assert_timeline(2)
+        app.jump_to(middle)
+        await settle(app, pilot)
+        assert await pilot.click("#load-more")
+        await settle(app, pilot)
+        assert not app.snapshot_data.has_more
+        assert app._history_key == middle
+        await assert_timeline(4)
+        await click_reference(app, pilot, "refs/heads/main")
+        await settle(app, pilot)
+        await assert_timeline(4)
+
+
 async def test_workspace_pane_drags_survive_refresh_collapse_and_terminal_resize(demo_repo):
     app = GitKraikenApp(demo_repo)
     async with app.run_test(size=(170, 50)) as pilot:
@@ -641,9 +692,9 @@ async def test_smooth_graph_toggle_preserves_selection_search_and_navigation(dem
         await settle(app, pilot)
         assert app.graph_style == "compact"
         assert app.query_one("#graph-style", Button).label.plain == "Compact [g]"
-        assert "crossing" not in str(app.query_one("#history-heading", Static).render())
+        assert "crossing, not a join" in str(app.query_one("#history-heading", Static).render())
         assert all(row.height == 1 for row in app._graph_rows)
-        assert table.row_count == len(app.snapshot_data.history) + 1
+        assert table.row_count == len(app._graph_rows) + 1
         assert app._history_key == selected
         assert app._search_matches == matches
         assert app._selected_commit.oid == selected

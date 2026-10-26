@@ -1008,8 +1008,10 @@ class GitKraikenApp(App[None]):
             self._graph_rows = render_history(self.snapshot_data.history, self.graph_style)
             self._graph_cache_key = cache_key
         heading = Text("COMMIT GRAPH", no_wrap=True, overflow="ellipsis")
-        if self.graph_style == "smooth" and any("╴" in row.graph.plain for row in self._graph_rows):
+        if any("╴" in row.graph.plain for row in self._graph_rows):
             heading.append("   ╴│╶ crossing, not a join", style=MUTED)
+        if any("↑ parent " in row.graph.plain for row in self._graph_rows):
+            heading.append("   ↑ parent shown above", style=MUTED)
         self.query_one("#history-heading", Static).update(heading)
         geometry = tuple(
             (row.commit.oid if row.commit else f"connector-{index}", row.height)

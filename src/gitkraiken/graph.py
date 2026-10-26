@@ -121,9 +121,11 @@ def _compact(history: tuple[HistoryLine, ...]) -> tuple[GraphRow, ...]:
 
 
 class _SmoothRenderer:
-    def __init__(self) -> None:
+    def __init__(self, *, spaced: bool = True) -> None:
         self.lanes: list[_Lane | None] = []
         self.color_index = 0
+        self.spaced = spaced
+        self.seen: set[str] = set()
 
     def _new_lane(self, target: str) -> _Lane:
         active_colors = {lane.color for lane in self.lanes if lane is not None}
@@ -256,6 +258,17 @@ class _SmoothRenderer:
         # Repeated parent IDs are invalid but can appear in synthetic or damaged
         # history. Treat them as one edge so they cannot create phantom lanes.
         parents = tuple(dict.fromkeys(commit.parents))
+        # Author timestamps can put a parent above its child (for example after
+        # a rebase). Do not invent a downward lane to an already-rendered node:
+        # name that parent explicitly, keeping the chronological rows untouched.
+        above = tuple(parent for parent in parents if parent in self.seen)
+        parents = tuple(parent for parent in parents if parent not in self.seen)
+        self.seen.add(commit.oid)
+        if above:
+            label = "↑ parent " + ", ".join(parent[:8] for parent in above)
+            start = max(node) + 2
+            for offset, glyph in enumerate(label):
+                _put(node, start + offset, glyph, current_lane.color)
         first_parent = parents[0] if parents else None
 
         # The current lane remains an exclusive stream while every secondary
@@ -279,9 +292,9 @@ class _SmoothRenderer:
 
         if final and any(lane is not None for lane in self.lanes):
             lines.append(_rails(self.lanes, glyph="┊"))
-        elif len(lines) == 1:
-            # Even disconnected roots need physical separation from the next
-            # commit node; active unrelated lanes continue through that space.
+        elif len(lines) == 1 and (self.spaced or (first_parent is None and not final)):
+            # Even Compact needs separation after a root: reusing its slot on
+            # the very next line would falsely connect two unrelated nodes.
             lines.append(_rails(self.lanes))
 
         return GraphRow(_to_text(lines), commit)
@@ -292,24 +305,32 @@ def render_history(
 ) -> tuple[GraphRow, ...]:
     """Render history without I/O or mutation of the supplied model values.
 
-    Structured commits must be ordered as Git emits ``log --graph``: every
-    child appears before each of its parents. Compact rendering retains Git's
-    native connector rows. Smooth rendering derives one (possibly multiline)
-    row per commit from immutable parent data.
-    If no structured commit data is available, native rendering is the only
-    truthful fallback.
+    Keep the supplied chronological order. Parents below their children use
+    connected lanes; parents already above them use explicit upward references.
+    Smooth groups connector lines with their commit and adds breathing room.
+    Compact omits optional spacers and gives each required line its own row.
+    Legacy native graph input can still be displayed directly in Compact mode,
+    and is the fallback when no structured commits are available.
     """
-    if style == "compact":
-        return _compact(history)
-    if style != "smooth":
+    if style not in {"smooth", "compact"}:
         raise ValueError(f"Unknown graph style: {style}")
+    if style == "compact" and any(line.graph for line in history):
+        return _compact(history)
 
     commits = tuple(line.commit for line in history if line.commit is not None)
     if not commits:
         return _compact(history)
 
-    renderer = _SmoothRenderer()
-    return tuple(
+    renderer = _SmoothRenderer(spaced=style == "smooth")
+    rows = tuple(
         renderer.render(commit, final=index == len(commits) - 1)
         for index, commit in enumerate(commits)
     )
+    if style == "smooth":
+        return rows
+    compact_rows: list[GraphRow] = []
+    for row in rows:
+        for index, line in enumerate(row.graph.split("\n", allow_blank=True)):
+            line.no_wrap = True  # Rich's split retains spans, but not this setting.
+            compact_rows.append(GraphRow(line, row.commit if index == 0 else None))
+    return tuple(compact_rows)

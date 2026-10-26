@@ -11,9 +11,13 @@ hosted PR creation uses authenticated GitHub/Azure CLIs; see [pull requests](pul
 - `git.py`: synchronous `Repository(path)` discovers the worktree root, rejects bare
   repos with a friendly `GitError`. `root: Path`. All Git I/O stays here. Methods:
   - `snapshot(limit: int = 300, ref: str = "") -> Snapshot`: status, refs, remotes,
-    stashes, current operation, bounded native Git graph. Empty `ref` means all refs
-    plus HEAD (including detached HEAD); nonempty ref shows its ancestry. The UI
+    stashes, current operation, bounded chronological history. Empty `ref` means all
+    refs plus HEAD (including detached HEAD); nonempty ref shows its ancestry. The UI
     always uses the unified, empty-ref form; reference selection never filters it.
+    A full lightweight author-epoch/OID scan selects the globally newest `limit`
+    commits before bounded metadata loading; limiting Git's traversal first would
+    miss newer ancestors with skewed author dates. The returned history is newest
+    first by author instant (`%at`), with raw `%aI` dates retained for display.
   - `detail(oid: str) -> CommitDetail`: full commit message, first-parent changes
     (root commits work), stat. `FileChange.index` holds committed change type.
   - `diff(path: str = "", *, staged: bool = False, oid: str = "") -> str`: plaintext
@@ -77,13 +81,16 @@ hosted PR creation uses authenticated GitHub/Azure CLIs; see [pull requests](pul
   - `GitError` has human-readable, redacted `str(error)`.
 - `graph.py`: pure `render_history(history, style)` returns `GraphRow` values with
   Rich text, the original commit identity, and physical width/height. Smooth mode
-  lays out real `Commit.parents` in topological order with stable active lane slots,
+  lays out real `Commit.parents` in the supplied chronological order with stable active lane slots,
   lane colors, rounded connectors and multiline commit rows. Secondary-parent
   forks precede first-parent coalescing; joins into existing secondary-parent lanes
   use separate fork/join rows so unrelated ancestry cannot leak through a junction.
   Crossings use `╴│╶` underpasses, never connected four-way junctions. Dotted tails
-  retain unloaded parents. Compact mode preserves every native Git graph row and
-  its ANSI colors. No Git I/O, widget state, topology clipping, or new dependencies.
+  retain unloaded parents. Parents already above a child use explicit `↑ parent <SHA>`
+  references instead of false downward lanes. Compact uses the same routing without
+  optional spacers and flattens required connector lines into separate rows. Legacy
+  native ANSI input remains supported. No Git I/O, widget state, topology clipping,
+  or new dependencies.
 - `sidebar.py`: mounted-once Input + Tree over a `Snapshot`; no Git I/O. Typed
   `SidebarSelection` messages carry full targets, OIDs, exact remote ownership,
   and repository root. Fold/cursor keys are semantic, not TreeNode IDs. A complete
