@@ -1,4 +1,4 @@
-"""Typed local/remote reference badges for the unified commit graph."""
+"""Typed reference and worktree badges for the unified commit graph."""
 
 from __future__ import annotations
 
@@ -8,10 +8,11 @@ from dataclasses import dataclass
 from rich.style import Style
 from rich.text import Text
 
-from .models import Ref, Snapshot
+from .models import Ref, Snapshot, Worktree
 from .theme import MUTED, PROVIDER_COLORS, TEAL
 
 _LOCAL = TEAL
+_WORKTREE = "#28733a"
 _MUTED = MUTED
 _PROVIDERS = {
     "GitHub": ("🐙", PROVIDER_COLORS["GitHub"]),
@@ -34,6 +35,8 @@ def build_ref_badges(snapshot: Snapshot, selected_ref: str = "") -> dict[str, Re
     when a long branch label is ellipsized. Descriptions retain every full ref;
     Commit.refs strings are deliberately not used to guess roles or providers.
     Remote tips are local remote-tracking refs, not live server observations.
+    Worktree pointers use registered HEADs, including detached and prunable entries;
+    bare repositories and unborn worktrees have no working-tree commit to mark.
     """
     by_oid: dict[str, list[Ref]] = defaultdict(list)
     for ref in snapshot.refs:
@@ -44,6 +47,11 @@ def build_ref_badges(snapshot: Snapshot, selected_ref: str = "") -> dict[str, Re
     for stash in snapshot.stashes:
         stashes[stash.oid].append(stash)
         by_oid.setdefault(stash.oid, [])
+    worktrees: dict[str, list[Worktree]] = defaultdict(list)
+    for worktree in snapshot.worktrees:
+        if worktree.head and not worktree.bare:
+            worktrees[worktree.head].append(worktree)
+            by_oid.setdefault(worktree.head, [])
     remotes = {remote.name: remote for remote in snapshot.remotes}
     badges: dict[str, RefBadges] = {}
     kind_order = {"local": 0, "remote": 1, "tag": 2}
@@ -54,6 +62,11 @@ def build_ref_badges(snapshot: Snapshot, selected_ref: str = "") -> dict[str, Re
         is_head = oid == snapshot.head
         if is_head or any(ref.kind == "local" for ref in refs):
             text.append("💻 ", style=f"bold {_LOCAL}")
+        if worktrees[oid]:
+            style = _WORKTREE
+            if any(str(worktree.path) == selected_ref for worktree in worktrees[oid]):
+                style += " bold underline"
+            text.append("🌳 ", style=style)
         providers = {
             remotes[ref.remote].provider if ref.remote in remotes else "Git"
             for ref in refs
@@ -74,6 +87,23 @@ def build_ref_badges(snapshot: Snapshot, selected_ref: str = "") -> dict[str, Re
             )
             if not any(ref.current for ref in refs):
                 labels.append(("HEAD", f"bold {_LOCAL}", ""))
+        for worktree in worktrees[oid]:
+            states = []
+            if worktree.current:
+                states.append("current")
+            if worktree.locked:
+                states.append(
+                    "locked" + (f": {worktree.lock_reason}" if worktree.lock_reason else "")
+                )
+            if worktree.prunable:
+                states.append(
+                    "prunable" + (f": {worktree.prune_reason}" if worktree.prune_reason else "")
+                )
+            branch = "detached HEAD" if worktree.detached else worktree.branch or "HEAD"
+            description.append(f"🌳 Worktree: {worktree.path} · {branch}")
+            if states:
+                description.append(f" ({'; '.join(states)})")
+            description.append("\n")
         for ref in refs:
             style = f"bold {_LOCAL}" if ref.current else "#36505b"
             if ref.full_name == selected_ref:
@@ -95,6 +125,18 @@ def build_ref_badges(snapshot: Snapshot, selected_ref: str = "") -> dict[str, Re
             style = "#7049a8 bold underline" if stash.ref == selected_ref else "#7049a8"
             labels.append((stash.ref, style, ""))
             description.append(f"▣ {stash.ref}: {stash.subject}\n")
+        if not labels:
+            # A detached linked worktree can be the only pointer at this commit.
+            labels.extend(
+                (
+                    (worktree.path.name or str(worktree.path)).translate(
+                        str.maketrans({"\n": r"\n", "\r": r"\r", "\t": r"\t"})
+                    ),
+                    _WORKTREE,
+                    "",
+                )
+                for worktree in worktrees[oid]
+            )
         for index, (name, style, full_ref) in enumerate(labels):
             if index:
                 text.append(" · ", style=_MUTED)

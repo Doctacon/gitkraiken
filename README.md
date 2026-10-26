@@ -47,12 +47,13 @@ intentionally rejected.
 
 ## The main screen
 
-- **Left:** a searchable navigator with **All refs**, **Local**, **Remote**,
-  **Worktrees**, and **PRs** tabs. Local/Remote focus on those branches; All refs
-  also includes Repository, Tags, and Stashes. Collapse sections, individual
-  remotes, and branch namespaces such as `feature/jlott` using their carets.
-  Search reveals matching paths; clearing it restores your folds. Switching tabs
-  never filters the commit graph or clears your selected branch.
+- **Left:** one searchable tree with collapsible **Repository**, **Local**,
+  **Remotes**, **Worktrees**, **PRs**, **Tags**, and **Stashes** sections, in that order.
+  Expand or collapse sections, individual remotes, and branch namespaces such as
+  `feature/jlott` using their carets. Worktrees and PRs sit below Remotes and above
+  Tags and Stashes, not in separate tabs. Search reveals matching paths; clearing
+  it restores your folds. Folding sections never filters the commit graph or
+  clears your selected branch.
   **Single-click selects action context without moving or filtering the graph.**
   **Double-click a local/remote branch label to check it out immediately.**
   **Right-click a branch for checkout, integration, creation, reset, upstream,
@@ -65,7 +66,7 @@ intentionally rejected.
   **PRs → Load PRs** explicitly loads open requests (including drafts) from supported
   GitHub.com and Azure DevOps fetch remotes. Click a PR or press Enter to inspect
   its title, author, source/target branches, and open/copy its browser link.
-  Use **Refresh** there to update the list; local refresh never polls providers.
+  Use **Refresh PRs** to update the list; local refresh never polls providers.
 - **Center:** a colored commit graph with rounded bends, branch/tag labels,
   authors, date/time, subjects and SHAs. Dates show `YYYY-MM-DD HH:MM` in your computer's
   local timezone, including daylight-saving rules for that date. All branches share
@@ -114,12 +115,14 @@ visible notice; binary files have a summary, not a binary-patch dump.
 
 ### Branch pointers and navigation
 
-The graph distinguishes **💻 local branch / HEAD**, **🐙 GitHub**, **☁ Azure DevOps**,
-**🦊 GitLab**, and **↗ other remote** pointers, plus **◇ tags** and **▣ stashes**.
-Both local and remote markers appear on a commit when their tips agree. A local
-commit moves only its local pointer; Fetch updates last-fetched remote-tracking
-pointers. These are not live server indicators. Icon appearance depends on your
-terminal font.
+The graph distinguishes **💻 local branch / HEAD**, **🌳 worktree**, **🐙 GitHub**,
+**☁ Azure DevOps**, **🦊 GitLab**, and **↗ other remote** pointers, plus **◇ tags**
+and **▣ stashes**. Markers share a commit when their tips agree. The tree marks
+registered worktree HEADs, including the main checkout and detached linked trees;
+multiple worktrees at one commit share a marker. Bare and unborn entries have no
+worktree commit to mark. A local commit moves its branch and worktree pointers;
+Fetch updates last-fetched remote-tracking pointers. These are not live server
+indicators. Icon appearance depends on your terminal font.
 
 Creating a branch at an existing commit adds a pointer, not an invented graph
 fork. New commits create divergence only when their actual ancestry diverges.

@@ -323,8 +323,8 @@ class GitKraikenApp(App[None]):
         wip_table.add_column("File", key="file")
         self._configure_history_columns()
         self.query_one("#history-heading", Static).tooltip = Text(
-            "💻 Local branch / HEAD · 🐙 GitHub · ☁ Azure DevOps · 🦊 GitLab · ↗ Other remote\n"
-            "Both markers share a commit when local and remote tips agree.\n"
+            "💻 Local branch / HEAD · 🌳 Worktree · 🐙 GitHub · ☁ Azure DevOps · 🦊 GitLab · ↗ Other remote\n"
+            "Markers share a commit when branch, worktree, and remote tips agree.\n"
             "Remote markers reflect last-fetched refs; Fetch updates them."
         )
         self.set_interval(5, self.poll_repository)

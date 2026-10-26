@@ -58,7 +58,6 @@ async def test_open_linked_worktree_without_modifying_either_checkout(
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         sidebar = app.query_one(ReferenceSidebar)
-        assert await pilot.click("#sidebar-view-worktrees")
         item = selected(sidebar, "linked-worktree", str(linked))
         tree, point = await hit_point(sidebar, pilot, item.key)
         await click(pilot, tree, point)
@@ -107,7 +106,6 @@ async def test_create_worktree_from_sidebar_uses_guarded_head_flow(workspace, gi
     app = GitKraikenApp(workspace)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
-        assert await pilot.click("#sidebar-view-worktrees")
         assert await pilot.click("#sidebar-worktree-new")
         await pilot.pause()
         assert isinstance(app.screen, ActionPicker)
@@ -144,8 +142,12 @@ async def test_pull_requests_only_load_explicitly_and_open_read_only_details(
         await settle(app, pilot)
         assert calls == []
         sidebar = app.query_one(ReferenceSidebar)
-        assert await pilot.click("#sidebar-view-prs")
-        await pilot.pause()
+        tree, point = await hit_point(sidebar, pilot, "group:prs", caret=True)
+        await click(pilot, tree, point)
+        assert sidebar._tree_nodes["group:prs"].is_collapsed
+        tree, point = await hit_point(sidebar, pilot, "group:prs")
+        await click(pilot, tree, point)
+        assert sidebar._tree_nodes["group:prs"].is_expanded
         assert calls == []
         assert await pilot.click("#sidebar-prs-load")
         await settle(app, pilot)

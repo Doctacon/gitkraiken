@@ -2,7 +2,8 @@
 
 ## Browse open pull requests
 
-Choose **PRs** in the left sidebar, then **Load PRs**. This explicitly contacts each
+Expand **PRs** in the left sidebar, below Worktrees, then choose **Load PRs**.
+This explicitly contacts each
 supported GitHub.com or Azure DevOps fetch repository, using the CLI authentication
 below. Multiple remotes for the same hosted repository are listed only once.
 Closed, merged, completed, and abandoned PRs are excluded; open drafts are included.
@@ -11,8 +12,8 @@ Filter by any of these fields, then click a PR or press Enter for its read-only
 summary and **Open in browser** / **Copy URL** actions. Reviewing and merging remain
 in the provider's web UI; browsing never fetches branches or checks out a PR.
 
-Use the PR panel's **Refresh** to reload. Changing tabs and the five-second local
-refresh do not contact a provider. Lists are session-local, reset when the repository
+Use **Refresh PRs** to reload. Expanding/collapsing sidebar sections and the five-second
+local refresh do not contact a provider. Lists are session-local, reset when the repository
 or remotes change, and invalidated after creating a PR. Each remote has its own
 empty/error state, so one unavailable provider does not hide successful results.
 Unsupported remotes show a setup explanation rather than an empty-looking success.

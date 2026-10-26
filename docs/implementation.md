@@ -99,11 +99,12 @@ hosted PR browsing/creation uses authenticated GitHub/Azure CLIs; see [pull requ
   optional spacers and flattens required connector lines into separate rows. Legacy
   native ANSI input remains supported. No Git I/O, widget state, topology clipping,
   or new dependencies.
-- `sidebar.py`: compact All refs / Local / Remote / Worktrees / PRs view tabs,
-  mounted-once Input + Tree over a `Snapshot`; no Git I/O. Worktree open/create
+- `sidebar.py`: a mounted-once Input + Tree over a `Snapshot`; no Git I/O or view
+  tabs. Top-level caret groups are Repository, Local, Remotes, Worktrees, PRs,
+  Tags, Stashes, in that order; each folds independently. Worktree open/create
   and PR load requests are typed messages. PR results are supplied separately,
   with loading, empty, unsupported and per-repository failure states. Root/remotes
-  changes invalidate hosted data; tab/filter changes preserve action context. Typed
+  changes invalidate hosted data; folds/filter changes preserve action context. Typed
   `SidebarSelection` messages carry full targets, OIDs, exact remote ownership,
   and repository root. Fold/cursor keys are semantic, not TreeNode IDs. A complete
   selection index is independent of search visibility. Stash identity uses OID.
@@ -116,9 +117,13 @@ hosted PR browsing/creation uses authenticated GitHub/Azure CLIs; see [pull requ
   PR selection opens a read-only detail modal. Right-click branch labels emit ContextRequested with an
   exact ref, repository root and screen position; other nodes/carets are inert.
   Carets, categories, Enter, and navigation never check out.
-- `ref_badges.py`: pure typed pointer grouping by OID from refs, remotes, and stashes,
-  not ambiguous `Commit.refs` strings. Local/HEAD and provider markers precede
-  potentially truncated names. Description metadata retains full refs.
+- `ref_badges.py`: pure typed pointer grouping by OID from refs, remotes, stashes,
+  and registered worktree HEADs, not ambiguous `Commit.refs` strings. Local/HEAD,
+  worktree (🌳), and provider markers precede potentially truncated names. Worktrees
+  sharing an OID use one marker; descriptions retain each full path, branch/detached
+  state, and current/locked/prunable status. Bare and unborn entries do not add
+  markers. A detached linked worktree without another pointer gets a basename
+  label, not an invented local branch. Description metadata retains full refs.
   Remote markers describe local last-fetched state, never live server state.
   Individual name spans carry full-ref metadata for graph branch context menus.
 - `context_actions.py`: immutable clicked targets and pure contextual menu policy.
@@ -167,10 +172,11 @@ hosted PR browsing/creation uses authenticated GitHub/Azure CLIs; see [pull requ
 
 GitKraken-inspired, original terminal implementation: dark blue/charcoal palette,
 teal active branch, colored graph lanes, compact toolbar, left refs tree, center
-scrollable graph, right selected commit details / staging. Sidebar tabs: All refs,
-Local, Remote, Worktrees, PRs. All refs includes tags and stashes; other tabs focus
-on one collection without changing graph scope. Worktrees show paths and status,
-with Open/New actions. PRs load only on explicit request and expose a detail modal
+scrollable graph, right selected commit details / staging. One sidebar tree has
+independent collapsible sections: Repository, Local, Remotes, Worktrees, PRs, Tags,
+Stashes. Folding and searching never change graph scope. Worktrees show paths and
+status, with Open/New actions. Expanding PRs never contacts providers; PRs load
+only on explicit request and expose a detail modal
 with browser/copy actions. Center: WIP, Smooth/Compact graph, badges, subjects and SHA;
 filter/search, load-more. Smooth is the default; `g`, the visible graph-style button,
 and Actions switch styles without losing selection or search. Cache graph layout

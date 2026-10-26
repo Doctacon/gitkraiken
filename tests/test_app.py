@@ -1075,6 +1075,45 @@ async def test_real_local_remote_badges_separate_when_local_branch_advances(bran
         assert "↗" in table.get_cell(tip, "refs").plain
 
 
+@pytest.mark.parametrize("detached", [False, True])
+async def test_worktree_graph_marker_tracks_other_checkout_without_moving_this_one(
+    branch_repo, git_run, tmp_path, detached
+):
+    linked = tmp_path / "linked tree"
+    app = GitKraikenApp(branch_repo)
+    async with app.run_test(size=(170, 50)) as pilot:
+        await settle(app, pilot)
+        base = app.snapshot_data.head
+        geometry = [(row.commit.oid, row.graph.plain) for row in app._graph_rows]
+        mode = ["--detach"] if detached else ["-b", "feature/linked"]
+        git_run(branch_repo, "worktree", "add", *mode, str(linked), "main")
+        app.action_refresh()
+        await settle(app, pilot)
+        assert [(row.commit.oid, row.graph.plain) for row in app._graph_rows] == geometry
+        table = app.query_one("#graph-table", DataTable)
+        assert table.get_cell(base, "refs").plain.count("🌳") == 1
+        assert str(linked) in app._ref_badges[base].description.plain
+
+        git_run(linked, "commit", "--allow-empty", "-m", "Advance linked worktree")
+        tip = git(linked, "rev-parse", "HEAD")
+        app.action_refresh()
+        await settle(app, pilot)
+        assert tip in app._commits  # --all also reaches detached linked worktree HEADs.
+        assert "🌳" in table.get_cell(tip, "refs").plain
+        assert ("💻" in table.get_cell(tip, "refs").plain) is not detached
+        assert "🌳" in table.get_cell(base, "refs").plain  # The main worktree remains here.
+        assert "↗" in table.get_cell(base, "refs").plain
+        assert app.snapshot_data.head == base
+        assert app.snapshot_data.branch == "main"
+
+        git_run(branch_repo, "worktree", "remove", str(linked))
+        app.action_refresh()
+        await settle(app, pilot)
+        badge = app._ref_badges.get(tip)
+        assert badge is None or "🌳" not in badge.text.plain
+        assert git(branch_repo, "rev-parse", "HEAD") == base
+
+
 async def test_new_branch_at_same_tip_does_not_invent_divergence(branch_repo):
     from gitkraiken.models import Action
 

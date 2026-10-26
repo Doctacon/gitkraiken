@@ -1,7 +1,7 @@
 from dataclasses import replace
 from pathlib import Path
 
-from gitkraiken.models import Commit, HistoryLine, Ref, Remote, Snapshot, Stash
+from gitkraiken.models import Commit, HistoryLine, Ref, Remote, Snapshot, Stash, Worktree
 from gitkraiken.ref_badges import build_ref_badges
 
 
@@ -26,6 +26,107 @@ def test_aligned_local_and_github_tips_show_both_markers_before_long_names():
     assert f"refs/heads/{name}" in badge.description.plain
     assert f"refs/remotes/origin/{name}" in badge.description.plain
     assert "last-fetched" in badge.description.plain
+
+
+def test_worktree_marker_shares_local_and_remote_tip_without_repeating_names():
+    snapshot = Snapshot(
+        Path("/demo"),
+        "main",
+        head="tip",
+        refs=(
+            Ref("main", "refs/heads/main", "tip", "local", True, "origin/main"),
+            Ref("origin/main", "refs/remotes/origin/main", "tip", "remote", remote="origin"),
+        ),
+        remotes=(Remote("origin", "https://github.com/example/demo.git", provider="GitHub"),),
+        worktrees=(
+            Worktree(Path("/demo"), "tip", "main", current=True),
+            Worktree(
+                Path("/linked [literal]"), "tip", detached=True, locked=True, lock_reason="in use"
+            ),
+        ),
+    )
+    badges = build_ref_badges(snapshot)
+    assert list(badges) == ["tip"]
+    badge = badges["tip"]
+    assert badge.text.plain == "💻 🌳 🐙 main · origin/main"
+    clipped = badge.text.copy()
+    clipped.truncate(12, overflow="ellipsis")
+    assert all(icon in clipped.plain for icon in ("💻", "🌳", "🐙"))
+    assert "🌳 Worktree: /demo · main (current)" in badge.description.plain
+    assert (
+        "🌳 Worktree: /linked [literal] · detached HEAD (locked: in use)" in badge.description.plain
+    )
+    assert "refs/heads/main" in badge.description.plain
+    assert "refs/remotes/origin/main" in badge.description.plain
+
+
+def test_detached_worktree_uses_its_registered_head_without_inventing_a_local_ref():
+    worktree = Worktree(Path("/demo/detached"), "detached-tip", detached=True)
+    snapshot = Snapshot(Path("/demo"), "main", head="main-tip", worktrees=(worktree,))
+    badge = build_ref_badges(snapshot)["detached-tip"]
+    assert badge.text.plain == "🌳 detached"
+    assert "detached HEAD" in badge.description.plain
+    assert "/demo/detached" in badge.description.plain
+    assert "🌳" not in build_ref_badges(snapshot)["main-tip"].text.plain
+    assert not any(
+        hasattr(span.style, "meta") and "context_ref" in span.style.meta
+        for span in badge.text.spans
+    )
+
+
+def test_detached_worktree_path_cannot_introduce_extra_graph_lines():
+    path = Path("/demo/line\nbreak\t[tree]")
+    snapshot = Snapshot(Path("/demo"), "main", worktrees=(Worktree(path, "tip", detached=True),))
+    badge = build_ref_badges(snapshot)["tip"]
+    assert badge.text.plain == r"🌳 line\nbreak\t[tree]"
+    assert str(path) in badge.description.plain
+
+
+def test_worktree_markers_follow_head_moves_and_registration_removal():
+    worktree = Worktree(Path("/demo/linked"), "old-tip", "topic")
+    snapshot = Snapshot(
+        Path("/demo"),
+        "main",
+        refs=(Ref("main", "refs/heads/main", "old-tip", "local"),),
+        worktrees=(worktree,),
+    )
+    assert "🌳" in build_ref_badges(snapshot)["old-tip"].text.plain
+    moved = replace(
+        snapshot, worktrees=(replace(worktree, head="new-tip", detached=True, branch=""),)
+    )
+    badges = build_ref_badges(moved)
+    assert "🌳" not in badges["old-tip"].text.plain
+    assert badges["new-tip"].text.plain == "🌳 linked"
+    removed = build_ref_badges(replace(moved, worktrees=()))
+    assert set(removed) == {"old-tip"}
+    assert "🌳" not in removed["old-tip"].text.plain
+
+
+def test_unborn_and_bare_worktrees_do_not_add_badges_and_prunable_state_is_explicit():
+    snapshot = Snapshot(
+        Path("/demo"),
+        "main",
+        worktrees=(
+            Worktree(Path("/unborn"), branch="main"),
+            Worktree(Path("/bare"), "bare-head", bare=True),
+            Worktree(Path("/missing"), "tip", "topic", prunable=True, prune_reason="missing path"),
+        ),
+    )
+    badges = build_ref_badges(snapshot)
+    assert set(badges) == {"tip"}
+    assert badges["tip"].text.plain == "🌳 missing"
+    assert "prunable: missing path" in badges["tip"].description.plain
+
+
+def test_worktree_selection_emphasizes_only_its_marker():
+    worktree = Worktree(Path("/linked"), "tip", "topic")
+    snapshot = Snapshot(Path("/demo"), "main", worktrees=(worktree,))
+    normal = build_ref_badges(snapshot)["tip"]
+    selected = build_ref_badges(snapshot, str(worktree.path))["tip"]
+    assert normal.text.plain == selected.text.plain
+    assert normal.description == selected.description
+    assert normal.text != selected.text
+    assert any("underline" in str(span.style) for span in selected.text.spans)
 
 
 def test_local_and_remote_move_independently_and_reunite_after_fetch():
