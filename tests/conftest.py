@@ -75,6 +75,25 @@ def git_repo(tmp_path: Path, git_run: GitRun) -> Path:
 
 
 @pytest.fixture
+def overlapping_remotes(git_repo: Path, git_run: GitRun) -> None:
+    """Seed legacy remote names without depending on `git remote add` validation.
+
+    Git 2.55 rejects adding team/origin alongside team. Repositories created
+    with older Git can still contain both, and must retain exact ref ownership.
+    """
+    for name in ("team", "team/origin"):
+        url = git_repo.parent / f"{name.replace('/', '-')}.git"
+        git_run(git_repo, "config", f"remote.{name}.url", str(url))
+        git_run(
+            git_repo,
+            "config",
+            "--add",
+            f"remote.{name}.fetch",
+            f"+refs/heads/*:refs/remotes/{name}/*",
+        )
+
+
+@pytest.fixture
 def bare_remote(tmp_path: Path, git_run: GitRun) -> Path:
     """A disposable local bare repository suitable as a network-free remote."""
     remote = tmp_path / "remote.git"

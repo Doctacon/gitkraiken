@@ -1307,12 +1307,17 @@ class GitKraikenApp(App[None]):
         if changed_commit:
             self._diff_token += 1
         token, generation, repo = self._detail_token, self._generation, self.repo
-        tabs = self.query_one("#inspector-tabs", TabbedContent)
+        # A menu can become the active screen while Git is reading. Inspector
+        # widgets always belong to the mounted workspace, not that modal.
+        workspace = self.screen_stack[0]
+        tabs = workspace.query_one("#inspector-tabs", TabbedContent)
         if activate and tabs.active != "details-tab":
             tabs.active = "details-tab"
-        self.query_one("#commit-detail", Static).update(Text(f"{commit.subject}\nLoading commit…"))
+        workspace.query_one("#commit-detail", Static).update(
+            Text(f"{commit.subject}\nLoading commit…")
+        )
         if changed_commit:
-            self.query_one(CommitFileTree).clear_files()
+            workspace.query_one(CommitFileTree).clear_files()
 
         async def load() -> None:
             try:
@@ -1338,10 +1343,10 @@ class GitKraikenApp(App[None]):
                 if badges:
                     metadata.append("\n")
                     metadata.append(badges.description)
-                header = self.query_one("#commit-detail", Static)
+                header = workspace.query_one("#commit-detail", Static)
                 header.update(text)
                 header.tooltip = metadata
-                tree = self.query_one(CommitFileTree)
+                tree = workspace.query_one(CommitFileTree)
                 tree.set_files(detail.files, identity=commit.oid)
                 # Loading detail must never turn an automatic tree highlight
                 # into a diff. Refresh an already explicit view of this file.
@@ -1385,8 +1390,9 @@ class GitKraikenApp(App[None]):
             return
         self._active_diff = None
         self._diff_token += 1
-        self.query_one("#diff-workspace").display = False
-        self.query_one("#graph-workspace").display = True
+        workspace = self.screen_stack[0]
+        workspace.query_one("#diff-workspace").display = False
+        workspace.query_one("#graph-workspace").display = True
 
     def load_diff(
         self,
@@ -1400,9 +1406,10 @@ class GitKraikenApp(App[None]):
         self._diff_tokens[scope] += 1
         token, epoch = self._diff_tokens[scope], self._diff_token
         generation, repo = self._generation, self.repo
+        workspace = self.screen_stack[0]
         target = "#center-diff"
         if not preserve_scroll:
-            self.query_one(target, Static).update("Loading diff…")
+            workspace.query_one(target, Static).update("Loading diff…")
 
         async def load() -> None:
             try:
@@ -1423,9 +1430,9 @@ class GitKraikenApp(App[None]):
                 and generation == self._generation
                 and self._active_diff == (file, staged, oid)
             ):
-                self.query_one(target, Static).update(patch_text(patch))
+                workspace.query_one(target, Static).update(patch_text(patch))
                 if not preserve_scroll:
-                    self.query_one("#center-diff-scroll").scroll_home(animate=False)
+                    workspace.query_one("#center-diff-scroll").scroll_home(animate=False)
 
         self.run_worker(load(), group="diff", exit_on_error=False)
 

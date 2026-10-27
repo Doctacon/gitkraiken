@@ -532,16 +532,9 @@ def test_am_conflict_is_detected_and_can_abort_or_continue(git_repo: Path, git_r
     assert repo.detail("HEAD").commit.subject == "mail patch"
 
 
+@pytest.mark.usefixtures("overlapping_remotes")
 def test_remote_ref_owner_uses_longest_configured_remote_name(git_repo: Path, git_run) -> None:
     commit_file(git_run, git_repo, "base.txt", "base\n", "base")
-    git_run(git_repo, "remote", "add", "team", str(git_repo.parent / "team.git"))
-    git_run(
-        git_repo,
-        "remote",
-        "add",
-        "team/origin",
-        str(git_repo.parent / "team-origin.git"),
-    )
     git_run(git_repo, "update-ref", "refs/remotes/team/topic", "HEAD")
     git_run(git_repo, "update-ref", "refs/remotes/team/origin/topic", "HEAD")
     git_run(git_repo, "update-ref", "refs/remotes/unassigned/topic", "HEAD")
@@ -556,18 +549,11 @@ def test_remote_ref_owner_uses_longest_configured_remote_name(git_repo: Path, gi
     assert remote_refs["refs/remotes/unassigned/topic"].remote == ""
 
 
+@pytest.mark.usefixtures("overlapping_remotes")
 def test_slash_remote_checkout_creates_and_reuses_exact_tracking_branch(
     git_repo: Path, git_run
 ) -> None:
     commit_file(git_run, git_repo, "base.txt", "base\n", "base")
-    git_run(git_repo, "remote", "add", "team", str(git_repo.parent / "team.git"))
-    git_run(
-        git_repo,
-        "remote",
-        "add",
-        "team/origin",
-        str(git_repo.parent / "team-origin.git"),
-    )
     git_run(git_repo, "update-ref", "refs/remotes/team/origin/topic", "HEAD")
     repo = Repository(git_repo)
     checkout = Action(
@@ -828,12 +814,11 @@ def test_remote_checkout_refuses_existing_branch_without_exact_canonical_upstrea
     assert repo.snapshot().head == head
 
 
+@pytest.mark.usefixtures("overlapping_remotes")
 def test_remote_checkout_rejects_same_tracking_namespace_from_another_remote(
     git_repo: Path, git_run
 ) -> None:
     head = commit_file(git_run, git_repo, "base.txt", "base\n", "base")
-    git_run(git_repo, "remote", "add", "team", str(git_repo.parent / "team.git"))
-    git_run(git_repo, "remote", "add", "team/origin", str(git_repo.parent / "origin.git"))
     git_run(git_repo, "update-ref", "refs/remotes/team/origin/topic", head)
     git_run(git_repo, "branch", "topic", head)
     git_run(git_repo, "config", "branch.topic.remote", "team")
@@ -850,16 +835,9 @@ def test_remote_checkout_rejects_same_tracking_namespace_from_another_remote(
     assert repo.snapshot().head == head
 
 
+@pytest.mark.usefixtures("overlapping_remotes")
 def test_remote_checkout_rejects_mismatched_explicit_owner(git_repo: Path, git_run) -> None:
     head = commit_file(git_run, git_repo, "base.txt", "base\n", "base")
-    git_run(git_repo, "remote", "add", "team", str(git_repo.parent / "team.git"))
-    git_run(
-        git_repo,
-        "remote",
-        "add",
-        "team/origin",
-        str(git_repo.parent / "team-origin.git"),
-    )
     git_run(git_repo, "update-ref", "refs/remotes/team/origin/topic", "HEAD")
     repo = Repository(git_repo)
 

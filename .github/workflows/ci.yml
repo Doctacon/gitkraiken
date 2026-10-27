@@ -14,6 +14,11 @@ jobs:
           python-version: '3.13'
           enable-cache: true
       - run: uv sync --locked
+      - name: Show tool versions
+        run: |
+          git --version
+          uv --version
+          uv run python --version
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest

@@ -245,17 +245,25 @@ def main(*, use_hotkey: bool = False) -> None:
 
                     wait_for(rendered, f"Displayed header did not update to {text}")
 
+                def open_actions(label: str, message: str) -> None:
+                    def opened() -> bool:
+                        screen = capture(target)
+                        if "REPOSITORY ACTIONS" in screen:
+                            return label in screen
+                        # Polling briefly makes the app busy, during which Ctrl+P
+                        # is intentionally ignored. Retry until the menu opens.
+                        tmux("send-keys", "-t", target, "C-p")
+                        return False
+
+                    wait_for(opened, message)
+
                 if run == 0:
                     # Select the test tip with one real graph click, then independently
                     # drive Actions -> checkout selected commit (detached HEAD).
                     graph_x, graph_y = point_for("●", contains="Popup checkout target")
                     send_mouse(target, graph_x, graph_y)
-                    tmux("send-keys", "-t", target, "C-p")
-                    wait_for(
-                        lambda: (
-                            "REPOSITORY ACTIONS" in capture(target)
-                            and "Check out selected commit" in capture(target)
-                        ),
+                    open_actions(
+                        "Check out selected commit",
                         "Ctrl+P did not open checkout actions for the selected commit",
                     )
                     tmux("send-keys", "-t", target, "Down", "Down", "Down", "Enter")
@@ -293,12 +301,8 @@ def main(*, use_hotkey: bool = False) -> None:
                         lambda: "Selected main" in capture(target),
                         "Sidebar click did not select branch main",
                     )
-                    tmux("send-keys", "-t", target, "C-p")
-                    wait_for(
-                        lambda: (
-                            "REPOSITORY ACTIONS" in capture(target)
-                            and "Check out refs/heads/main" in capture(target)
-                        ),
+                    open_actions(
+                        "Check out refs/heads/main",
                         "Ctrl+P did not open checkout actions for the selected sidebar branch",
                     )
                     tmux("send-keys", "-t", target, "Down", "Down", "Down", "Down", "Enter")

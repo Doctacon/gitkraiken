@@ -121,18 +121,11 @@ def test_create_worktree_uses_exact_target_and_requires_explicit_branch_choice(
     assert not (git_repo.parent / "not-created").exists()
 
 
+@pytest.mark.usefixtures("overlapping_remotes")
 def test_set_upstream_and_branch_remote_target_preserve_custom_mapping_and_slash_owner(
     git_repo: Path, git_run
 ) -> None:
     head = commit_file(git_run, git_repo, "base.txt", "base\n", "base")
-    git_run(git_repo, "remote", "add", "team", str(git_repo.parent / "team.git"))
-    git_run(
-        git_repo,
-        "remote",
-        "add",
-        "team/origin",
-        str(git_repo.parent / "team-origin.git"),
-    )
     git_run(git_repo, "config", "--unset-all", "remote.team/origin.fetch")
     git_run(
         git_repo,
