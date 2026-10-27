@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-import gitkraiken.git as git_module
-from gitkraiken.git import GitError, Repository
-from gitkraiken.models import Action
-from gitkraiken.pull_requests import PullRequestError
+import rhizome.git as git_module
+from rhizome.git import GitError, Repository
+from rhizome.models import Action
+from rhizome.pull_requests import PullRequestError
 
 
 def _oid(git_run, root: Path, ref: str = "HEAD") -> str:

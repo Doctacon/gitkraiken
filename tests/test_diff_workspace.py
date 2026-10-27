@@ -7,8 +7,8 @@ from test_app import settle
 from textual.widgets import DataTable, Input, Static, TabbedContent, TextArea
 from ui_helpers import click
 
-from gitkraiken.app import GitKraikenApp
-from gitkraiken.commit_files import CommitFileTree
+from rhizome.app import RhizomeApp
+from rhizome.commit_files import CommitFileTree
 
 
 @pytest.fixture
@@ -38,7 +38,7 @@ async def test_explicit_commit_file_diff_returns_to_unchanged_graph(git_repo, gi
     git_run(git_repo, "commit", "-m", "Initial note")
     oid = git_run(git_repo, "rev-parse", "HEAD").stdout.strip()
 
-    app = GitKraikenApp(git_repo)
+    app = RhizomeApp(git_repo)
     async with app.run_test(size=(150, 45)) as pilot:
         await settle(app, pilot)
         graph = app.query_one("#graph-table", DataTable)
@@ -78,7 +78,7 @@ async def test_worktree_enter_opens_only_the_selected_staging_area(git_repo, git
     git_run(git_repo, "add", "note.txt")
     (git_repo / "note.txt").write_text("unstaged\n")
 
-    app = GitKraikenApp(git_repo)
+    app = RhizomeApp(git_repo)
     async with app.run_test(size=(150, 45)) as pilot:
         await settle(app, pilot)
         table = app.query_one("#wip-table", DataTable)
@@ -97,7 +97,7 @@ async def test_worktree_enter_opens_only_the_selected_staging_area(git_repo, git
 
 
 async def test_refresh_keeps_working_tab_and_explicit_diff_not_highlight(file_repo):
-    app = GitKraikenApp(file_repo)
+    app = RhizomeApp(file_repo)
     async with app.run_test(size=(150, 45)) as pilot:
         await settle(app, pilot)
         app.jump_to(app.snapshot_data.head)
@@ -152,7 +152,7 @@ async def test_refresh_keeps_working_tab_and_explicit_diff_not_highlight(file_re
 async def test_refresh_does_not_reset_diff_scroll(file_repo, scope):
     if scope == "worktree":
         (file_repo / "a.txt").write_text("".join(f"new {i}\n" for i in range(100)))
-    app = GitKraikenApp(file_repo)
+    app = RhizomeApp(file_repo)
     async with app.run_test(size=(150, 40)) as pilot:
         await settle(app, pilot)
         if scope == "commit":
@@ -183,7 +183,7 @@ async def test_refresh_does_not_reset_diff_scroll(file_repo, scope):
 
 
 async def test_late_diff_cannot_reopen_after_escape_or_tab_change(file_repo, monkeypatch):
-    app = GitKraikenApp(file_repo)
+    app = RhizomeApp(file_repo)
     async with app.run_test(size=(150, 45)) as pilot:
         await settle(app, pilot)
         app.jump_to(app.snapshot_data.head)
@@ -226,7 +226,7 @@ async def test_late_diff_cannot_reopen_after_escape_or_tab_change(file_repo, mon
 
 @pytest.mark.parametrize("width", [60, 100])
 async def test_center_diff_fits_narrow_workspace(file_repo, width):
-    app = GitKraikenApp(file_repo)
+    app = RhizomeApp(file_repo)
     async with app.run_test(size=(width, 35)) as pilot:
         await settle(app, pilot)
         if not app.query_one("#inspector-panel").display:
@@ -254,7 +254,7 @@ async def test_center_diff_fits_narrow_workspace(file_repo, width):
 async def test_back_restores_graph_scroll_search_and_selection(file_repo, git_run):
     for number in range(25):
         git_run(file_repo, "commit", "--allow-empty", "-m", f"Later {number}")
-    app = GitKraikenApp(file_repo)
+    app = RhizomeApp(file_repo)
     async with app.run_test(size=(150, 35)) as pilot:
         await settle(app, pilot)
         search = app.query_one("#graph-filter", Input)

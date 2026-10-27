@@ -16,13 +16,13 @@ from textual.widgets import (
 from textual.widgets._toast import Toast
 from ui_helpers import click, drag, header_grip, post_click
 
-from gitkraiken.app import GitKraikenApp
-from gitkraiken.commit_files import CommitFileTree
-from gitkraiken.demo import create_demo
-from gitkraiken.dialogs import ActionPicker, BranchContextMenu, MessageDialog, PromptDialog
-from gitkraiken.pull_request_dialog import PullRequestDialog
-from gitkraiken.resizable_table import ResizableDataTable
-from gitkraiken.sidebar import ReferenceSidebar, SidebarSelection
+from rhizome.app import RhizomeApp
+from rhizome.commit_files import CommitFileTree
+from rhizome.demo import create_demo
+from rhizome.dialogs import ActionPicker, BranchContextMenu, MessageDialog, PromptDialog
+from rhizome.pull_request_dialog import PullRequestDialog
+from rhizome.resizable_table import ResizableDataTable
+from rhizome.sidebar import ReferenceSidebar, SidebarSelection
 
 
 @pytest.fixture
@@ -119,7 +119,7 @@ def branch_repo(git_repo, git_run, bare_remote):
 
 
 async def test_real_repository_mount_and_commit_diff(demo_repo):
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         assert app.snapshot_data is not None
@@ -145,7 +145,7 @@ async def test_real_repository_mount_and_commit_diff(demo_repo):
 
 
 async def test_hover_tooltips_stay_hidden_in_workspace_and_context_menu(demo_repo):
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     app.TOOLTIP_DELAY = 0.01
     # Textual disables tooltips in run_test by default; exercise the real hover path.
     async with app.run_test(size=(170, 50), tooltips=True) as pilot:
@@ -190,7 +190,7 @@ async def test_history_author_and_date_time_columns_survive_style_and_size_chang
     monkeypatch.setenv("GIT_AUTHOR_DATE", "2024-02-03T04:05:06+05:30")
     git_run(demo_repo, "commit", "--allow-empty", "-m", "Known author timestamp")
     tip = git(demo_repo, "rev-parse", "HEAD")
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     async with app.run_test(size=(width, 50)) as pilot:
         await settle(app, pilot)
         table = app.query_one("#graph-table", DataTable)
@@ -244,7 +244,7 @@ async def test_graph_timeline_stays_newest_first_across_styles_and_load_more(
     older = dated_commit(2)
     newest = dated_commit(4)
     expected = [newest, middle, older, base]
-    app = GitKraikenApp(git_repo)
+    app = RhizomeApp(git_repo)
     app.limit = 2
     async with app.run_test(size=(170, 45)) as pilot:
         await settle(app, pilot)
@@ -277,7 +277,7 @@ async def test_graph_timeline_stays_newest_first_across_styles_and_load_more(
 
 
 async def test_workspace_pane_drags_survive_refresh_collapse_and_terminal_resize(demo_repo):
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         app.jump_to(app.snapshot_data.head)
@@ -336,7 +336,7 @@ async def test_workspace_pane_drags_survive_refresh_collapse_and_terminal_resize
 
 @pytest.mark.parametrize("tab", ["details-tab", "wip-tab"])
 async def test_inspector_file_lists_use_reclaimed_preview_space(demo_repo, tab):
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     async with app.run_test(size=(170, 55)) as pilot:
         await settle(app, pilot)
         app.jump_to(app.snapshot_data.head if tab == "details-tab" else "wip")
@@ -352,7 +352,7 @@ async def test_inspector_file_lists_use_reclaimed_preview_space(demo_repo, tab):
 
 @pytest.mark.parametrize("selector", ["#refs-splitter", "#graph-table"])
 async def test_opening_modal_cancels_mouse_resize_capture(demo_repo, selector):
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         widget = app.query_one(selector)
@@ -372,7 +372,7 @@ async def test_opening_modal_cancels_mouse_resize_capture(demo_repo, selector):
 
 
 async def test_history_column_drags_preserve_sizes_and_selection(demo_repo, git_run):
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     async with app.run_test(size=(190, 50)) as pilot:
         await settle(app, pilot)
         table = app.query_one("#graph-table", ResizableDataTable)
@@ -411,7 +411,7 @@ async def test_history_column_drags_preserve_sizes_and_selection(demo_repo, git_
 
 
 async def test_stage_commit_and_refresh(demo_repo):
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         app.jump_to("wip")
@@ -428,7 +428,7 @@ async def test_stage_commit_and_refresh(demo_repo):
 
 
 async def test_search_and_branch_selection_preserve_unified_history(demo_repo):
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     async with app.run_test(size=(160, 45)) as pilot:
         await settle(app, pilot)
         table = app.query_one("#graph-table", DataTable)
@@ -462,7 +462,7 @@ async def test_search_and_branch_selection_preserve_unified_history(demo_repo):
 
 
 async def test_discard_runs_without_confirmation_and_preserves_index(demo_repo):
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     async with app.run_test(size=(150, 45)) as pilot:
         await settle(app, pilot)
         file = next(f for f in app.snapshot_data.files if f.path == "README.md")
@@ -480,7 +480,7 @@ async def test_discard_runs_without_confirmation_and_preserves_index(demo_repo):
 async def test_mixed_index_worktree_file_has_two_diff_choices(demo_repo):
     file = demo_repo / "src/workspace.py"
     file.write_text(file.read_text() + "UNSTAGED_ONLY = True\n")
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     async with app.run_test(size=(160, 48)) as pilot:
         await settle(app, pilot)
         rows = [
@@ -500,7 +500,7 @@ async def test_mixed_index_worktree_file_has_two_diff_choices(demo_repo):
 
 async def test_empty_repository_and_narrow_screen(tmp_path):
     subprocess.run(["git", "init", "-b", "main", str(tmp_path)], check=True, capture_output=True)
-    app = GitKraikenApp(tmp_path)
+    app = RhizomeApp(tmp_path)
     async with app.run_test(size=(100, 32)) as pilot:
         await settle(app, pilot)
         assert app.snapshot_data is not None
@@ -516,10 +516,10 @@ async def test_empty_repository_and_narrow_screen(tmp_path):
 
 
 async def test_mutations_are_not_cancelled_by_refresh(demo_repo, monkeypatch):
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     async with app.run_test(size=(150, 45)) as pilot:
         await settle(app, pilot)
-        from gitkraiken.models import Action
+        from rhizome.models import Action
 
         real_execute = app.repo.execute
         import time
@@ -539,7 +539,7 @@ async def test_mutations_are_not_cancelled_by_refresh(demo_repo, monkeypatch):
 async def test_open_repository_replaces_state_without_touching_original(demo_repo, tmp_path):
     second = tmp_path / "second"
     subprocess.run(["git", "init", "-b", "main", str(second)], check=True, capture_output=True)
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     async with app.run_test(size=(160, 45)) as pilot:
         await settle(app, pilot)
         app.open_repository(str(second))
@@ -557,7 +557,7 @@ async def test_open_repository_replaces_state_without_touching_original(demo_rep
 async def test_global_shortcuts_cannot_replace_repository_under_action_picker(demo_repo, tmp_path):
     second = tmp_path / "second"
     subprocess.run(["git", "init", "-b", "main", str(second)], check=True, capture_output=True)
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     async with app.run_test(size=(160, 45)) as pilot:
         await settle(app, pilot)
         app.action_command_picker()
@@ -574,7 +574,7 @@ async def test_global_shortcuts_cannot_replace_repository_under_action_picker(de
 
 
 async def test_obsolete_selection_reads_are_skipped(demo_repo, monkeypatch):
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     async with app.run_test(size=(160, 45)) as pilot:
         await settle(app, pilot)
         calls = []
@@ -595,7 +595,7 @@ async def test_obsolete_selection_reads_are_skipped(demo_repo, monkeypatch):
 
 @pytest.mark.parametrize("width", [120, 170])
 async def test_hierarchical_sidebar_fits_and_graph_starts_near_top(demo_repo, width):
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     async with app.run_test(size=(width, 45)) as pilot:
         await settle(app, pilot)
         sidebar = app.query_one(ReferenceSidebar)
@@ -609,9 +609,9 @@ async def test_hierarchical_sidebar_fits_and_graph_starts_near_top(demo_repo, wi
 
 
 async def test_branch_creation_runs_on_name_submission(demo_repo):
-    from gitkraiken.dialogs import PromptDialog
+    from rhizome.dialogs import PromptDialog
 
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     async with app.run_test(size=(160, 45)) as pilot:
         await settle(app, pilot)
         await pilot.click("#branch")
@@ -627,7 +627,7 @@ async def test_branch_creation_runs_on_name_submission(demo_repo):
 async def test_smooth_graph_toggle_preserves_selection_search_and_navigation(demo_repo):
     from textual.widgets import Button
 
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         table = app.query_one("#graph-table", DataTable)
@@ -688,7 +688,7 @@ async def test_smooth_graph_toggle_preserves_selection_search_and_navigation(dem
 
 
 async def test_graph_shortcut_does_not_steal_text_input_or_escape_dialog(demo_repo):
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     async with app.run_test(size=(160, 48)) as pilot:
         await settle(app, pilot)
         search = app.query_one("#graph-filter", Input)
@@ -718,10 +718,10 @@ async def test_graph_shortcut_does_not_steal_text_input_or_escape_dialog(demo_re
 async def test_wide_graph_retains_all_lanes_and_scrolls_instead_of_clipping(tmp_path):
     from dataclasses import replace
 
-    from gitkraiken.models import Commit, HistoryLine
+    from rhizome.models import Commit, HistoryLine
 
     subprocess.run(["git", "init", "-b", "main", str(tmp_path)], check=True, capture_output=True)
-    app = GitKraikenApp(tmp_path)
+    app = RhizomeApp(tmp_path)
     async with app.run_test(size=(120, 45)) as pilot:
         await settle(app, pilot)
         history = tuple(
@@ -752,7 +752,7 @@ async def test_wide_graph_retains_all_lanes_and_scrolls_instead_of_clipping(tmp_
 
 
 async def test_double_click_checkout_runs_immediately_and_keeps_graph_unified(branch_repo):
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         before = [(row.commit.oid, row.graph.plain) for row in app._graph_rows]
@@ -774,7 +774,7 @@ async def test_double_click_checkout_runs_immediately_and_keeps_graph_unified(br
 
 @pytest.mark.parametrize("style", ["smooth", "compact"])
 async def test_graph_node_double_click_requests_branch_checkout(branch_repo, style):
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     app.graph_style = style
     async with app.run_test(size=(170, 50), notifications=True) as pilot:
         await settle(app, pilot)
@@ -802,7 +802,7 @@ async def test_graph_node_double_click_requests_branch_checkout(branch_repo, sty
 
 async def test_graph_double_click_chooses_between_local_branches(branch_repo, git_run):
     git_run(branch_repo, "branch", "another", "test")
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         tip = git(branch_repo, "rev-parse", "test")
@@ -822,10 +822,10 @@ async def test_graph_double_click_chooses_between_local_branches(branch_repo, gi
 async def test_graph_double_click_remote_only_tip_uses_exact_owner(
     branch_repo, git_run, monkeypatch
 ):
-    from gitkraiken.models import Action
+    from rhizome.models import Action
 
     git_run(branch_repo, "branch", "-D", "test")
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         tip = git(branch_repo, "rev-parse", "origin/test")
@@ -850,7 +850,7 @@ async def test_graph_double_click_non_tip_checks_out_detached_head(branch_repo, 
     base = git(branch_repo, "rev-parse", "main")
     git_run(branch_repo, "commit", "--allow-empty", "-m", "Advance main")
     git_run(branch_repo, "push", "origin", "main")
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         table, point = await graph_point(app, pilot, base)
@@ -864,7 +864,7 @@ async def test_graph_double_click_non_tip_checks_out_detached_head(branch_repo, 
 
 async def test_graph_double_click_ignores_inert_rows_and_stale_clicks(branch_repo):
     (branch_repo / "pending.txt").write_text("untracked change\n")
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         table, point = await graph_point(app, pilot, "wip")
@@ -891,7 +891,7 @@ async def test_checkout_selected_commit_keeps_workspace_running(branch_repo, git
     git_run(branch_repo, "switch", "test")
     git_run(branch_repo, "commit", "--allow-empty", "-m", "[bold]literal[/bold]")
     git_run(branch_repo, "switch", "main")
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     # Textual's default test mode hides toasts; production renders them.
     async with app.run_test(size=(170, 50), notifications=True) as pilot:
         await settle(app, pilot)
@@ -919,9 +919,9 @@ async def test_checkout_selected_commit_keeps_workspace_running(branch_repo, git
 
 
 async def test_checkout_error_notification_is_literal_and_keeps_workspace_running(branch_repo):
-    from gitkraiken.models import Action
+    from rhizome.models import Action
 
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50), notifications=True) as pilot:
         await settle(app, pilot)
         missing = "refs/heads/missing[/literal]"
@@ -936,9 +936,9 @@ async def test_checkout_error_notification_is_literal_and_keeps_workspace_runnin
 
 
 async def test_remote_double_click_uses_full_ref_and_exact_owner(branch_repo, monkeypatch):
-    from gitkraiken.models import Action
+    from rhizome.models import Action
 
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         calls = []
@@ -960,7 +960,7 @@ async def test_remote_double_click_uses_full_ref_and_exact_owner(branch_repo, mo
 async def test_out_of_window_tip_does_not_filter_or_autoload_but_explicit_load_reveals_it(
     branch_repo,
 ):
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     app.limit = 1
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
@@ -991,7 +991,7 @@ async def test_out_of_window_tip_does_not_filter_or_autoload_but_explicit_load_r
 
 
 async def test_sidebar_search_does_not_change_graph_or_steal_graph_shortcuts(demo_repo):
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         graph_search = app.query_one("#graph-filter", Input)
@@ -1026,7 +1026,7 @@ async def test_sidebar_search_does_not_change_graph_or_steal_graph_shortcuts(dem
 
 
 async def test_real_local_remote_badges_separate_when_local_branch_advances(branch_repo, git_run):
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         table = app.query_one("#graph-table", DataTable)
@@ -1056,7 +1056,7 @@ async def test_worktree_graph_marker_tracks_other_checkout_without_moving_this_o
     branch_repo, git_run, tmp_path, detached
 ):
     linked = tmp_path / "linked tree"
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         base = app.snapshot_data.head
@@ -1093,9 +1093,9 @@ async def test_worktree_graph_marker_tracks_other_checkout_without_moving_this_o
 
 
 async def test_new_branch_at_same_tip_does_not_invent_divergence(branch_repo):
-    from gitkraiken.models import Action
+    from rhizome.models import Action
 
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         before = [(row.commit.oid, row.graph.plain) for row in app._graph_rows]
@@ -1112,7 +1112,7 @@ async def test_single_click_and_checkout_preserve_scrolled_graph_viewport(branch
         git_run(branch_repo, "switch", "-c", f"parallel-{index:02}", "main")
         git_run(branch_repo, "commit", "--allow-empty", "-m", f"Independent tip {index}")
     git_run(branch_repo, "switch", "main")
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(130, 32)) as pilot:
         await settle(app, pilot)
         table = app.query_one("#graph-table", DataTable)
@@ -1143,7 +1143,7 @@ async def test_hidden_selection_survives_refresh_and_stale_checkout_messages_are
     branch_repo,
     git_run,
 ):
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50), notifications=True) as pilot:
         await settle(app, pilot)
         await click_reference(app, pilot, "refs/heads/test")
@@ -1190,7 +1190,7 @@ async def test_compact_commit_header_gives_space_to_file_tree(git_repo, git_run,
         file.write_text(f"select {index} as metric;\n")
     git_run(git_repo, "add", ".")
     git_run(git_repo, "commit", "-m", title, "-m", body)
-    app = GitKraikenApp(git_repo)
+    app = RhizomeApp(git_repo)
     async with app.run_test(size=size) as pilot:
         await settle(app, pilot)
         app.jump_to(app.snapshot_data.head)
@@ -1236,7 +1236,7 @@ async def test_compact_commit_header_gives_space_to_file_tree(git_repo, git_run,
 
 @pytest.mark.parametrize("operation", ["fetch", "pull", "push"])
 async def test_network_toolbar_actions_run_without_confirmation(branch_repo, operation):
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         await pilot.click(f"#{operation}")
@@ -1267,7 +1267,7 @@ async def test_right_click_rebases_current_feature_onto_clicked_branch(
 ):
     before = git(rebase_repo, "rev-parse", "HEAD")
     base = git(rebase_repo, "rev-parse", target)
-    app = GitKraikenApp(rebase_repo)
+    app = RhizomeApp(rebase_repo)
     async with app.run_test(size=(170, 50), notifications=True) as pilot:
         await settle(app, pilot)
         calls = []
@@ -1310,7 +1310,7 @@ async def test_right_click_rebases_current_feature_onto_clicked_branch(
 
 async def test_rebase_menu_rejects_external_checkout_while_open(rebase_repo, git_run):
     before = git(rebase_repo, "rev-parse", "feature/payments")
-    app = GitKraikenApp(rebase_repo)
+    app = RhizomeApp(rebase_repo)
     async with app.run_test(size=(170, 50), notifications=True) as pilot:
         await settle(app, pilot)
         await click_reference(app, pilot, "refs/heads/test", button=3)
@@ -1330,7 +1330,7 @@ async def test_rebase_menu_rejects_external_checkout_while_open(rebase_repo, git
 async def test_right_click_does_not_offer_invalid_rebase(rebase_repo, git_run, state):
     if state == "detached":
         git_run(rebase_repo, "switch", "--detach")
-    app = GitKraikenApp(rebase_repo)
+    app = RhizomeApp(rebase_repo)
     async with app.run_test(size=(170, 50), notifications=True) as pilot:
         await settle(app, pilot)
         before = git(rebase_repo, "rev-parse", "HEAD")
@@ -1355,7 +1355,7 @@ async def test_right_click_does_not_offer_invalid_rebase(rebase_repo, git_run, s
 async def test_rebase_dirty_worktree_error_keeps_changes_and_refreshes(rebase_repo):
     before = git(rebase_repo, "rev-parse", "HEAD")
     (rebase_repo / "feature.txt").write_text("uncommitted edits\n")
-    app = GitKraikenApp(rebase_repo)
+    app = RhizomeApp(rebase_repo)
     async with app.run_test(size=(170, 50), notifications=True) as pilot:
         await settle(app, pilot)
         await click_reference(app, pilot, "refs/heads/test", button=3)
@@ -1372,7 +1372,7 @@ async def test_rebase_dirty_worktree_error_keeps_changes_and_refreshes(rebase_re
 
 @pytest.mark.parametrize("finish", ["abort", "continue"])
 async def test_right_click_rebase_conflicts_can_abort_or_continue(rebase_repo, git_run, finish):
-    from gitkraiken.models import Action
+    from rhizome.models import Action
 
     (rebase_repo / "base.txt").write_text("feature version\n")
     git_run(rebase_repo, "add", ".")
@@ -1383,7 +1383,7 @@ async def test_right_click_rebase_conflicts_can_abort_or_continue(rebase_repo, g
     git_run(rebase_repo, "add", ".")
     git_run(rebase_repo, "commit", "-m", "Teammate changes base")
     git_run(rebase_repo, "switch", "feature/payments")
-    app = GitKraikenApp(rebase_repo)
+    app = RhizomeApp(rebase_repo)
     async with app.run_test(size=(170, 50), notifications=True) as pilot:
         await settle(app, pilot)
         await click_reference(app, pilot, "refs/heads/test", button=3)
@@ -1415,13 +1415,13 @@ async def test_right_click_rebase_conflicts_can_abort_or_continue(rebase_repo, g
 
 @pytest.mark.parametrize("native", [True, False])
 async def test_expanded_branch_menu_copy_actions_do_not_mutate(branch_repo, monkeypatch, native):
-    from gitkraiken.clipboard import CopyResult
+    from rhizome.clipboard import CopyResult
 
     copied = []
     monkeypatch.setattr(
-        "gitkraiken.clipboard._copy_native", lambda value: copied.append(value) or native
+        "rhizome.clipboard._copy_native", lambda value: copied.append(value) or native
     )
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(100, 24)) as pilot:
         await settle(app, pilot)
         before = app.snapshot_data.head
@@ -1447,7 +1447,7 @@ async def test_expanded_branch_menu_copy_actions_do_not_mutate(branch_repo, monk
 
 
 async def test_context_menu_resize_keeps_workspace_alive_and_actions_usable(branch_repo):
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         before = app.snapshot_data.head
@@ -1467,7 +1467,7 @@ async def test_context_menu_resize_keeps_workspace_alive_and_actions_usable(bran
 
 
 async def test_context_branch_creation_uses_clicked_tip_not_inspector(branch_repo):
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         app.jump_to(app.snapshot_data.head)
@@ -1485,7 +1485,7 @@ async def test_context_branch_creation_uses_clicked_tip_not_inspector(branch_rep
 
 
 async def test_context_prompt_rejects_target_move_before_submission(branch_repo, git_run):
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         before = app.snapshot_data.head
@@ -1501,10 +1501,10 @@ async def test_context_prompt_rejects_target_move_before_submission(branch_repo,
 
 
 async def test_graph_context_uses_clicked_commit_and_ignores_inert_rows(branch_repo):
-    from gitkraiken.app import HistoryTable
+    from rhizome.app import HistoryTable
 
     (branch_repo / "pending.txt").write_text("untracked change\n")
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         await click_reference(app, pilot, "refs/heads/main")
@@ -1535,7 +1535,7 @@ async def test_graph_context_uses_clicked_commit_and_ignores_inert_rows(branch_r
 
 
 async def test_graph_badge_context_resolves_exact_branch(branch_repo):
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         tip = git(branch_repo, "rev-parse", "test")
@@ -1558,7 +1558,7 @@ async def test_graph_badge_context_resolves_exact_branch(branch_repo):
 @pytest.mark.parametrize("mode", ["reset-soft", "reset-mixed", "reset-hard"])
 async def test_graph_reset_mode_picker_executes_explicit_choice(branch_repo, git_run, mode):
     git_run(branch_repo, "switch", "test")
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         target = git(branch_repo, "rev-parse", "main")
@@ -1585,7 +1585,7 @@ async def test_context_edit_latest_message_preserves_staged_content(branch_repo,
     (branch_repo / "base.txt").write_text("staged, not part of message edit\n")
     git_run(branch_repo, "add", "base.txt")
     tree = git(branch_repo, "rev-parse", "HEAD^{tree}")
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         await click_reference(app, pilot, "refs/heads/main", button=3)
@@ -1605,7 +1605,7 @@ async def test_context_edit_latest_message_preserves_staged_content(branch_repo,
 
 async def test_context_create_worktree_keeps_current_checkout(branch_repo, tmp_path):
     destination = tmp_path / "context worktree"
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         before = app.snapshot_data.head
@@ -1627,7 +1627,7 @@ async def test_context_create_worktree_keeps_current_checkout(branch_repo, tmp_p
 
 @pytest.mark.parametrize("target", ["refs/heads/main", "refs/remotes/origin/test"])
 async def test_context_upstream_updates_explicit_branch(branch_repo, target):
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         await click_reference(app, pilot, target, button=3)
@@ -1645,7 +1645,7 @@ async def test_context_apply_patch_keeps_index_unchanged(branch_repo, tmp_path):
     patch.write_text(
         "diff --git a/base.txt b/base.txt\n--- a/base.txt\n+++ b/base.txt\n@@ -1 +1 @@\n-base\n+patched\n"
     )
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         await click_reference(app, pilot, "refs/heads/main", button=3)
@@ -1661,7 +1661,7 @@ async def test_context_apply_patch_keeps_index_unchanged(branch_repo, tmp_path):
 async def test_context_remote_delete_requires_explicit_destination_and_preserves_local(
     branch_repo, bare_remote
 ):
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         await click_reference(app, pilot, "refs/remotes/origin/test", button=3)
@@ -1686,7 +1686,7 @@ async def test_context_remote_delete_rejects_mapping_change_while_picker_open(
 ):
     oid = git(branch_repo, "rev-parse", "test")
     git_run(bare_remote, "update-ref", "refs/heads/other", oid)
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         await click_reference(app, pilot, "refs/remotes/origin/test", button=3)
@@ -1717,7 +1717,7 @@ async def test_context_copy_branch_link_uses_remote_source_not_tracking_alias(br
         "+refs/heads/release/*:refs/remotes/origin/cache/*",
     )
     git_run(branch_repo, "update-ref", "refs/remotes/origin/cache/test", oid)
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         await click_reference(app, pilot, "refs/remotes/origin/cache/test", button=3)
@@ -1746,7 +1746,7 @@ async def test_right_click_creates_pr_from_feature_to_clicked_target(
     git_run(branch_repo, "remote", "set-url", "origin", remote_url)
     before = git(branch_repo, "rev-parse", "HEAD")
     requests = []
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(150, 45)) as pilot:
         await settle(app, pilot)
 
@@ -1782,7 +1782,7 @@ async def test_right_click_creates_pr_from_feature_to_clicked_target(
 
 async def test_pr_form_rejects_external_checkout_and_preserves_input(branch_repo, git_run):
     git_run(branch_repo, "remote", "set-url", "origin", "https://github.com/org/repo.git")
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(140, 40)) as pilot:
         await settle(app, pilot)
         await click_reference(app, pilot, "refs/heads/test", button=3)
@@ -1809,7 +1809,7 @@ async def test_pr_ambiguous_repository_prompts_before_composer(branch_repo, git_
     git_run(branch_repo, "config", "--unset", "branch.test.merge")
     git_run(branch_repo, "remote", "set-url", "origin", "https://github.com/org/repo.git")
     git_run(branch_repo, "remote", "add", "team", "https://dev.azure.com/org/project/_git/repo")
-    app = GitKraikenApp(branch_repo)
+    app = RhizomeApp(branch_repo)
     async with app.run_test(size=(140, 40)) as pilot:
         await settle(app, pilot)
         await click_reference(app, pilot, "refs/heads/test", button=3)
@@ -1830,7 +1830,7 @@ async def test_pr_ambiguous_repository_prompts_before_composer(branch_repo, git_
 async def test_commit_selection_waits_for_chained_diff_workers(demo_repo, monkeypatch):
     import time
 
-    app = GitKraikenApp(demo_repo)
+    app = RhizomeApp(demo_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         original_diff = app.repo.diff

@@ -2,7 +2,7 @@
 
 import pytest
 
-from gitkraiken.app import patch_text
+from rhizome.app import patch_text
 
 HEADER = (
     'diff --git "a/src/long [name].py" "b/src/long [name].py"\n'
@@ -23,7 +23,7 @@ def test_file_preview_omits_transport_headers_but_keeps_hunks_and_literal_conten
         "-before\n"
         "+after\n"
         "\\ No newline at end of file\n"
-        "\n[diff truncated by GitKraiken]\n"
+        "\n[diff truncated by Rhizome]\n"
     )
     rendered = patch_text(HEADER + body)
     assert rendered.plain == body

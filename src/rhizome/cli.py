@@ -12,12 +12,12 @@ from . import __version__
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(
-        prog="gitkraiken",
+        prog="rhizome",
         description="A GitKraken-inspired Git workspace for your terminal and tmux.",
         epilog="Private remotes use your existing Git credential helper or SSH agent.",
     )
     result.add_argument("path", nargs="?", default=".", help="repository or a directory inside it")
-    result.add_argument("--version", action="version", version=f"gitkraiken {__version__}")
+    result.add_argument("--version", action="version", version=f"rhizome {__version__}")
     mode = result.add_mutually_exclusive_group()
     mode.add_argument(
         "--tmux", action="store_true", help="open/reuse a tmux window (session outside tmux)"
@@ -47,7 +47,7 @@ def main(argv: list[str] | None = None) -> None:
             "--demo runs in this terminal; do not combine it with --clone/--tmux/--popup"
         )
     if args.clone and args.path == ".":
-        arg_parser.error("specify a new destination: gitkraiken --clone URL ./repository")
+        arg_parser.error("specify a new destination: rhizome --clone URL ./repository")
     from .git import GitError, Repository
     from .tmux import TmuxError, config, launch
 
@@ -56,13 +56,13 @@ def main(argv: list[str] | None = None) -> None:
             print(config(), end="")
             return
         if args.demo:
-            from .app import GitKraikenApp
+            from .app import RhizomeApp
             from .demo import create_demo
 
-            with tempfile.TemporaryDirectory(prefix="gitkraiken-demo-") as directory:
+            with tempfile.TemporaryDirectory(prefix="rhizome-demo-") as directory:
                 root = create_demo(Path(directory))
-                app = GitKraikenApp(root)
-                app.title = "GitKraiken · DEMO (disposable local repository)"
+                app = RhizomeApp(root)
+                app.title = "Rhizome · DEMO (disposable local repository)"
                 app.run()
             return
         if args.clone:
@@ -73,11 +73,11 @@ def main(argv: list[str] | None = None) -> None:
         if args.tmux or args.popup:
             launch(root, popup=args.popup)
         else:
-            from .app import GitKraikenApp
+            from .app import RhizomeApp
 
-            GitKraikenApp(root).run()
+            RhizomeApp(root).run()
     except (GitError, TmuxError, OSError, ValueError) as error:
-        print(f"gitkraiken: {error}", file=sys.stderr)
+        print(f"rhizome: {error}", file=sys.stderr)
         raise SystemExit(1) from None
     except KeyboardInterrupt:
         raise SystemExit(130) from None

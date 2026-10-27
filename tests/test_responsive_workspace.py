@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from textual.widgets import DataTable
 
-from gitkraiken.app import GitKraikenApp
+from rhizome.app import RhizomeApp
 
 
 async def settle(app, pilot) -> None:
@@ -33,7 +33,7 @@ def assert_workspace_fits(app) -> None:
 
 
 async def test_workspace_scales_through_tmux_pane_sizes(git_repo):
-    app = GitKraikenApp(git_repo)
+    app = RhizomeApp(git_repo)
     async with app.run_test(size=(140, 32)) as pilot:
         await settle(app, pilot)
         for height in (24, 32):
@@ -60,7 +60,7 @@ async def test_workspace_scales_through_tmux_pane_sizes(git_repo):
 
 
 async def test_resizing_preserves_explicit_side_panel_preferences(git_repo):
-    app = GitKraikenApp(git_repo)
+    app = RhizomeApp(git_repo)
     async with app.run_test(size=(140, 32)) as pilot:
         await settle(app, pilot)
         app.action_toggle_refs()

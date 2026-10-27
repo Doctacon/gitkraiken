@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from gitkraiken.context_actions import ContextTarget, context_actions, remote_link
-from gitkraiken.models import Ref, Remote, Snapshot
+from rhizome.context_actions import ContextTarget, context_actions, remote_link
+from rhizome.models import Ref, Remote, Snapshot
 
 
 def snapshot():

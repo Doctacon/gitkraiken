@@ -2,8 +2,8 @@ import pytest
 from textual.app import App, ComposeResult
 from ui_helpers import click
 
-from gitkraiken.commit_files import CommitFileTree
-from gitkraiken.models import FileChange
+from rhizome.commit_files import CommitFileTree
+from rhizome.models import FileChange
 
 
 class FileTreeApp(App[None]):
@@ -106,7 +106,7 @@ async def test_same_basenames_have_distinct_nodes_and_literal_rename_tooltip() -
 @pytest.mark.asyncio
 async def test_empty_and_same_identity_refresh_preserve_fold_and_file() -> None:
     app = FileTreeApp()
-    file = FileChange("src/gitkraiken/commit_files.py", index="M")
+    file = FileChange("src/rhizome/commit_files.py", index="M")
     async with app.run_test(size=(50, 20)) as pilot:
         tree = app.query_one(CommitFileTree)
         tree.set_files((), identity="one")
@@ -114,25 +114,25 @@ async def test_empty_and_same_identity_refresh_preserve_fold_and_file() -> None:
         assert tree.selected_file is None
         tree.set_files((file,), identity="one")
         await pilot.pause()
-        folder = tree._path_nodes["dir:src/gitkraiken"]
+        folder = tree._path_nodes["dir:src/rhizome"]
         point = await hit_point(tree, pilot, tree._key_for(file))
         await click(pilot, tree, point)
         folder.collapse()
         tree.set_files((file,), identity="one")
         await pilot.pause()
-        assert tree._path_nodes["dir:src/gitkraiken"].is_collapsed
+        assert tree._path_nodes["dir:src/rhizome"].is_collapsed
         assert tree.selected_file == file
         tree.set_files((file,), identity="two")
         await pilot.pause()
-        assert tree._path_nodes["dir:src/gitkraiken"].is_expanded
+        assert tree._path_nodes["dir:src/rhizome"].is_expanded
         assert tree.selected_file is None
         assert tree.cursor_node is None
-        tree._path_nodes["dir:src/gitkraiken"].collapse()
+        tree._path_nodes["dir:src/rhizome"].collapse()
         tree.clear_files()
         assert tree.root.label.plain == "CHANGED FILES (0)"
         assert tree.selected_file is None
         tree.set_files((file,), identity="two")
-        assert tree._path_nodes["dir:src/gitkraiken"].is_collapsed
+        assert tree._path_nodes["dir:src/rhizome"].is_collapsed
         assert tree.get_node_by_id(tree.root.id) is tree.root
         assert len(tree._tree_nodes) == len(tree._path_nodes) + 1
         for node in tree._path_nodes.values():

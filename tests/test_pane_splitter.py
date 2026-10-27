@@ -4,7 +4,7 @@ from textual.containers import Horizontal, Vertical
 from textual.geometry import Offset
 from textual.widgets import Static
 
-from gitkraiken.pane_splitter import PaneSplitter
+from rhizome.pane_splitter import PaneSplitter
 
 
 class SplitterApp(App[None]):

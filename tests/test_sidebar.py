@@ -6,9 +6,9 @@ from textual.app import App, ComposeResult
 from textual.widgets import Input, Tree
 from ui_helpers import click, post_click
 
-from gitkraiken.models import Ref, Remote, Snapshot, Stash, Worktree
-from gitkraiken.pull_requests import HostedRepository, PullRequest, PullRequestListing
-from gitkraiken.sidebar import ReferenceSidebar, SidebarSelection
+from rhizome.models import Ref, Remote, Snapshot, Stash, Worktree
+from rhizome.pull_requests import HostedRepository, PullRequest, PullRequestListing
+from rhizome.sidebar import ReferenceSidebar, SidebarSelection
 
 
 class SidebarApp(App[None]):

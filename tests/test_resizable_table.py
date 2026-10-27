@@ -2,7 +2,7 @@ from rich.text import Text
 from textual.app import App, ComposeResult
 from ui_helpers import drag, header_grip, post_click
 
-from gitkraiken.resizable_table import ResizableDataTable
+from rhizome.resizable_table import ResizableDataTable
 
 
 class TableApp(App):

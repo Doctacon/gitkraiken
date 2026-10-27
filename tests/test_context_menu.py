@@ -4,7 +4,7 @@ from textual.app import App, ComposeResult
 from textual.widgets import OptionList, Static, TextArea
 from ui_helpers import post_click
 
-from gitkraiken.dialogs import BranchContextMenu, MessageDialog
+from rhizome.dialogs import BranchContextMenu, MessageDialog
 
 
 class ContextMenuApp(App[None]):

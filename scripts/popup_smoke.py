@@ -26,7 +26,7 @@ import uuid
 from collections.abc import Callable
 from pathlib import Path
 
-from gitkraiken.tmux import workspace_id
+from rhizome.tmux import workspace_id
 
 
 def create_fixture(path: Path) -> tuple[Path, str]:
@@ -60,7 +60,7 @@ def create_fixture(path: Path) -> tuple[Path, str]:
 def main(*, use_hotkey: bool = False) -> None:
     if not shutil.which("tmux"):
         raise SystemExit("tmux >= 3.2 is required")
-    server = f"gitkraiken-popup-test-{uuid.uuid4().hex[:12]}"
+    server = f"rhizome-popup-test-{uuid.uuid4().hex[:12]}"
     master, slave = pty.openpty()
     attached = None
     stopped = threading.Event()
@@ -115,7 +115,7 @@ def main(*, use_hotkey: bool = False) -> None:
     reader = threading.Thread(target=drain, daemon=True)
     reader.start()
     try:
-        with tempfile.TemporaryDirectory(prefix="gitkraiken-popup-") as temp:
+        with tempfile.TemporaryDirectory(prefix="rhizome-popup-") as temp:
             root, checkout_oid = create_fixture(Path(temp) / "repo's parent")
 
             def git(*args: str) -> str:
@@ -141,10 +141,10 @@ def main(*, use_hotkey: bool = False) -> None:
             shell = shutil.which("zsh") or "/bin/sh"
             tmux("set-option", "-g", "default-shell", shell)
             if use_hotkey:
-                config_path = Path(temp) / "gitkraiken.conf"
+                config_path = Path(temp) / "rhizome.conf"
                 config_path.write_text(
                     subprocess.check_output(
-                        [sys.executable, "-m", "gitkraiken", "--tmux-config"],
+                        [sys.executable, "-m", "rhizome", "--tmux-config"],
                         cwd=temp,
                         text=True,
                     )
@@ -164,11 +164,11 @@ def main(*, use_hotkey: bool = False) -> None:
                 start_new_session=True,
             )
             time.sleep(0.3)
-            target = "gitkraiken-" + workspace_id(root)
+            target = "rhizome-" + workspace_id(root)
             app_pid: int | None = None
             popup_client_pids: list[int] = []
             for run in range(2):
-                command = shlex.join([sys.executable, "-m", "gitkraiken", "--popup", str(root)])
+                command = shlex.join([sys.executable, "-m", "rhizome", "--popup", str(root)])
                 command += f"; printf 'POPUP_{run}_EXIT:%s\\n' \"$?\""
                 tmux("send-keys", "-t", "host", "-l", command)
                 tmux("send-keys", "-t", "host", "Enter")

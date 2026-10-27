@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-import gitkraiken.git as git_module
-import gitkraiken.pull_requests as pull_request_module
-from gitkraiken.git import Repository
-from gitkraiken.pull_requests import (
+import rhizome.git as git_module
+import rhizome.pull_requests as pull_request_module
+from rhizome.git import Repository
+from rhizome.pull_requests import (
     HostedRepository,
     PullRequest,
     PullRequestError,

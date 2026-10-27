@@ -1,6 +1,6 @@
 # Implementation contract
 
-A Python 3.13+ / Textual 1.x application, launched with `uv run gitkraiken [PATH]`.
+A Python 3.13+ / Textual 1.x application, launched with `uv run rhizome [PATH]`.
 No web server, hosted service, built-in account management, or token database.
 Existing Git credential helpers / SSH configuration handle Git access. Optional
 hosted PR browsing/creation uses authenticated GitHub/Azure CLIs; see [pull requests](pull-requests.md).
@@ -149,7 +149,7 @@ hosted PR browsing/creation uses authenticated GitHub/Azure CLIs; see [pull requ
 - `commit_files.py`: presentation-only changed-file tree. Compacted directory
   chains, basename/status leaves, and typed FileSelected messages. Same-commit
   refresh preserves folds and selection.
-- `app.py`, `dialogs.py`, `app.tcss`: Textual UI. `GitKraikenApp(path: str | Path)`.
+- `app.py`, `dialogs.py`, `app.tcss`: Textual UI. `RhizomeApp(path: str | Path)`.
   Synchronous Git calls run via `asyncio.to_thread`, not on the UI loop; serialize
   mutation/refresh work and ignore stale selection detail results. No UI-to-shell
   calls. Refresh after success AND failure (conflicts can change repository state).

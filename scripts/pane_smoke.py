@@ -26,13 +26,13 @@ from pathlib import Path
 
 from popup_smoke import create_fixture
 
-from gitkraiken.tmux import hotkey
+from rhizome.tmux import hotkey
 
 
 def main() -> None:
     if not shutil.which("tmux"):
         raise SystemExit("tmux >= 3.2 is required")
-    server = f"gitkraiken-pane-test-{uuid.uuid4().hex[:12]}"
+    server = f"rhizome-pane-test-{uuid.uuid4().hex[:12]}"
     master, slave = pty.openpty()
     attached = None
     stopped = threading.Event()
@@ -70,7 +70,7 @@ def main() -> None:
     reader = threading.Thread(target=drain, daemon=True)
     reader.start()
     try:
-        with tempfile.TemporaryDirectory(prefix="gitkraiken-pane-") as temp:
+        with tempfile.TemporaryDirectory(prefix="rhizome-pane-") as temp:
             root, _ = create_fixture(Path(temp) / "repo's parent")
 
             def git(directory: Path, *args: str) -> str:
@@ -135,14 +135,14 @@ def main() -> None:
                 str(root),
                 "/bin/sh",
             )
-            tmux("send-keys", "-t", origin, "-l", "GK_SMOKE_KEEP=preserved")
+            tmux("send-keys", "-t", origin, "-l", "PANE_SMOKE_KEEP=preserved")
             tmux("send-keys", "-t", origin, "Enter")
             tmux("send-keys", "-t", neighbor, "-l", "printf 'NEIGHBOR_STAYS_VISIBLE\\n'")
             tmux("send-keys", "-t", neighbor, "Enter")
-            config_path = Path(temp) / "gitkraiken.conf"
+            config_path = Path(temp) / "rhizome.conf"
             config_path.write_text(
                 subprocess.check_output(
-                    [sys.executable, "-m", "gitkraiken", "--tmux-config"],
+                    [sys.executable, "-m", "rhizome", "--tmux-config"],
                     text=True,
                 )
             )
@@ -173,8 +173,8 @@ def main() -> None:
                 tmux("select-pane", "-t", source)
                 os.write(master, b"\x02g")
                 wait_for(
-                    lambda: "GITKRAIKEN" in capture("host"),
-                    "prefix+g did not open GitKraiken inside the originating pane",
+                    lambda: "RHIZOME" in capture("host"),
+                    "prefix+g did not open Rhizome inside the originating pane",
                 )
                 target = value("host", "#{pane_id}")
 
@@ -226,7 +226,7 @@ def main() -> None:
                 assert value(app, "#{pane_width},#{pane_height}") == f"{width},{height}"
                 assert int(value(app, "#{pane_pid}")) == app_pid
                 assert value(app, "#{pane_dead}") == "0"
-                assert "GITKRAIKEN" in capture(app)
+                assert "RHIZOME" in capture(app)
                 assert len(host_panes()) == 3
             resized_geometry = value(app, geometry)
 
@@ -236,7 +236,7 @@ def main() -> None:
             os.write(master, b"printf 'NEIGHBOR_STILL_INTERACTIVE\\n'\r")
             wait_for(
                 lambda: "NEIGHBOR_STILL_INTERACTIVE" in capture(neighbor),
-                "Neighbor did not accept input while GitKraiken was open",
+                "Neighbor did not accept input while Rhizome was open",
             )
             # Concurrent handlers can arrive before a previous run-shell job
             # finishes. An even number must leave exactly one hidden/visible
@@ -290,7 +290,13 @@ def main() -> None:
             assert value(origin, "#{window_zoomed_flag}") == "1"
             tmux("resize-pane", "-Z", "-t", origin)
             assert value(origin, geometry) == resized_geometry
-            tmux("send-keys", "-t", origin, "-l", "printf 'SHELL_STATE:%s\\n' \"$GK_SMOKE_KEEP\"")
+            tmux(
+                "send-keys",
+                "-t",
+                origin,
+                "-l",
+                "printf 'SHELL_STATE:%s\\n' \"$PANE_SMOKE_KEEP\"",
+            )
             tmux("send-keys", "-t", origin, "Enter")
             wait_for(lambda: "SHELL_STATE:preserved" in capture(origin), "Shell state was lost")
 

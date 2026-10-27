@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from gitkraiken.git import Repository
-from gitkraiken.models import Commit, HistoryLine, Ref, Remote, Snapshot, Stash, Worktree
-from gitkraiken.ref_badges import build_ref_badges
+from rhizome.git import Repository
+from rhizome.models import Commit, HistoryLine, Ref, Remote, Snapshot, Stash, Worktree
+from rhizome.ref_badges import build_ref_badges
 
 
 def test_aligned_local_and_github_tips_show_both_markers_before_long_names():

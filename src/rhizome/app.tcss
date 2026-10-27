@@ -1,4 +1,4 @@
-/* GitKraiken — bright, quiet framing for high-contrast colored commit lanes. */
+/* Rhizome — bright, quiet framing for high-contrast colored commit lanes. */
 Screen {
     background: #f7fbfc;
     color: #14232c;

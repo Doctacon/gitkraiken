@@ -8,13 +8,13 @@ from test_app import settle
 from textual import events
 from textual.widgets import Button, Static
 
-import gitkraiken.app as app_module
-from gitkraiken.app import GitKraikenApp, HistoryTable
-from gitkraiken.dialogs import ActionPicker
-from gitkraiken.git import GitError, Repository
-from gitkraiken.models import Action
-from gitkraiken.pull_requests import PullRequest, PullRequestListing, hosted_repository
-from gitkraiken.sidebar import ReferenceSidebar
+import rhizome.app as app_module
+from rhizome.app import HistoryTable, RhizomeApp
+from rhizome.dialogs import ActionPicker
+from rhizome.git import GitError, Repository
+from rhizome.models import Action
+from rhizome.pull_requests import PullRequest, PullRequestListing, hosted_repository
+from rhizome.sidebar import ReferenceSidebar
 
 
 @pytest.fixture
@@ -29,7 +29,7 @@ def listings():
 
 
 async def test_local_poll_keeps_controls_and_unchanged_graph_stable(git_repo):
-    app = GitKraikenApp(git_repo)
+    app = RhizomeApp(git_repo)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         table = app.query_one(HistoryTable)
@@ -46,7 +46,7 @@ async def test_pull_requests_load_on_open_without_a_click(git_repo, git_run, mon
     load = Mock(return_value=listings)
     monkeypatch.setattr(Repository, "open_pull_requests", load)
     monkeypatch.setattr(Repository, "execute", Mock(return_value=""))
-    app = GitKraikenApp(git_repo)
+    app = RhizomeApp(git_repo)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         load.assert_called_once()
@@ -64,7 +64,7 @@ async def test_open_fetches_remote_commits_without_pulling(
     git_run(tmp_path, "clone", str(bare_remote), str(peer))
     git_run(peer, "commit", "--allow-empty", "-m", "Remote update")
     git_run(peer, "push")
-    app = GitKraikenApp(git_repo)
+    app = RhizomeApp(git_repo)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         assert app.snapshot_data.behind == 1
@@ -85,7 +85,7 @@ async def test_remote_poll_cadence_and_resume_refresh(remote_workspace, monkeypa
     monkeypatch.setattr(app_module, "monotonic", lambda: clock[0])
     load = Mock(return_value=())
     monkeypatch.setattr(Repository, "open_pull_requests", load)
-    app = GitKraikenApp(remote_workspace)
+    app = RhizomeApp(remote_workspace)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         load.assert_called_once()
@@ -118,7 +118,7 @@ async def test_background_fetch_keeps_cached_ui_and_does_not_disturb_modal(
     remote_workspace, monkeypatch, listings
 ):
     monkeypatch.setattr(Repository, "open_pull_requests", Mock(return_value=listings))
-    app = GitKraikenApp(remote_workspace)
+    app = RhizomeApp(remote_workspace)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         sidebar = app.query_one(ReferenceSidebar)
@@ -161,7 +161,7 @@ async def test_background_fetch_keeps_cached_ui_and_does_not_disturb_modal(
 
 
 async def test_mutation_waits_for_background_git_without_overlap(remote_workspace, monkeypatch):
-    app = GitKraikenApp(remote_workspace)
+    app = RhizomeApp(remote_workspace)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         started, release = threading.Event(), threading.Event()
@@ -200,7 +200,7 @@ async def test_failed_fetch_still_loads_prs_and_backs_off(remote_workspace, monk
     load = Mock(return_value=())
     monkeypatch.setattr(Repository, "execute", fetch)
     monkeypatch.setattr(Repository, "open_pull_requests", load)
-    app = GitKraikenApp(remote_workspace)
+    app = RhizomeApp(remote_workspace)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         fetch.assert_called_once_with(Action("fetch"))
@@ -228,7 +228,7 @@ async def test_focus_refresh_waits_until_dialog_closes(remote_workspace, monkeyp
     monkeypatch.setattr(app_module, "monotonic", lambda: clock[0])
     load = Mock(return_value=())
     monkeypatch.setattr(Repository, "open_pull_requests", load)
-    app = GitKraikenApp(remote_workspace)
+    app = RhizomeApp(remote_workspace)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         app.action_help()
@@ -248,7 +248,7 @@ async def test_failed_listing_preserves_cache_and_action_result(
 ):
     load = Mock(return_value=listings)
     monkeypatch.setattr(Repository, "open_pull_requests", load)
-    app = GitKraikenApp(remote_workspace)
+    app = RhizomeApp(remote_workspace)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         sidebar = app.query_one(ReferenceSidebar)
@@ -270,7 +270,7 @@ async def test_failed_listing_preserves_cache_and_action_result(
 async def test_closed_pull_request_selection_is_reconciled(remote_workspace, monkeypatch, listings):
     load = Mock(return_value=listings)
     monkeypatch.setattr(Repository, "open_pull_requests", load)
-    app = GitKraikenApp(remote_workspace)
+    app = RhizomeApp(remote_workspace)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         sidebar = app.query_one(ReferenceSidebar)
@@ -292,7 +292,7 @@ async def test_remote_change_during_automatic_read_discards_and_retries(
     monkeypatch.setattr(app_module, "monotonic", lambda: clock[0])
     load = Mock(return_value=listings)
     monkeypatch.setattr(Repository, "open_pull_requests", load)
-    app = GitKraikenApp(remote_workspace)
+    app = RhizomeApp(remote_workspace)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         sidebar = app.query_one(ReferenceSidebar)

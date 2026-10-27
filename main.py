@@ -1,6 +1,6 @@
 """Compatibility entrypoint: uv run main.py [repository]."""
 
-from gitkraiken.cli import main
+from rhizome.cli import main
 
 if __name__ == "__main__":
     main()

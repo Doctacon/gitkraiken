@@ -4,9 +4,9 @@ from rich.color import Color
 from rich.console import Console
 from textual.widgets import DataTable, Input, OptionList, TextArea, Tree
 
-from gitkraiken.app import GitKraikenApp, patch_text
-from gitkraiken.dialogs import ActionPicker, BranchContextMenu, MessageDialog, PromptDialog
-from gitkraiken.theme import GRAPH_PALETTE, MUTED, PROVIDER_COLORS, SUBTLE_TEXT, TEAL, TEXT
+from rhizome.app import RhizomeApp, patch_text
+from rhizome.dialogs import ActionPicker, BranchContextMenu, MessageDialog, PromptDialog
+from rhizome.theme import GRAPH_PALETTE, MUTED, PROVIDER_COLORS, SUBTLE_TEXT, TEAL, TEXT
 
 
 def luminance(color: str) -> float:
@@ -24,7 +24,7 @@ def contrast(foreground: str, background: str) -> float:
 
 
 async def test_workspace_defaults_to_light_with_readable_rich_colors(git_repo):
-    app = GitKraikenApp(git_repo)
+    app = RhizomeApp(git_repo)
     async with app.run_test(size=(170, 48)) as pilot:
         await app.workers.wait_for_complete()
         await pilot.pause()
@@ -87,7 +87,7 @@ async def test_workspace_defaults_to_light_with_readable_rich_colors(git_repo):
 
 
 async def test_dialogs_and_editors_remain_light(git_repo):
-    app = GitKraikenApp(git_repo)
+    app = RhizomeApp(git_repo)
     async with app.run_test(size=(120, 40)) as pilot:
         await app.workers.wait_for_complete()
         await pilot.pause()

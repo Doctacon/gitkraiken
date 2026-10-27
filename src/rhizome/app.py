@@ -151,9 +151,9 @@ class HistoryTable(ResizableDataTable):
         self.tooltip = Text(description) if isinstance(description, str) else None
 
 
-class GitKraikenApp(App[None]):
+class RhizomeApp(App[None]):
     CSS_PATH = "app.tcss"
-    TITLE = "GitKraiken"
+    TITLE = "Rhizome"
     ENABLE_COMMAND_PALETTE = False
     LOCAL_REFRESH_INTERVAL = 2
     REMOTE_REFRESH_INTERVAL = 30
@@ -221,7 +221,7 @@ class GitKraikenApp(App[None]):
         return self._sidebar_selection.kind if self._sidebar_selection else ""
 
     def compose(self) -> ComposeResult:
-        yield Static("GITKRAIKEN  /  Opening repository…", id="repo-header")
+        yield Static("RHIZOME  /  Opening repository…", id="repo-header")
         with Horizontal(id="toolbar"):
             for ident, label in [
                 ("open", "Open"),
@@ -538,7 +538,7 @@ class GitKraikenApp(App[None]):
         self._detail_token += 1
         self._diff_token += 1
         self.snapshot_data = snapshot
-        header = Text(" GITKRAIKEN ", style=f"bold {TEAL}")
+        header = Text(" RHIZOME ", style=f"bold {TEAL}")
         if "DEMO" in self.title:
             header.append(" DEMO ", style="bold #9a5a00")
         header.append(f" / {snapshot.root.name}  ", style=f"bold {TEXT}")

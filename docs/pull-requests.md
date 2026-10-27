@@ -43,7 +43,7 @@ There is no inferred Git “parent branch” and selecting a target never checks
 Escape or Cancel abandons the form without a request. While creating, submission
 and cancellation are disabled to avoid duplicate requests. Failures preserve your
 text. A timed-out request may have reached the server: check the repository's PRs
-before retrying. GitKraiken never retries creation automatically.
+before retrying. Rhizome never retries creation automatically.
 
 ## One-time authentication
 
@@ -64,7 +64,7 @@ az devops login --organization https://dev.azure.com/YOUR_ORG
 
 Use an account with repository read access for browsing, and permission to create PRs
 for the composer. These tools own
-credentials; GitKraiken does not collect or store tokens. The app does not launch
+credentials; Rhizome does not collect or store tokens. The app does not launch
 login prompts or automatically install the Azure extension. Missing tools, failed
 authentication, or provider rejection are reported in the PR list or composer. Git
 authentication must also work for the branch checks performed on submission.
@@ -92,7 +92,7 @@ authentication must also work for the branch checks performed on submission.
 
 ## Implementation and primary sources
 
-The provider adapter in `src/gitkraiken/pull_requests.py` uses argv-based,
+The provider adapter in `src/rhizome/pull_requests.py` uses argv-based,
 noninteractive subprocesses with a 60-second timeout. Tests mock hosted commands;
 no real PRs or accounts are touched. Repository preparation and source-tip checks
 live in `Repository`; the Textual composer and read-only summary are in
@@ -108,7 +108,7 @@ PR numbers, never trusted from provider response URLs.
 
 - [GitHub CLI `gh api`](https://cli.github.com/manual/gh_api): authenticated API
   requests; explicit hostname/method; `--input -` accepts a JSON body on stdin.
-  GitKraiken supplies explicit repository, `head`, `base`, `title`, and `body`,
+  Rhizome supplies explicit repository, `head`, `base`, `title`, and `body`,
   avoiding the implicit branch publishing behavior of higher-level workflows.
 - [GitHub create-pull-request API](https://docs.github.com/en/rest/pulls/pulls#create-a-pull-request):
   creation fields and the returned PR `number`. The result link is the repository's
@@ -116,10 +116,10 @@ PR numbers, never trusted from provider response URLs.
 - [Azure CLI `az repos pr create`](https://learn.microsoft.com/en-us/cli/azure/repos/pr?view=azure-cli-latest#az-repos-pr-create):
   explicit organization, project, repository, source/target, title and description;
   `--detect false` prevents repository auto-detection, and `--open` defaults to false.
-  GitKraiken requests JSON and does not request auto-completion or branch deletion.
+  Rhizome requests JSON and does not request auto-completion or branch deletion.
 - [Azure create-pull-request API](https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/create?view=azure-devops-rest-7.1):
   the response has `pullRequestId`; `url` is an API resource, not the browser page.
-  GitKraiken builds `/pullrequest/ID` from the selected repository and returned ID.
+  Rhizome builds `/pullrequest/ID` from the selected repository and returned ID.
 - [Azure CLI implementation](https://github.com/Azure/azure-devops-cli-extension/blob/master/azure-devops/azext_devops/dev/repos/pull_request.py):
   explicit description (including empty) prevents automatic commit-message filling;
   `_open_pull_request` documents the `/PROJECT/_git/REPO/pullrequest/ID` browser route.

@@ -1,6 +1,6 @@
 """Synchronous, subprocess-backed Git repository engine.
 
-This is the only module in GitKraiken which invokes Git.  Arguments are always
+This is the only module in Rhizome which invokes Git.  Arguments are always
 passed as an argv sequence; callers cannot supply command-line fragments.
 """
 
@@ -208,7 +208,7 @@ def _raise_process_error(
     clipped = raw_detail[:_MAX_ERROR_BYTES]
     detail = _decode(clipped).strip()
     if len(raw_detail) > _MAX_ERROR_BYTES:
-        detail += "\n[Git error output truncated by GitKraiken]"
+        detail += "\n[Git error output truncated by Rhizome]"
     if not detail:
         detail = f"Git exited with status {result.returncode}."
     if timeout == _NETWORK_TIMEOUT:
@@ -1115,7 +1115,7 @@ class Repository:
         if len(data) <= _MAX_DIFF_BYTES:
             return _decode(data)
         clipped = data[:_MAX_DIFF_BYTES]
-        return _decode(clipped) + "\n\n[diff truncated by GitKraiken]\n"
+        return _decode(clipped) + "\n\n[diff truncated by Rhizome]\n"
 
     def diff(self, path: str = "", *, staged: bool = False, oid: str = "") -> str:
         resolved = self._resolve_commit(oid, label="Commit") if oid else ""

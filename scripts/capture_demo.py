@@ -14,8 +14,8 @@ from pathlib import Path
 
 from textual.widgets import Input, Tree
 
-from gitkraiken.app import GitKraikenApp
-from gitkraiken.demo import create_demo
+from rhizome.app import RhizomeApp
+from rhizome.demo import create_demo
 
 
 def add_reference_fixture(root: Path) -> None:
@@ -56,12 +56,12 @@ async def capture(
     ref_filter: str = "",
     collapse_remotes: bool = False,
 ) -> None:
-    with tempfile.TemporaryDirectory(prefix="gitkraiken-preview-") as temp:
+    with tempfile.TemporaryDirectory(prefix="rhizome-preview-") as temp:
         root = create_demo(Path(temp))
         if many_refs:
             add_reference_fixture(root)
-        app = GitKraikenApp(root)
-        app.title = "GitKraiken · DEMO"
+        app = RhizomeApp(root)
+        app.title = "Rhizome · DEMO"
         async with app.run_test(size=(width, height)) as pilot:
             await wait_for_idle(app, pilot)
             if compact:

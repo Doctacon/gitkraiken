@@ -5,10 +5,10 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import Button, Input, Link, Static, TextArea
 
-from gitkraiken.clipboard import CopyResult
-from gitkraiken.models import Action
-from gitkraiken.pull_request_dialog import PullRequestDialog
-from gitkraiken.pull_requests import PullRequestError, PullRequestPlan, hosted_repository
+from rhizome.clipboard import CopyResult
+from rhizome.models import Action
+from rhizome.pull_request_dialog import PullRequestDialog
+from rhizome.pull_requests import PullRequestError, PullRequestPlan, hosted_repository
 
 
 class DialogApp(App):
@@ -141,7 +141,7 @@ async def test_slow_clipboard_prevents_duplicate_copies_but_does_not_block_close
         await release.wait()
         return CopyResult.SYSTEM
 
-    monkeypatch.setattr("gitkraiken.pull_request_dialog.copy_text", copy)
+    monkeypatch.setattr("rhizome.pull_request_dialog.copy_text", copy)
 
     async def create(title, description):
         return url

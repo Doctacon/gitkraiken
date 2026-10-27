@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 from textual.app import App
 
-from gitkraiken.clipboard import CopyResult, copy_text
+from rhizome.clipboard import CopyResult, copy_text
 
 TEXT = "https://example.com/café?ref=feature/$literal&view=1\nSecond line"
 

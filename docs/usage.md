@@ -1,4 +1,4 @@
-# GitKraiken usage guide
+# Rhizome usage guide
 
 [Quickstart](../README.md)
 
@@ -7,7 +7,7 @@ and Textual. Local-first, mouse-friendly, keyboard-driven, with a high-contrast
 light palette for bright environments. Works with private GitHub and Azure DevOps
 repositories through your existing Git authentication.
 
-![GitKraiken's branches, commit graph, and changed files](assets/workspace.png)
+![Rhizome's branches, commit graph, and changed files](assets/workspace.png)
 
 ## Run
 
@@ -19,32 +19,37 @@ the inspector collapses; use `Ctrl+Right` to show it or `Ctrl+Left` to return to
 refs. Either side panel can remain alongside history at 60 columns. No special font is required.
 
 ```sh
-git clone https://github.com/Doctacon/gitkraiken.git
-cd gitkraiken
+git clone https://github.com/Doctacon/rhizome.git
+cd rhizome
 uv sync
-uv run gitkraiken /path/to/repository
+uv run rhizome /path/to/repository
 
 # Explore a disposable REAL Git repository with a local-only remote.
 # Nothing is cloned from or pushed to an external service.
-uv run gitkraiken --demo
+uv run rhizome --demo
 
 # Clone, then open (destination must be new or empty)
-uv run gitkraiken --clone git@github.com:ORG/REPO.git ~/work/repo
+uv run rhizome --clone git@github.com:ORG/REPO.git ~/work/repo
 ```
 
-To make `gitkraiken` available from any directory:
+To make `rhizome` available from any directory:
 
 ```sh
 uv tool install .
-gitkraiken ~/work/repo
+rhizome ~/work/repo
 ```
 
-To update a checkout-based tool installation, quit any running GitKraiken workspace
+To update a checkout-based tool installation, quit any running Rhizome workspace
 with `Ctrl+Q`, then run `git pull --ff-only` and `uv tool install --force --reinstall .`
 in this checkout. Reopen it normally (or with your existing tmux hotkey).
 
-`uv run main.py [path]` and `uv run python -m gitkraiken [path]` also work. A path
-inside a worktree is enough; GitKraiken discovers its root. Bare repositories are
+**Migrating from `gitkraiken`:** quit old tmux workspaces, install the renamed
+`rhizome` CLI, and regenerate/replace the old tmux binding with
+`rhizome --tmux-config`. The package, Python module, and generated Python paths
+changed, so the old binding cannot be reused.
+
+`uv run main.py [path]` and `uv run python -m rhizome [path]` also work. A path
+inside a worktree is enough; Rhizome discovers its root. Bare repositories are
 intentionally rejected.
 
 ## The main screen
@@ -302,10 +307,10 @@ Pi, a plugin, global key bindings, a web server, or changes to `~/.tmux.conf`.
 ```sh
 # Inside tmux: open/reuse this repo's window in the current session.
 # Outside tmux: attach a dedicated persistent session.
-uv run gitkraiken --tmux ~/work/repo
+uv run rhizome --tmux ~/work/repo
 
 # Inside tmux: persistent popup over your current work.
-uv run gitkraiken --popup ~/work/repo
+uv run rhizome --popup ~/work/repo
 ```
 
 In a popup, use your normal tmux **prefix + d** to detach; reopening resumes the
@@ -318,7 +323,7 @@ you will use tmux**:
 
 ```sh
 # Append a binding for this installation; no changes are made until you redirect it.
-"$(uv tool dir --bin)/gitkraiken" --tmux-config >> ~/.tmux.conf
+"$(uv tool dir --bin)/rhizome" --tmux-config >> ~/.tmux.conf
 
 # Reload if tmux is already running; otherwise it loads the binding on next start.
 tmux source-file ~/.tmux.conf
@@ -326,12 +331,12 @@ tmux source-file ~/.tmux.conf
 
 Use your configured prefix (normally **Ctrl+B**, release, then **g**):
 
-- In a repository pane, **prefix + g** opens/resumes GitKraiken **in that pane's
+- In a repository pane, **prefix + g** opens/resumes Rhizome **in that pane's
   exact space**. Other panes remain visible and interactive; normal tmux pane
   resizing immediately resizes the app.
 - **prefix + g** again returns to your original shell/editor without losing the
   app's state. The original process stays running while the app is visible.
-- **Ctrl+Q** quits GitKraiken and restores the original pane. App-process crashes
+- **Ctrl+Q** quits Rhizome and restores the original pane. App-process crashes
   also restore it. Use these controls rather than tmux's destructive `kill-pane`
   or `kill-window` commands, which remove the pane itself.
 - Each originating pane/repository pair has its own workspace, so opening the
@@ -339,25 +344,26 @@ Use your configured prefix (normally **Ctrl+B**, release, then **g**):
 - It uses the pane's current directory, including subdirectories of a repo.
 - Outside a repository it shows an error on the invoking client's status line.
 
-The toggle parks the inactive pane in a detached `gitkraiken-pane-…` session.
+The toggle parks the inactive pane in a detached `rhizome-pane-…` session.
 Do not kill that session while it holds your shell/editor. Quitting the app
 cleans it up automatically. If the original process exits while parked, there is
 no process to restore. `--popup` remains an explicit full-client overlay option;
 inside an explicit popup, **prefix + g** still detaches it. Normal **prefix + d**
 in pane-local mode detaches your entire tmux client, as usual.
 
-Existing generated hotkeys pick up this behavior after updating the installation
-and quitting/reopening old workspaces. No binding change is required unless the
-installation's Python path changed.
+After the `gitkraiken`-to-`rhizome` migration above, later generated hotkeys pick
+up behavior updates by updating the installation and quitting/reopening old
+Rhizome workspaces. No further binding change is required unless the
+installation's Python path changes.
 
 The generated binding contains the absolute Python path, so it works even when
-an existing tmux server cannot find `gitkraiken` or `uv` on its `PATH`. It targets
+an existing tmux server cannot find `rhizome` or `uv` on its `PATH`. It targets
 the invoking client/pane/socket explicitly. It **does override an existing
 prefix + g binding** when loaded, but does not change your prefix or other keys.
 Remove the generated `bind-key` line and run `tmux unbind-key -T prefix g` to
 remove it (then restore any previous binding).
 
-For checkout-based development, `uv run gitkraiken --tmux-config` generates the
+For checkout-based development, `uv run rhizome --tmux-config` generates the
 same binding using that checkout's `.venv`. Regenerate the binding if you move or
 remove that environment. Do not copy a generated macOS binding to WSL: generate
 it in WSL after installation.
@@ -369,10 +375,10 @@ Run inside your **WSL Linux shell**, not PowerShell. With `uv` installed:
 ```sh
 sudo apt update && sudo apt install -y git tmux
 mkdir -p ~/work
-git clone https://github.com/Doctacon/gitkraiken.git ~/work/gitkraiken
-cd ~/work/gitkraiken
+git clone https://github.com/Doctacon/rhizome.git ~/work/rhizome
+cd ~/work/rhizome
 uv tool install --python 3.13 .         # uv supplies Python if necessary
-"$(uv tool dir --bin)/gitkraiken" --tmux-config >> ~/.tmux.conf
+"$(uv tool dir --bin)/rhizome" --tmux-config >> ~/.tmux.conf
 
 tmux -V                                # must be 3.2 or newer
 # If tmux is already running:
@@ -389,7 +395,7 @@ Windows credentials and SSH agents are not automatically the same as WSL's.
 
 ## Private GitHub and Azure DevOps
 
-There is no GitKraiken login, token database, or subscription. **Git operations use
+There is no Rhizome login, token database, or subscription. **Git operations use
 the same credential helper, SSH configuration and agent as command-line Git.**
 Use SSH keys or a system credential manager—not a PAT embedded in a URL.
 Optional **pull request creation** additionally requires an authenticated GitHub
@@ -399,13 +405,13 @@ See [pull request setup](pull-requests.md); credentials stay with those CLIs.
 
 ```sh
 # GitHub, including private repositories
-gitkraiken --clone git@github.com:ORG/REPO.git ~/work/github-repo
+rhizome --clone git@github.com:ORG/REPO.git ~/work/github-repo
 
 # Azure DevOps SSH
-gitkraiken --clone git@ssh.dev.azure.com:v3/ORG/PROJECT/REPO ~/work/azure-repo
+rhizome --clone git@ssh.dev.azure.com:v3/ORG/PROJECT/REPO ~/work/azure-repo
 
 # Azure DevOps HTTPS, with your configured Git Credential Manager
-gitkraiken --clone https://dev.azure.com/ORG/PROJECT/_git/REPO ~/work/azure-repo
+rhizome --clone https://dev.azure.com/ORG/PROJECT/_git/REPO ~/work/azure-repo
 ```
 
 Authenticate **once in a normal terminal** first. For GitHub, `gh auth login`

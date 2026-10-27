@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from gitkraiken.git import GitError, Repository
-from gitkraiken.models import Action
+from rhizome.git import GitError, Repository
+from rhizome.models import Action
 
 
 def commit_file(git_run, root: Path, path: str, text: str, message: str) -> str:

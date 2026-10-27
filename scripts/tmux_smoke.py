@@ -13,21 +13,21 @@ import time
 import uuid
 from pathlib import Path
 
-from gitkraiken.demo import create_demo
-from gitkraiken.tmux import launch
+from rhizome.demo import create_demo
+from rhizome.tmux import launch
 
 
 def main() -> None:
     if not shutil.which("tmux"):
         raise SystemExit("tmux is required for this optional smoke test")
-    server = f"gitkraiken-test-{uuid.uuid4().hex[:12]}"
+    server = f"rhizome-test-{uuid.uuid4().hex[:12]}"
 
     def tmux(*args: str) -> str:
         return subprocess.check_output(["tmux", "-L", server, *args], text=True).strip()
 
     old_tmux = os.environ.get("TMUX")
     try:
-        with tempfile.TemporaryDirectory(prefix="gitkraiken-smoke-") as temp:
+        with tempfile.TemporaryDirectory(prefix="rhizome-smoke-") as temp:
             root = create_demo(Path(temp) / "a repo's directory")
             tmux(
                 "-f",
@@ -50,7 +50,7 @@ def main() -> None:
             assert before == tmux("list-windows", "-F", "#{window_id}"), "window was duplicated"
             for _ in range(40):
                 screen = tmux("capture-pane", "-p")
-                if "GITKRAIKEN" in screen and "feature/workspace" in screen:
+                if "RHIZOME" in screen and "feature/workspace" in screen:
                     break
                 time.sleep(0.1)
             else:

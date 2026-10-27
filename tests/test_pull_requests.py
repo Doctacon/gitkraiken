@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from gitkraiken.pull_requests import (
+from rhizome.pull_requests import (
     HostedRepository,
     PullRequestError,
     create_pull_request,

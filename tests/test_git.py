@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from gitkraiken.git import GitError, Repository, _git_environment
-from gitkraiken.models import Action
+from rhizome.git import GitError, Repository, _git_environment
+from rhizome.models import Action
 
 
 def commit_file(git_run, root: Path, path: str, text: str, message: str) -> str:
@@ -303,7 +303,7 @@ def test_large_text_diff_is_bounded_without_binary_patch(git_repo: Path, git_run
     path.write_text("new line\n" * 300_000)
 
     patch = Repository(git_repo).diff("large.txt")
-    assert "[diff truncated by GitKraiken]" in patch
+    assert "[diff truncated by Rhizome]" in patch
     assert len(patch.encode("utf-8", "surrogateescape")) < 2_100_000
     assert "GIT binary patch" not in patch
 

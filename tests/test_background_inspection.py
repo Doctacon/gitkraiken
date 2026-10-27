@@ -6,9 +6,9 @@ import pytest
 from test_app import settle
 from textual.widgets import Static
 
-from gitkraiken.app import GitKraikenApp
-from gitkraiken.commit_files import CommitFileTree
-from gitkraiken.dialogs import ActionPicker
+from rhizome.app import RhizomeApp
+from rhizome.commit_files import CommitFileTree
+from rhizome.dialogs import ActionPicker
 
 
 @pytest.mark.parametrize("read_kind", ["detail", "diff"])
@@ -18,7 +18,7 @@ async def test_inspection_finishes_without_disturbing_open_actions(
     (git_repo / "note.txt").write_text("committed content\n")
     git_run(git_repo, "add", ".")
     git_run(git_repo, "commit", "-m", "Base file")
-    app = GitKraikenApp(git_repo)
+    app = RhizomeApp(git_repo)
     async with app.run_test(size=(150, 45)) as pilot:
         await settle(app, pilot)
         workspace = app.screen_stack[0]

@@ -40,7 +40,7 @@ def workspace_id(root: Path) -> str:
 
 def app_command(root: Path) -> str:
     # tmux's command argument is shell source; quote every dynamic token.
-    return "exec " + shlex.join([sys.executable, "-m", "gitkraiken", str(root.resolve())])
+    return "exec " + shlex.join([sys.executable, "-m", "rhizome", str(root.resolve())])
 
 
 def _tmux_quote(command: str) -> str:
@@ -57,11 +57,11 @@ def config() -> str:
         raise TmuxError("The Python installation path contains unsupported control characters.")
     # One tmux format expansion happens when run-shell executes. Escape literal
     # hashes in an installation path, then quote for its shell and tmux's parser.
-    command = shlex.join([sys.executable.replace("#", "##"), "-m", "gitkraiken.tmux"])
+    command = shlex.join([sys.executable.replace("#", "##"), "-m", "rhizome.tmux"])
     command += " --socket #{q:socket_path} --client #{q:client_name} --pane #{q:pane_id}"
     quoted = _tmux_quote(command)
     return (
-        "# GitKraiken: prefix + g toggles this pane's repo in place; other panes stay visible.\n"
+        "# Rhizome: prefix + g toggles this pane's repo in place; other panes stay visible.\n"
         "# Generated for this machine. Regenerate after moving/reinstalling the Python environment.\n"
         f"bind-key -T prefix g run-shell -b {quoted}\n"
     )
@@ -76,7 +76,7 @@ def hotkey(*, socket: str, client: str, pane: str) -> None:
         "-p",
         "-t",
         pane,
-        "#{@gitkraiken_popup}\t#{@gitkraiken_origin}",
+        "#{@rhizome_popup}\t#{@rhizome_origin}",
         socket=socket,
     ).stdout.removesuffix("\n")
     popup, _, origin = markers.partition("\t")
@@ -98,7 +98,7 @@ def hotkey(*, socket: str, client: str, pane: str) -> None:
 @contextmanager
 def _pane_lock(origin: str, *, socket: str) -> Iterator[None]:
     """Serialize startup, toggles and exit restoration for one originating pane."""
-    channel = f"gitkraiken-pane-{origin}"
+    channel = f"rhizome-pane-{origin}"
     _run("wait-for", "-L", channel, socket=socket)
     try:
         yield
@@ -140,9 +140,9 @@ def launch_pane(root: Path, *, pane: str, socket: str) -> None:
     session; neither the user's shell nor any neighboring pane is respawned.
     """
     root = root.resolve()
-    session = f"gitkraiken-pane-{pane.removeprefix('%')}-{workspace_id(root)}"
+    session = f"rhizome-pane-{pane.removeprefix('%')}-{workspace_id(root)}"
     with _pane_lock(pane, socket=socket):
-        app = _pane_value(f"={session}:", "#{@gitkraiken_app}", socket=socket, check=False)
+        app = _pane_value(f"={session}:", "#{@rhizome_app}", socket=socket, check=False)
         reused = bool(app)
         if not app:
             size = _pane_value(pane, "#{pane_width}\t#{pane_height}", socket=socket)
@@ -170,9 +170,9 @@ def launch_pane(root: Path, *, pane: str, socket: str) -> None:
             try:
                 _run("set-option", "-t", parking, "destroy-unattached", "off", socket=socket)
                 _run("set-option", "-t", parking, "status", "off", socket=socket)
-                _run("set-option", "-t", parking, "@gitkraiken_app", app, socket=socket)
-                _run("set-option", "-p", "-t", app, "@gitkraiken_origin", pane, socket=socket)
-                _run("set-option", "-p", "-t", app, "@gitkraiken_parking", parking, socket=socket)
+                _run("set-option", "-t", parking, "@rhizome_app", app, socket=socket)
+                _run("set-option", "-p", "-t", app, "@rhizome_origin", pane, socket=socket)
+                _run("set-option", "-p", "-t", app, "@rhizome_parking", parking, socket=socket)
                 _run("set-option", "-p", "-t", app, "remain-on-exit", "on", socket=socket)
                 restore = shlex.join(
                     [
@@ -180,7 +180,7 @@ def launch_pane(root: Path, *, pane: str, socket: str) -> None:
                         for token in [
                             sys.executable,
                             "-m",
-                            "gitkraiken.tmux",
+                            "rhizome.tmux",
                             "--socket",
                             socket,
                             "--pane",
@@ -221,11 +221,11 @@ def launch_pane(root: Path, *, pane: str, socket: str) -> None:
 
 def restore_pane(*, pane: str, socket: str) -> None:
     """Handle Ctrl+Q, startup failure or a killed app without losing the origin."""
-    origin = _pane_value(pane, "#{@gitkraiken_origin}", socket=socket, check=False)
+    origin = _pane_value(pane, "#{@rhizome_origin}", socket=socket, check=False)
     if not origin:
         return  # Another cleanup already removed the app pane.
     with _pane_lock(origin, socket=socket):
-        parking = _pane_value(pane, "#{@gitkraiken_parking}", socket=socket, check=False)
+        parking = _pane_value(pane, "#{@rhizome_parking}", socket=socket, check=False)
         current = _pane_value(pane, "#{session_id}", socket=socket, check=False)
         if not current or not parking:
             return
@@ -243,7 +243,7 @@ def restore_pane(*, pane: str, socket: str) -> None:
 
 def hotkey_main() -> None:
     """Internal entrypoint for generated run-shell bindings, not an interactive app."""
-    parser = argparse.ArgumentParser(description="GitKraiken tmux hotkey handler")
+    parser = argparse.ArgumentParser(description="Rhizome tmux hotkey handler")
     parser.add_argument("--socket", required=True)
     parser.add_argument("--client", default="")
     parser.add_argument("--pane", required=True)
@@ -265,7 +265,7 @@ def hotkey_main() -> None:
             *(["-c", args.client] if args.client else ["-t", args.pane]),
             "-d",
             "5000",
-            "GitKraiken: " + message.replace("#", "##"),
+            "Rhizome: " + message.replace("#", "##"),
             socket=args.socket,
             check=False,
         )
@@ -281,7 +281,7 @@ def launch(root: Path, *, popup: bool = False, client: str = "", socket: str = "
         raise TmuxError("tmux is not installed. Install tmux >= 3.2 or omit --tmux/--popup.")
     root = root.resolve()
     key = workspace_id(root)
-    session = f"gitkraiken-{key}"
+    session = f"rhizome-{key}"
     command = app_command(root)
     inside = bool(os.environ.get("TMUX")) or bool(client and socket)
 
@@ -297,7 +297,7 @@ def launch(root: Path, *, popup: bool = False, client: str = "", socket: str = "
         # Only our dedicated popup sessions carry this marker. The hotkey can
         # safely detach their client instead of recursively opening another popup.
         # set-option does not accept has-session's '=name' target syntax.
-        run("set-option", "-t", session, "@gitkraiken_popup", "1")
+        run("set-option", "-t", session, "@rhizome_popup", "1")
         if reused:
             _notify_focus(f"={session}:", socket=socket)
         popup_socket = socket or run("display-message", "-p", "#{socket_path}").stdout.strip()
@@ -331,7 +331,7 @@ def launch(root: Path, *, popup: bool = False, client: str = "", socket: str = "
                 "Could not open tmux popup. tmux >= 3.2 and an attached client are required."
             )
     elif inside:
-        windows = run("list-windows", "-F", "#{window_id}\t#{@gitkraiken_id}").stdout
+        windows = run("list-windows", "-F", "#{window_id}\t#{@rhizome_id}").stdout
         for line in windows.splitlines():
             window, _, marker = line.partition("\t")
             if marker == key:
@@ -349,7 +349,7 @@ def launch(root: Path, *, popup: bool = False, client: str = "", socket: str = "
             str(root),
             command,
         ).stdout.strip()
-        run("set-option", "-w", "-t", window, "@gitkraiken_id", key)
+        run("set-option", "-w", "-t", window, "@rhizome_id", key)
     else:
         result = subprocess.run(
             [*_tmux_args(socket), "new-session", "-A", "-s", session, "-c", str(root), command],

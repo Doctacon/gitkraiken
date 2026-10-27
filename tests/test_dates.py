@@ -1,6 +1,6 @@
 import pytest
 
-from gitkraiken.dates import format_commit_date
+from rhizome.dates import format_commit_date
 
 
 @pytest.mark.parametrize(

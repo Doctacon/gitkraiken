@@ -8,8 +8,8 @@ from unittest.mock import patch
 
 import pytest
 
-from gitkraiken.cli import main, parser
-from gitkraiken.tmux import (
+from rhizome.cli import main, parser
+from rhizome.tmux import (
     TmuxError,
     app_command,
     config,
@@ -39,7 +39,7 @@ def test_version(capsys):
     with pytest.raises(SystemExit) as error:
         main(["--version"])
     assert error.value.code == 0
-    assert "gitkraiken 0.1.0" in capsys.readouterr().out
+    assert "rhizome 0.1.0" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(
@@ -61,7 +61,7 @@ def test_cli_invalid_combinations(args):
 def test_tmux_command_quotes_shell_metacharacters(tmp_path):
     root = tmp_path / "a repo's $(touch NEVER) ; folder"
     words = shlex.split(app_command(root))
-    assert words == ["exec", sys.executable, "-m", "gitkraiken", str(root.resolve())]
+    assert words == ["exec", sys.executable, "-m", "rhizome", str(root.resolve())]
     assert len(workspace_id(root)) == 16
     assert workspace_id(root) == workspace_id(root / ".")
 
@@ -70,9 +70,9 @@ def test_existing_window_is_reused(tmp_path, monkeypatch):
     monkeypatch.setenv("TMUX", "/fake/socket,1,0")
     key = workspace_id(tmp_path)
     with (
-        patch("gitkraiken.tmux.shutil.which", return_value="/bin/tmux"),
+        patch("rhizome.tmux.shutil.which", return_value="/bin/tmux"),
         patch(
-            "gitkraiken.tmux._run",
+            "rhizome.tmux._run",
             side_effect=[result(f"@2\tother\n@4\t{key}\n"), result(), result()],
         ) as run,
     ):
@@ -88,10 +88,8 @@ def test_existing_window_is_reused(tmp_path, monkeypatch):
 def test_new_window_sets_only_its_marker(tmp_path, monkeypatch):
     monkeypatch.setenv("TMUX", "/fake/socket,1,0")
     with (
-        patch("gitkraiken.tmux.shutil.which", return_value="/bin/tmux"),
-        patch(
-            "gitkraiken.tmux._run", side_effect=[result("@2\t\n"), result("@7\n"), result()]
-        ) as run,
+        patch("rhizome.tmux.shutil.which", return_value="/bin/tmux"),
+        patch("rhizome.tmux._run", side_effect=[result("@2\t\n"), result("@7\n"), result()]) as run,
     ):
         launch(tmp_path)
     assert run.call_args_list[1].args[0] == "new-window"
@@ -100,7 +98,7 @@ def test_new_window_sets_only_its_marker(tmp_path, monkeypatch):
         "-w",
         "-t",
         "@7",
-        "@gitkraiken_id",
+        "@rhizome_id",
         workspace_id(tmp_path),
     )
     assert all("-g" not in call.args for call in run.call_args_list)
@@ -110,7 +108,7 @@ def test_new_window_sets_only_its_marker(tmp_path, monkeypatch):
 def test_popup_requires_tmux(monkeypatch, tmp_path):
     monkeypatch.delenv("TMUX", raising=False)
     with (
-        patch("gitkraiken.tmux.shutil.which", return_value="/bin/tmux"),
+        patch("rhizome.tmux.shutil.which", return_value="/bin/tmux"),
         pytest.raises(TmuxError, match="existing tmux client"),
     ):
         launch(tmp_path, popup=True)
@@ -118,7 +116,7 @@ def test_popup_requires_tmux(monkeypatch, tmp_path):
 
 def test_missing_tmux_message(tmp_path):
     with (
-        patch("gitkraiken.tmux.shutil.which", return_value=None),
+        patch("rhizome.tmux.shutil.which", return_value=None),
         pytest.raises(TmuxError, match="not installed"),
     ):
         launch(tmp_path)
@@ -127,18 +125,18 @@ def test_missing_tmux_message(tmp_path):
 def test_popup_reuses_session_and_unsets_tmux(tmp_path, monkeypatch):
     monkeypatch.setenv("TMUX", "/fake/socket,1,0")
     with (
-        patch("gitkraiken.tmux.shutil.which", return_value="/bin/tmux"),
+        patch("rhizome.tmux.shutil.which", return_value="/bin/tmux"),
         patch(
-            "gitkraiken.tmux._run",
+            "rhizome.tmux._run",
             side_effect=[result(), result(), result(), result("/tmp/alternate tmux/socket\n")],
         ) as run,
-        patch("gitkraiken.tmux.subprocess.run", return_value=result()) as foreground,
+        patch("rhizome.tmux.subprocess.run", return_value=result()) as foreground,
     ):
         launch(tmp_path, popup=True)
-    session = f"gitkraiken-{workspace_id(tmp_path)}"
+    session = f"rhizome-{workspace_id(tmp_path)}"
     assert [call.args for call in run.call_args_list] == [
         ("has-session", "-t", f"={session}"),
-        ("set-option", "-t", session, "@gitkraiken_popup", "1"),
+        ("set-option", "-t", session, "@rhizome_popup", "1"),
         ("send-keys", "-t", f"={session}:", "-H", "1b", "5b", "49"),
         ("display-message", "-p", "#{socket_path}"),
     ]
@@ -160,12 +158,12 @@ def test_popup_reuses_session_and_unsets_tmux(tmp_path, monkeypatch):
 def test_fresh_popup_does_not_signal_the_new_app(tmp_path, monkeypatch):
     monkeypatch.setenv("TMUX", "/fake/socket,1,0")
     with (
-        patch("gitkraiken.tmux.shutil.which", return_value="/bin/tmux"),
+        patch("rhizome.tmux.shutil.which", return_value="/bin/tmux"),
         patch(
-            "gitkraiken.tmux._run",
+            "rhizome.tmux._run",
             side_effect=[result(returncode=1), result(), result(), result("/tmp/socket\n")],
         ) as run,
-        patch("gitkraiken.tmux.subprocess.run", return_value=result()),
+        patch("rhizome.tmux.subprocess.run", return_value=result()),
     ):
         launch(tmp_path, popup=True)
     assert not any(call.args[0] == "send-keys" for call in run.call_args_list)
@@ -182,9 +180,9 @@ def test_popup_focus_notification_failure_does_not_report_open_failure(tmp_path,
         return result()
 
     with (
-        patch("gitkraiken.tmux.shutil.which", return_value="/bin/tmux"),
-        patch("gitkraiken.tmux._run", side_effect=fake_run),
-        patch("gitkraiken.tmux.subprocess.run", return_value=result()) as foreground,
+        patch("rhizome.tmux.shutil.which", return_value="/bin/tmux"),
+        patch("rhizome.tmux._run", side_effect=fake_run),
+        patch("rhizome.tmux.subprocess.run", return_value=result()) as foreground,
     ):
         launch(tmp_path, popup=True)
     foreground.assert_called_once()
@@ -192,12 +190,12 @@ def test_popup_focus_notification_failure_does_not_report_open_failure(tmp_path,
 
 def test_config_is_printed_without_repository_or_config_mutation(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
-    with patch("gitkraiken.git.Repository", side_effect=AssertionError("should not open repo")):
+    with patch("rhizome.git.Repository", side_effect=AssertionError("should not open repo")):
         main(["--tmux-config"])
     output = capsys.readouterr().out
     assert "bind-key -T prefix g run-shell -b" in output
     assert sys.executable in output
-    assert "gitkraiken.tmux" in output
+    assert "rhizome.tmux" in output
     assert "#{q:pane_id}" in output
     assert "#{q:client_name}" in output
     assert "#{q:socket_path}" in output
@@ -219,13 +217,13 @@ def test_config_quotes_tmux_parser_and_literal_hashes(monkeypatch):
 def test_popup_can_target_explicit_client_without_inherited_tmux(tmp_path, monkeypatch):
     monkeypatch.delenv("TMUX", raising=False)
     with (
-        patch("gitkraiken.tmux.shutil.which", return_value="/bin/tmux"),
-        patch("gitkraiken.tmux._run", return_value=result()) as run,
-        patch("gitkraiken.tmux.subprocess.run", return_value=result()) as foreground,
+        patch("rhizome.tmux.shutil.which", return_value="/bin/tmux"),
+        patch("rhizome.tmux._run", return_value=result()) as run,
+        patch("rhizome.tmux.subprocess.run", return_value=result()) as foreground,
     ):
         launch(tmp_path, popup=True, socket="/tmp/server", client="/dev/pts/42")
     assert all(call.kwargs["socket"] == "/tmp/server" for call in run.call_args_list)
-    session = f"gitkraiken-{workspace_id(tmp_path)}"
+    session = f"rhizome-{workspace_id(tmp_path)}"
     assert ("send-keys", "-t", f"={session}:", "-H", "1b", "5b", "49") in [
         call.args for call in run.call_args_list
     ]
@@ -238,8 +236,8 @@ def test_hotkey_uses_exact_pane_directory_and_client(tmp_path):
     root.mkdir()
     subprocess.run(["git", "init", "-b", "main", str(root)], check=True, capture_output=True)
     with (
-        patch("gitkraiken.tmux._run", side_effect=[result("\n"), result(str(root) + "\n")]) as run,
-        patch("gitkraiken.tmux.launch_pane") as show,
+        patch("rhizome.tmux._run", side_effect=[result("\n"), result(str(root) + "\n")]) as run,
+        patch("rhizome.tmux.launch_pane") as show,
     ):
         hotkey(socket="/tmp/socket", client="/dev/pts/42", pane="%7")
     assert run.call_args_list[1].args == (
@@ -254,8 +252,8 @@ def test_hotkey_uses_exact_pane_directory_and_client(tmp_path):
 
 def test_hotkey_inside_popup_detaches_without_opening_another():
     with (
-        patch("gitkraiken.tmux._run", side_effect=[result("1\n"), result()]) as run,
-        patch("gitkraiken.tmux.launch") as show,
+        patch("rhizome.tmux._run", side_effect=[result("1\n"), result()]) as run,
+        patch("rhizome.tmux.launch") as show,
     ):
         hotkey(socket="/tmp/socket", client="/dev/pts/42", pane="%7")
     show.assert_not_called()
@@ -265,23 +263,23 @@ def test_hotkey_inside_popup_detaches_without_opening_another():
 def test_hotkey_inside_pane_restores_origin_without_touching_processes():
     with (
         patch(
-            "gitkraiken.tmux._run", side_effect=[result("\t%7\n"), result(), result(), result()]
+            "rhizome.tmux._run", side_effect=[result("\t%7\n"), result(), result(), result()]
         ) as run,
-        patch("gitkraiken.tmux.launch_pane") as show,
+        patch("rhizome.tmux.launch_pane") as show,
     ):
         hotkey(socket="/tmp/socket", client="/dev/pts/42", pane="%9")
     show.assert_not_called()
     assert [call.args for call in run.call_args_list[1:]] == [
-        ("wait-for", "-L", "gitkraiken-pane-%7"),
+        ("wait-for", "-L", "rhizome-pane-%7"),
         ("swap-pane", "-d", "-Z", "-s", "%7", "-t", "%9"),
-        ("wait-for", "-U", "gitkraiken-pane-%7"),
+        ("wait-for", "-U", "rhizome-pane-%7"),
     ]
     assert all(call.kwargs["socket"] == "/tmp/socket" for call in run.call_args_list)
 
 
 def test_pane_launch_reuses_parked_app(tmp_path):
     with patch(
-        "gitkraiken.tmux._run",
+        "rhizome.tmux._run",
         side_effect=[result(), result("%9\n"), result(), result(), result()],
     ) as run:
         launch_pane(tmp_path, pane="%7", socket="/tmp/socket")
@@ -290,15 +288,15 @@ def test_pane_launch_reuses_parked_app(tmp_path):
         "display-message",
         "-p",
         "-t",
-        f"=gitkraiken-pane-7-{workspace_id(tmp_path)}:",
-        "#{@gitkraiken_app}",
+        f"=rhizome-pane-7-{workspace_id(tmp_path)}:",
+        "#{@rhizome_app}",
     )
     assert commands[2:4] == [
         ("swap-pane", "-d", "-Z", "-s", "%9", "-t", "%7"),
         ("send-keys", "-t", "%9", "-H", "1b", "5b", "49"),
     ]
     assert run.call_args_list[3].kwargs == {"socket": "/tmp/socket", "check": False}
-    assert commands[4] == ("wait-for", "-U", "gitkraiken-pane-%7")
+    assert commands[4] == ("wait-for", "-U", "rhizome-pane-%7")
     assert not any(
         command[0] in {"new-session", "respawn-pane", "display-popup"} for command in commands
     )
@@ -312,9 +310,9 @@ def test_pane_focus_notification_failure_still_unlocks(tmp_path):
             raise TmuxError("notification failed")
         return result()
 
-    with patch("gitkraiken.tmux._run", side_effect=fake_run) as run:
+    with patch("rhizome.tmux._run", side_effect=fake_run) as run:
         launch_pane(tmp_path, pane="%7", socket="/tmp/socket")
-    assert run.call_args_list[-1].args == ("wait-for", "-U", "gitkraiken-pane-%7")
+    assert run.call_args_list[-1].args == ("wait-for", "-U", "rhizome-pane-%7")
 
 
 def test_new_pane_is_guarded_before_start_and_swap(tmp_path):
@@ -325,11 +323,11 @@ def test_new_pane_is_guarded_before_start_and_swap(tmp_path):
             return result("80\t24\n")
         return result()
 
-    with patch("gitkraiken.tmux._run", side_effect=fake_run) as run:
+    with patch("rhizome.tmux._run", side_effect=fake_run) as run:
         launch_pane(tmp_path, pane="%7", socket="/tmp/socket")
     commands = [call.args for call in run.call_args_list]
-    assert ("set-option", "-p", "-t", "%9", "@gitkraiken_origin", "%7") in commands
-    assert ("set-option", "-p", "-t", "%9", "@gitkraiken_parking", "$2") in commands
+    assert ("set-option", "-p", "-t", "%9", "@rhizome_origin", "%7") in commands
+    assert ("set-option", "-p", "-t", "%9", "@rhizome_parking", "$2") in commands
     guard = commands.index(("set-option", "-p", "-t", "%9", "remain-on-exit", "on"))
     hook = next(i for i, command in enumerate(commands) if command[0] == "set-hook")
     spawn = next(i for i, command in enumerate(commands) if command[0] == "respawn-pane")
@@ -354,7 +352,7 @@ def test_pane_setup_failure_never_kills_the_origin(tmp_path, failure):
             raise TmuxError("failed")
         return result()
 
-    with patch("gitkraiken.tmux._run", side_effect=fake_run) as run:
+    with patch("rhizome.tmux._run", side_effect=fake_run) as run:
         with pytest.raises(TmuxError, match="failed"):
             launch_pane(tmp_path, pane="%7", socket="/tmp/socket")
     commands = [call.args for call in run.call_args_list]
@@ -362,7 +360,7 @@ def test_pane_setup_failure_never_kills_the_origin(tmp_path, failure):
     # If a swap timed out, it may already have completed. Leave both processes
     # intact instead of removing the app slot with the user's origin still parked.
     assert kills == ([("kill-pane", "-t", "%9")] if failure == "respawn-pane" else [])
-    assert commands[-1] == ("wait-for", "-U", "gitkraiken-pane-%7")
+    assert commands[-1] == ("wait-for", "-U", "rhizome-pane-%7")
 
 
 @pytest.mark.parametrize(
@@ -375,15 +373,15 @@ def test_exit_restores_only_a_parked_origin(app_session, origin_session, swap):
             return result()
         target, field = args[3:]
         values = {
-            ("%9", "#{@gitkraiken_origin}"): "%7",
-            ("%9", "#{@gitkraiken_parking}"): "$2",
+            ("%9", "#{@rhizome_origin}"): "%7",
+            ("%9", "#{@rhizome_parking}"): "$2",
             ("%9", "#{session_id}"): app_session,
             ("%9", "#{pane_dead}"): "1",
             ("%7", "#{session_id}"): origin_session,
         }
         return result(values[target, field] + "\n")
 
-    with patch("gitkraiken.tmux._run", side_effect=fake_run) as run:
+    with patch("rhizome.tmux._run", side_effect=fake_run) as run:
         restore_pane(pane="%9", socket="/tmp/socket")
     commands = [call.args for call in run.call_args_list]
     swaps = [command for command in commands if command[0] == "swap-pane"]
@@ -392,22 +390,22 @@ def test_exit_restores_only_a_parked_origin(app_session, origin_session, swap):
         ("kill-pane", "-t", "%9"),
     ]
     assert not any(command[0] == "send-keys" for command in commands)
-    assert commands[-1] == ("wait-for", "-U", "gitkraiken-pane-%7")
+    assert commands[-1] == ("wait-for", "-U", "rhizome-pane-%7")
 
 
 def test_delayed_exit_hook_does_not_kill_a_respawned_live_pane():
     with patch(
-        "gitkraiken.tmux._run",
+        "rhizome.tmux._run",
         side_effect=[result("%7"), result(), result("$2"), result("$0"), result("0"), result()],
     ) as run:
         restore_pane(pane="%9", socket="/tmp/socket")
     commands = [call.args for call in run.call_args_list]
     assert not any(command[0] in {"kill-pane", "swap-pane"} for command in commands)
-    assert commands[-1] == ("wait-for", "-U", "gitkraiken-pane-%7")
+    assert commands[-1] == ("wait-for", "-U", "rhizome-pane-%7")
 
 
 def test_duplicate_exit_cleanup_is_noop():
-    with patch("gitkraiken.tmux._run", return_value=result()) as run:
+    with patch("rhizome.tmux._run", return_value=result()) as run:
         restore_pane(pane="%9", socket="/tmp/socket")
     assert run.call_count == 1
 
@@ -418,13 +416,13 @@ def test_exit_hook_entrypoint_does_not_require_a_client(monkeypatch):
         "argv",
         ["hotkey", "--socket", "/tmp/socket", "--pane", "%9", "--restore"],
     )
-    with patch("gitkraiken.tmux.restore_pane") as restore:
+    with patch("rhizome.tmux.restore_pane") as restore:
         hotkey_main()
     restore.assert_called_once_with(pane="%9", socket="/tmp/socket")
 
 
 def test_hotkey_errors_are_shown_on_originating_client(monkeypatch):
-    from gitkraiken.git import GitError
+    from rhizome.git import GitError
 
     monkeypatch.setattr(
         sys,
@@ -432,8 +430,8 @@ def test_hotkey_errors_are_shown_on_originating_client(monkeypatch):
         ["hotkey", "--socket", "/tmp/server", "--client", "/dev/pts/42", "--pane", "%7"],
     )
     with (
-        patch("gitkraiken.tmux.hotkey", side_effect=GitError("Not a repository: #{client_name}")),
-        patch("gitkraiken.tmux._run", return_value=result()) as run,
+        patch("rhizome.tmux.hotkey", side_effect=GitError("Not a repository: #{client_name}")),
+        patch("rhizome.tmux._run", return_value=result()) as run,
     ):
         hotkey_main()
     assert run.call_args.args[:5] == ("display-message", "-c", "/dev/pts/42", "-d", "5000")
@@ -442,7 +440,7 @@ def test_hotkey_errors_are_shown_on_originating_client(monkeypatch):
 
 
 def test_demo_uses_only_local_upstream_and_has_real_history(tmp_path):
-    from gitkraiken.demo import create_demo
+    from rhizome.demo import create_demo
 
     root = create_demo(tmp_path / "demo")
 

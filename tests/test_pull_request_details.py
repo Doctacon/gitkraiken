@@ -4,9 +4,9 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import Button, Link, Static
 
-from gitkraiken.clipboard import CopyResult
-from gitkraiken.pull_request_dialog import PullRequestDetailsDialog
-from gitkraiken.pull_requests import PullRequest
+from rhizome.clipboard import CopyResult
+from rhizome.pull_request_dialog import PullRequestDetailsDialog
+from rhizome.pull_requests import PullRequest
 
 
 class DetailsApp(App):
@@ -64,7 +64,7 @@ async def test_details_copy_blocks_duplicates_but_allows_close(monkeypatch):
         await release.wait()
         return CopyResult.SYSTEM
 
-    monkeypatch.setattr("gitkraiken.pull_request_dialog.copy_text", copy)
+    monkeypatch.setattr("rhizome.pull_request_dialog.copy_text", copy)
     app = DetailsApp()
     async with app.run_test(size=(100, 40)) as pilot:
         dialog = PullRequestDetailsDialog(request())

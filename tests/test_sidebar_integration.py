@@ -9,12 +9,12 @@ from test_sidebar import hit_point
 from textual.widgets import Input, Static, TextArea
 from ui_helpers import click
 
-from gitkraiken.app import GitKraikenApp
-from gitkraiken.dialogs import ActionPicker, PromptDialog
-from gitkraiken.git import Repository
-from gitkraiken.pull_request_dialog import PullRequestDetailsDialog
-from gitkraiken.pull_requests import PullRequest, PullRequestListing, hosted_repository
-from gitkraiken.sidebar import ReferenceSidebar
+from rhizome.app import RhizomeApp
+from rhizome.dialogs import ActionPicker, PromptDialog
+from rhizome.git import Repository
+from rhizome.pull_request_dialog import PullRequestDetailsDialog
+from rhizome.pull_requests import PullRequest, PullRequestListing, hosted_repository
+from rhizome.sidebar import ReferenceSidebar
 
 
 @pytest.fixture
@@ -54,7 +54,7 @@ async def test_open_linked_worktree_without_modifying_either_checkout(
     linked = tmp_path / directory
     git_run(workspace, "worktree", "add", "-b", "feature/linked", str(linked))
     (workspace / "local.txt").write_text("keep these untracked changes\n")
-    app = GitKraikenApp(workspace)
+    app = RhizomeApp(workspace)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         sidebar = app.query_one(ReferenceSidebar)
@@ -72,7 +72,7 @@ async def test_open_linked_worktree_without_modifying_either_checkout(
 
 
 async def test_open_current_worktree_keeps_commit_draft(workspace):
-    app = GitKraikenApp(workspace)
+    app = RhizomeApp(workspace)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         sidebar = app.query_one(ReferenceSidebar)
@@ -89,7 +89,7 @@ async def test_open_current_worktree_keeps_commit_draft(workspace):
 async def test_removed_worktree_cannot_open_an_obsolete_path(workspace, git_run, tmp_path):
     linked = tmp_path / "linked"
     git_run(workspace, "worktree", "add", "--detach", str(linked))
-    app = GitKraikenApp(workspace)
+    app = RhizomeApp(workspace)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         sidebar = app.query_one(ReferenceSidebar)
@@ -103,7 +103,7 @@ async def test_removed_worktree_cannot_open_an_obsolete_path(workspace, git_run,
 
 async def test_create_worktree_from_sidebar_uses_guarded_head_flow(workspace, git_run, tmp_path):
     destination = tmp_path / "new tree"
-    app = GitKraikenApp(workspace)
+    app = RhizomeApp(workspace)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         assert await pilot.click("#sidebar-worktree-new")
@@ -135,7 +135,7 @@ async def test_pull_requests_load_automatically_and_open_read_only_details(
         return (listing(),)
 
     monkeypatch.setattr(Repository, "open_pull_requests", load)
-    app = GitKraikenApp(workspace)
+    app = RhizomeApp(workspace)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         app.poll_repository()
@@ -186,7 +186,7 @@ async def test_pr_loading_rejects_duplicates_and_survives_help_modal(
         return (listing(),)
 
     monkeypatch.setattr(Repository, "open_pull_requests", load)
-    app = GitKraikenApp(workspace)
+    app = RhizomeApp(workspace)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         sidebar = app.query_one(ReferenceSidebar)
@@ -216,7 +216,7 @@ async def test_changed_remote_during_listing_discards_old_results(workspace, git
         return (listing(),)
 
     monkeypatch.setattr(Repository, "open_pull_requests", load)
-    app = GitKraikenApp(workspace)
+    app = RhizomeApp(workspace)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         sidebar = app.query_one(ReferenceSidebar)
@@ -241,7 +241,7 @@ async def test_repository_switch_clears_prs_and_rejects_old_sidebar_requests(
         return (listing(),) if repo.root == workspace else ()
 
     monkeypatch.setattr(Repository, "open_pull_requests", load)
-    app = GitKraikenApp(workspace)
+    app = RhizomeApp(workspace)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         sidebar = app.query_one(ReferenceSidebar)
@@ -268,7 +268,7 @@ async def test_failed_pr_read_leaves_local_navigation_usable(workspace, monkeypa
         raise RuntimeError("A safe listing failure")
 
     monkeypatch.setattr(Repository, "open_pull_requests", load)
-    app = GitKraikenApp(workspace)
+    app = RhizomeApp(workspace)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         sidebar = app.query_one(ReferenceSidebar)

@@ -7,9 +7,9 @@ from rich.color import Color
 from rich.console import Console
 from rich.text import Text
 
-from gitkraiken.graph import GraphRow, render_history
-from gitkraiken.models import Commit, HistoryLine
-from gitkraiken.theme import GRAPH_PALETTE
+from rhizome.graph import GraphRow, render_history
+from rhizome.models import Commit, HistoryLine
+from rhizome.theme import GRAPH_PALETTE
 
 
 def commit(oid: str, *parents: str) -> Commit:

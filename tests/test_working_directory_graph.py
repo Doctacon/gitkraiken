@@ -4,8 +4,8 @@ import pytest
 from test_app import click_reference, settle
 from textual.widgets import DataTable, TabbedContent
 
-from gitkraiken.app import GitKraikenApp
-from gitkraiken.commit_files import CommitFileTree
+from rhizome.app import RhizomeApp
+from rhizome.commit_files import CommitFileTree
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ def clean_branch(git_repo, git_run):
 async def test_clean_checkout_has_no_wip_node(clean_branch, git_run, style, detached):
     if detached:
         git_run(clean_branch, "checkout", "--detach")
-    app = GitKraikenApp(clean_branch)
+    app = RhizomeApp(clean_branch)
     app.graph_style = style
     async with app.run_test(size=(170, 45)) as pilot:
         await settle(app, pilot)
@@ -43,7 +43,7 @@ async def test_clean_checkout_has_no_wip_node(clean_branch, git_run, style, deta
 
 @pytest.mark.parametrize("kind", ["unstaged", "staged", "untracked", "deleted"])
 async def test_wip_node_tracks_changes_and_returns_to_head(clean_branch, git_run, kind):
-    app = GitKraikenApp(clean_branch)
+    app = RhizomeApp(clean_branch)
     async with app.run_test(size=(170, 45)) as pilot:
         await settle(app, pilot)
         table = app.query_one("#graph-table", DataTable)
@@ -97,7 +97,7 @@ async def test_clean_checkout_selects_head_not_newer_other_branch(clean_branch, 
     )
     other = git_run(clean_branch, "rev-parse", "HEAD").stdout.strip()
     git_run(clean_branch, "switch", "test")
-    app = GitKraikenApp(clean_branch)
+    app = RhizomeApp(clean_branch)
     app.limit = limit
     async with app.run_test(size=(170, 45)) as pilot:
         await settle(app, pilot)
@@ -122,7 +122,7 @@ async def test_clean_checkout_selects_head_not_newer_other_branch(clean_branch, 
 
 
 async def test_clean_working_directory_accessible_from_sidebar(clean_branch):
-    app = GitKraikenApp(clean_branch)
+    app = RhizomeApp(clean_branch)
     async with app.run_test(size=(170, 45)) as pilot:
         await settle(app, pilot)
         await click_reference(app, pilot, "worktree")
@@ -145,7 +145,7 @@ async def test_open_clean_repository_selects_head(clean_branch, git_run, tmp_pat
     other.mkdir()
     git_run(other, "init", "-b", "main")
     (other / "pending.txt").write_text("untracked change\n")
-    app = GitKraikenApp(other)
+    app = RhizomeApp(other)
     async with app.run_test(size=(170, 45)) as pilot:
         await settle(app, pilot)
         assert app._history_key == "wip"
@@ -159,7 +159,7 @@ async def test_open_clean_repository_selects_head(clean_branch, git_run, tmp_pat
 
 
 async def test_empty_repository_has_no_wip_until_a_file_exists(git_repo):
-    app = GitKraikenApp(git_repo)
+    app = RhizomeApp(git_repo)
     async with app.run_test(size=(170, 45)) as pilot:
         await settle(app, pilot)
         table = app.query_one("#graph-table", DataTable)
