@@ -22,7 +22,12 @@ def assert_workspace_fits(app) -> None:
     assert history.region.width >= 34
     assert workspace.region.x <= history.region.x
     assert history.region.right <= workspace.region.right
-    assert app.query_one("#graph-table", DataTable).row_count >= 1
+    assert app.query_one("#graph-table", DataTable).row_count == len(app._graph_rows) + bool(
+        app.snapshot_data.files
+    )
+    inspector = app.query_one("#inspector-panel")
+    if inspector.display:
+        assert inspector.region.right <= workspace.region.right
     for button in app.query("#toolbar Button"):
         assert button.region.right <= workspace.region.right
 

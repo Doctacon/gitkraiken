@@ -170,14 +170,17 @@ hosted PR browsing/creation uses authenticated GitHub/Azure CLIs; see [pull requ
 
 ## Main screen
 
-GitKraken-inspired, original terminal implementation: dark blue/charcoal palette,
+GitKraken-inspired, original terminal implementation: high-contrast light palette,
 teal active branch, colored graph lanes, compact toolbar, left refs tree, center
 scrollable graph, right selected commit details / staging. One sidebar tree has
 independent collapsible sections: Repository, Local, Remotes, Worktrees, PRs, Tags,
 Stashes. Folding and searching never change graph scope. Worktrees show paths and
 status, with Open/New actions. Expanding PRs never contacts providers; PRs load
 only on explicit request and expose a detail modal
-with browser/copy actions. Center: WIP, Smooth/Compact graph, badges, subjects and SHA;
+with browser/copy actions. Center: Smooth/Compact graph, badges, subjects and SHA;
+WIP appears only when the working directory/index has changes. Clean checkouts
+select HEAD (or a loaded commit if HEAD is outside the history limit), not a
+synthetic node; empty repositories keep the working-directory controls available.
 filter/search, load-more. Smooth is the default; `g`, the visible graph-style button,
 and Actions switch styles without losing selection or search. Cache graph layout
 across resize/search; preserve lane colors under selection. Multiline Smooth rows
@@ -196,9 +199,14 @@ not trigger filtering or automatic loading; Load more may reveal them, within th
 5,000-commit cap. New pointers at an existing OID do not invent a graph divergence.
 The inspector shows a commit title and compact local-time metadata, not the commit
 body or multiline stat; that space belongs to the collapsible changed-file tree.
+Explicit file activation replaces the center graph with the file diff, never the
+right inspector. Back to graph / Escape restores the mounted graph and its state.
+The working-directory tab keeps staged/unstaged files, staging controls, and the
+commit composer on the right; its files use the same center diff view. Selecting
+a commit or entering a tab does not automatically open a file. Local refreshes
+preserve the active view and inspector tab while updating the chosen diff.
 Hover tooltip popups are globally hidden, including in modal menus; normal mouse
-highlighting and explicit clicks remain active. Worktree has staged/unstaged files,
-diff and commit composer. Include context actions for commits/refs/stashes, quick
+highlighting and explicit clicks remain active. Include context actions for commits/refs/stashes, quick
 command picker, shortcuts/help, visible pending-operation and conflict controls.
 Below 85 columns automatically hide the inspector; Ctrl+Right swaps it into the
 side-panel slot and Ctrl+Left returns to refs, keeping history visible. Automatic

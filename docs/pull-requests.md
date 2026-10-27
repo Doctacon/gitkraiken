@@ -34,7 +34,7 @@ error rather than silently presenting a partial list.
    policies, and other provider-specific fields. Copy uses the system clipboard
    when available; local copying does not require terminal OSC 52 support. If the
    app falls back to a terminal copy request, paste to verify or open the link and
-   copy it from your browser's address bar. See [clipboard support](../README.md#clipboard-support).
+   copy it from your browser's address bar. See [clipboard support](usage.md#clipboard-support).
    Close returns to the workspace.
 
 The checked-out branch is the source; the right-clicked branch is the target.

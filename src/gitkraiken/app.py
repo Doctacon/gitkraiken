@@ -189,6 +189,9 @@ class GitKraikenApp(App[None]):
         self._file_rows: dict[str, tuple[FileChange, bool]] = {}
         self._selected_commit: Commit | None = None
         self._selected_file: tuple[FileChange, bool] | None = None
+        # The graph remains mounted underneath this temporary center workspace.
+        # A diff exists only after an explicit file activation.
+        self._active_diff: tuple[FileChange, bool, str] | None = None
         self._sidebar_selection: SidebarSelection | None = None
         self._reveal_ref_key: str | None = None
         self._ref_badges: dict[str, RefBadges] = {}
@@ -236,26 +239,35 @@ class GitKraikenApp(App[None]):
                 "#refs-panel", "#history-panel", minimum=15, flexible_minimum=34, id="refs-splitter"
             )
             with Vertical(id="history-panel"):
-                yield Static("COMMIT GRAPH", id="history-heading")
-                with Horizontal(id="search-bar"):
-                    yield Input(
-                        placeholder="Search commits, authors, refs or SHA…", id="graph-filter"
+                # Keep this mounted while a diff is open so graph position, widths,
+                # style, search, and selected commit survive the temporary view.
+                with Vertical(id="graph-workspace"):
+                    yield Static("COMMIT GRAPH", id="history-heading")
+                    with Horizontal(id="search-bar"):
+                        yield Input(
+                            placeholder="Search commits, authors, refs or SHA…", id="graph-filter"
+                        )
+                        yield Button("Next", id="search-next", classes="tool")
+                        yield Button(
+                            Text("Smooth [g]"),
+                            id="graph-style",
+                            tooltip="Switch Smooth / Compact graph (g). Smooth uses rounded bends; "
+                            "broken horizontal lines pass behind vertical lanes without joining them.",
+                        )
+                    yield Static("Unified history · local + remote branches", id="history-caption")
+                    yield HistoryTable(
+                        id="graph-table",
+                        cursor_type="row",
+                        zebra_stripes=False,
+                        cursor_foreground_priority="renderable",
                     )
-                    yield Button("Next", id="search-next", classes="tool")
-                    yield Button(
-                        Text("Smooth [g]"),
-                        id="graph-style",
-                        tooltip="Switch Smooth / Compact graph (g). Smooth uses rounded bends; "
-                        "broken horizontal lines pass behind vertical lanes without joining them.",
-                    )
-                yield Static("Unified history · local + remote branches", id="history-caption")
-                yield HistoryTable(
-                    id="graph-table",
-                    cursor_type="row",
-                    zebra_stripes=False,
-                    cursor_foreground_priority="renderable",
-                )
-                yield Button("Load 300 more commits", id="load-more")
+                    yield Button("Load 300 more commits", id="load-more")
+                with Vertical(id="diff-workspace"):
+                    with Horizontal(id="diff-toolbar"):
+                        yield Button("← Back to graph", id="back-to-graph")
+                        yield Static(id="center-diff-title")
+                    with VerticalScroll(id="center-diff-scroll"):
+                        yield Static("", id="center-diff")
             yield PaneSplitter(
                 "#inspector-panel",
                 "#history-panel",
@@ -268,20 +280,8 @@ class GitKraikenApp(App[None]):
                 with TabbedContent(id="inspector-tabs"):
                     with TabPane("Commit", id="details-tab"):
                         yield Static("Select a commit to inspect its changes.", id="commit-detail")
-                        with PaneGroup(id="commit-changes"):
+                        with Vertical(id="commit-changes"):
                             yield CommitFileTree(id="commit-file-tree")
-                            yield PaneSplitter(
-                                "#commit-file-tree",
-                                "#commit-diff-scroll",
-                                axis="height",
-                                minimum=5,
-                                flexible_minimum=5,
-                                id="commit-files-splitter",
-                            )
-                            with VerticalScroll(id="commit-diff-scroll"):
-                                yield Static(
-                                    "Select a changed file to read its diff.", id="commit-diff"
-                                )
                     with TabPane("Working directory", id="wip-tab"):
                         with Horizontal(classes="wip-actions"):
                             yield Button("Stage", id="stage")
@@ -290,22 +290,9 @@ class GitKraikenApp(App[None]):
                         with Horizontal(classes="wip-actions"):
                             yield Button("Stage all", id="stage-all")
                             yield Button("Unstage all", id="unstage-all")
-                        with PaneGroup(id="wip-changes"):
+                        with Vertical(id="wip-changes"):
                             yield ResizableDataTable(id="wip-table", cursor_type="row")
-                            yield PaneSplitter(
-                                "#wip-table",
-                                "#wip-preview",
-                                axis="height",
-                                minimum=3,
-                                flexible_minimum=6,
-                                id="wip-files-splitter",
-                            )
-                            with Vertical(id="wip-preview"):
-                                yield Static(
-                                    "Select a file to inspect its changes", id="diff-title"
-                                )
-                                with VerticalScroll(id="diff-scroll"):
-                                    yield Static("Working directory is clean.", id="diff-view")
+                            yield Static("Working directory is clean.", id="wip-empty")
                         yield Label("COMMIT MESSAGE", classes="composer-label")
                         yield TextArea(id="commit-message", theme="github_light")
                         yield Button("Commit staged changes", id="commit", variant="primary")
@@ -318,6 +305,7 @@ class GitKraikenApp(App[None]):
     def on_mount(self) -> None:
         self.query_one("#operation-banner").display = False
         self.query_one("#load-more").display = False
+        self.query_one("#diff-workspace").display = False
         wip_table = self.query_one("#wip-table", ResizableDataTable)
         wip_table.add_column("Area", key="area")
         wip_table.add_column("File", key="file")
@@ -423,9 +411,10 @@ class GitKraikenApp(App[None]):
                 snapshot = await asyncio.to_thread(self.repo.snapshot, self.limit)
             if snapshot != self.snapshot_data:
                 await self.apply_snapshot(snapshot)
-            elif self._selected_file:
-                # Status codes can stay unchanged while the selected file is edited.
-                self.inspect_worktree_file(*self._selected_file)
+            elif self._active_diff and self._active_diff[2] == "":
+                # Status codes can stay unchanged while an explicitly opened
+                # worktree file is edited.
+                self.load_diff(*self._active_diff[:2], preserve_scroll=True)
             if not quiet:
                 self.status("Local state refreshed · no network request")
                 self._last_error = ""
@@ -435,6 +424,7 @@ class GitKraikenApp(App[None]):
             self.set_busy(False)
 
     async def apply_snapshot(self, snapshot: Snapshot) -> None:
+        new_repository = self.snapshot_data is None or self.snapshot_data.root != snapshot.root
         self._generation += 1
         self._detail_token += 1
         self._diff_token += 1
@@ -473,12 +463,19 @@ class GitKraikenApp(App[None]):
         )
         self.query_one("#continue", Button).disabled = bool(snapshot.conflicts)
         self.query_one("#load-more").display = snapshot.has_more and self.limit < 5000
-        # Re-inspect the selected item against this snapshot, including external edits.
+        # Reconcile details without treating polling as an explicit graph click.
+        # In particular, a clean checkout can show Working directory while the
+        # graph cursor remains on HEAD (there is no WIP row to select).
         if self._history_key in self._commits:
-            self.inspect_commit(self._commits[self._history_key])
+            self.inspect_commit(self._commits[self._history_key], activate=new_repository)
         else:
             self._selected_commit = None
-            self.query_one("#inspector-tabs", TabbedContent).active = "wip-tab"
+            self.query_one("#commit-detail", Static).update(
+                "Select a commit to inspect its changes."
+            )
+            self.query_one(CommitFileTree).clear_files()
+            if new_repository:
+                self.query_one("#inspector-tabs", TabbedContent).active = "wip-tab"
         if self._selected_file:
             old_file, staged = self._selected_file
             current = next(
@@ -490,12 +487,21 @@ class GitKraikenApp(App[None]):
                 None,
             )
             self._selected_file = current
+        if self._active_diff and self._active_diff[2] == "":
+            active, staged, _oid = self._active_diff
+            current = next(
+                (
+                    (f, s)
+                    for f, s in self._file_rows.values()
+                    if f.path == active.path and s == staged
+                ),
+                None,
+            )
             if current:
-                self.inspect_worktree_file(*current)
+                self._active_diff = (current[0], current[1], "")
+                self.load_diff(*current, preserve_scroll=True)
             else:
-                self.query_one("#diff-view", Static).update(
-                    Text("Select a file to inspect its changes.")
-                )
+                self.back_to_graph()
         self.update_controls()
 
     def _clear_reference_selection(self) -> None:
@@ -1122,7 +1128,10 @@ class GitKraikenApp(App[None]):
         if any("↑ parent " in row.graph.plain for row in self._graph_rows):
             heading.append("   ↑ parent shown above", style=MUTED)
         self.query_one("#history-heading", Static).update(heading)
-        geometry = tuple(
+        dirty = len(self.snapshot_data.files)
+        wip_height = 2 if self.graph_style == "smooth" else 1
+        geometry = (("wip", wip_height),) if dirty else ()
+        geometry += tuple(
             (row.commit.oid if row.commit else f"connector-{index}", row.height)
             for index, row in enumerate(self._graph_rows)
         )
@@ -1130,25 +1139,17 @@ class GitKraikenApp(App[None]):
         self._graph_geometry = geometry
         self._configure_history_columns()
         self._commits = {}
-        dirty = len(self.snapshot_data.files)
-        wip_cells = [
-            Text(" ◉" if self.graph_style == "smooth" else "◉", style=TEAL),
-            Text("WIP", style=TEAL),
-            "",  # Working changes have no commit author.
-            "",  # Working changes have no commit timestamp.
-            Text(
-                f"Working directory · {dirty} changed files"
-                if dirty
-                else "Working directory · clean",
-                style=f"bold {TEAL}",
-            ),
-        ]
-        table.add_row(
-            *wip_cells,
-            *([""] if self._show_sha else []),
-            height=2 if self.graph_style == "smooth" else 1,
-            key="wip",
-        )
+        if dirty:
+            table.add_row(
+                Text(" ◉" if self.graph_style == "smooth" else "◉", style=TEAL),
+                Text("WIP", style=TEAL),
+                "",  # Working changes have no commit author.
+                "",  # Working changes have no commit timestamp.
+                Text(f"Working directory · {dirty} changed files", style=f"bold {TEAL}"),
+                *([""] if self._show_sha else []),
+                height=wip_height,
+                key="wip",
+            )
         for index, row in enumerate(self._graph_rows):
             if not row.commit:
                 table.add_row(
@@ -1183,8 +1184,18 @@ class GitKraikenApp(App[None]):
                 height=row.height,
                 key=commit.oid,
             )
-        key = self._history_key if self._history_key in table.rows else "wip"
-        table.move_cursor(row=table.get_row_index(key), animate=False)
+        # A clean checkout has no synthetic node. Prefer its actual HEAD when
+        # the old selection disappears; HEAD may be outside the loaded limit.
+        key = next(
+            (
+                candidate
+                for candidate in (self._history_key, "wip", self.snapshot_data.head, *self._commits)
+                if candidate in table.rows
+            ),
+            "",
+        )
+        if key:
+            table.move_cursor(row=table.get_row_index(key), animate=False)
         self._history_key = key
         self.update_search(jump=False)
         if preserve_scroll:
@@ -1199,6 +1210,8 @@ class GitKraikenApp(App[None]):
     def paint_wip(self, files: tuple[FileChange, ...]) -> None:
         table = self.query_one("#wip-table", DataTable)
         table.clear()
+        table.display = bool(files)
+        self.query_one("#wip-empty").display = not bool(files)
         self._file_rows = {}
         for staged in (False, True):
             for number, file in enumerate(files):
@@ -1217,12 +1230,22 @@ class GitKraikenApp(App[None]):
                     table.move_cursor(row=table.get_row_index(key), animate=False)
         if not files:
             self._selected_file = None
-            self.query_one("#diff-title", Static).update("No pending changes")
-            self.query_one("#diff-view", Static).update("Working directory is clean.")
+            if self._active_diff and self._active_diff[2] == "":
+                self.back_to_graph()
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
-        if not self._rebuilding:
-            self.select_row(event.data_table.id, str(event.row_key.value))
+        table = event.data_table
+        if self._rebuilding or not table.row_count:
+            return
+        # Rebuild highlights may be delivered after _finish_rebuild. Ignore
+        # intermediate cursors and the graph selection we already reconciled;
+        # actual arrow navigation still inspects the newly highlighted commit.
+        if table.ordered_rows[table.cursor_row].key != event.row_key:
+            return
+        key = str(event.row_key.value)
+        if table.id == "graph-table" and key == self._history_key:
+            return
+        self.select_row(table.id, key)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         self.select_row(event.data_table.id, str(event.row_key.value), explicit=True)
@@ -1240,32 +1263,56 @@ class GitKraikenApp(App[None]):
                     self._clear_reference_selection()
                     self.update_search(jump=False)
             if key == "wip":
-                self._history_key = key
+                changed_history = self._history_key != key
+                if key in self.query_one("#graph-table", DataTable).rows:
+                    self._history_key = key
                 self._detail_token += 1
                 self._selected_commit = None
-                self.query_one("#inspector-tabs", TabbedContent).active = "wip-tab"
+                if explicit or changed_history:
+                    self.back_to_graph()
+                    self.query_one("#inspector-tabs", TabbedContent).active = "wip-tab"
             elif key in self._commits:
                 self._history_key = key
                 self.inspect_commit(self._commits[key])
         elif table_id == "wip-table" and key in self._file_rows:
-            self.inspect_worktree_file(*self._file_rows[key])
+            self._selected_file = self._file_rows[key]
+            self.update_controls()
+            if explicit:
+                self.inspect_worktree_file(*self._selected_file)
 
     def on_commit_file_tree_file_selected(self, event: CommitFileTree.FileSelected) -> None:
         event.stop()
         if self._selected_commit and event.identity == self._selected_commit.oid:
             self.inspect_commit_file(event.file)
 
-    def inspect_commit(self, commit: Commit) -> None:
+    def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
+        if event.tabbed_content.id != "inspector-tabs":
+            return
+        self.back_to_graph()
+        if (
+            event.tabbed_content.active == "details-tab"
+            and self._selected_commit is None
+            and self._history_key in self._commits
+        ):
+            # Returning from the clean Working directory keeps the real graph
+            # selection available for inspection; no synthetic WIP row is needed.
+            self.inspect_commit(self._commits[self._history_key], activate=False)
+
+    def inspect_commit(self, commit: Commit, *, activate: bool = True) -> None:
         changed_commit = self._selected_commit is None or self._selected_commit.oid != commit.oid
+        if changed_commit and (activate or (self._active_diff and self._active_diff[2])):
+            self.back_to_graph()
         self._selected_commit = commit
         self._detail_token += 1
-        self._diff_token += 1
+        if changed_commit:
+            self._diff_token += 1
         token, generation, repo = self._detail_token, self._generation, self.repo
-        self.query_one("#inspector-tabs", TabbedContent).active = "details-tab"
+        tabs = self.query_one("#inspector-tabs", TabbedContent)
+        if activate and tabs.active != "details-tab":
+            tabs.active = "details-tab"
         self.query_one("#commit-detail", Static).update(Text(f"{commit.subject}\nLoading commit…"))
         if changed_commit:
             self.query_one(CommitFileTree).clear_files()
-        self.query_one("#commit-diff", Static).update("Loading changes…")
 
         async def load() -> None:
             try:
@@ -1296,13 +1343,18 @@ class GitKraikenApp(App[None]):
                 header.tooltip = metadata
                 tree = self.query_one(CommitFileTree)
                 tree.set_files(detail.files, identity=commit.oid)
-                self.query_one("#commit-diff", Static).update(
-                    "Select a changed file." if detail.files else "No file changes."
-                )
-                if tree.selected_file:
-                    self.inspect_commit_file(tree.selected_file)
-                elif detail.files:
-                    tree.select_file(detail.files[0])
+                # Loading detail must never turn an automatic tree highlight
+                # into a diff. Refresh an already explicit view of this file.
+                if self._active_diff and self._active_diff[2] == commit.oid:
+                    active, _staged, _oid = self._active_diff
+                    current = next(
+                        (item for item in detail.files if item.path == active.path), None
+                    )
+                    if current:
+                        self._active_diff = (current, False, commit.oid)
+                        self.load_diff(current, oid=commit.oid, preserve_scroll=True)
+                    else:
+                        self.back_to_graph()
             except Exception as error:
                 if token == self._detail_token and generation == self._generation:
                     self.show_error(str(error))
@@ -1310,25 +1362,47 @@ class GitKraikenApp(App[None]):
         self.run_worker(load(), group="detail", exit_on_error=False)
 
     def inspect_commit_file(self, file: FileChange) -> None:
-        if not self._selected_commit:
-            return
-        self.load_diff(file, oid=self._selected_commit.oid)
+        if self._selected_commit:
+            self.open_diff(file, oid=self._selected_commit.oid)
 
     def inspect_worktree_file(self, file: FileChange, staged: bool) -> None:
         self._selected_file = (file, staged)
-        self.query_one("#diff-title", Static).update(
-            Text(f"{'INDEX' if staged else 'WORKTREE'} · {file.path}")
-        )
-        self.load_diff(file, staged=staged)
         self.update_controls()
+        self.open_diff(file, staged=staged)
 
-    def load_diff(self, file: FileChange, *, staged: bool = False, oid: str = "") -> None:
+    def open_diff(self, file: FileChange, *, staged: bool = False, oid: str = "") -> None:
+        """Temporarily use the center pane for an explicitly requested diff."""
+        self._active_diff = (file, staged, oid)
+        self.query_one("#graph-workspace").display = False
+        self.query_one("#diff-workspace").display = True
+        source = f"COMMIT {oid[:8]}" if oid else ("INDEX" if staged else "WORKTREE")
+        self.query_one("#center-diff-title", Static).update(Text(f"{source}  ·  {file.path}"))
+        self.load_diff(file, staged=staged, oid=oid)
+
+    def back_to_graph(self) -> None:
+        """Dismiss the transient diff and invalidate any late diff worker."""
+        if not self._active_diff:
+            return
+        self._active_diff = None
+        self._diff_token += 1
+        self.query_one("#diff-workspace").display = False
+        self.query_one("#graph-workspace").display = True
+
+    def load_diff(
+        self,
+        file: FileChange,
+        staged: bool = False,
+        oid: str = "",
+        *,
+        preserve_scroll: bool = False,
+    ) -> None:
         scope = "commit" if oid else "worktree"
         self._diff_tokens[scope] += 1
         token, epoch = self._diff_tokens[scope], self._diff_token
         generation, repo = self._generation, self.repo
-        target = "#commit-diff" if oid else "#diff-view"
-        self.query_one(target, Static).update("Loading diff…")
+        target = "#center-diff"
+        if not preserve_scroll:
+            self.query_one(target, Static).update("Loading diff…")
 
         async def load() -> None:
             try:
@@ -1347,11 +1421,11 @@ class GitKraikenApp(App[None]):
                 token == self._diff_tokens[scope]
                 and epoch == self._diff_token
                 and generation == self._generation
+                and self._active_diff == (file, staged, oid)
             ):
                 self.query_one(target, Static).update(patch_text(patch))
-                self.query_one("#commit-diff-scroll" if oid else "#diff-scroll").scroll_home(
-                    animate=False
-                )
+                if not preserve_scroll:
+                    self.query_one("#center-diff-scroll").scroll_home(animate=False)
 
         self.run_worker(load(), group="diff", exit_on_error=False)
 
@@ -1386,7 +1460,11 @@ class GitKraikenApp(App[None]):
         table = self.query_one("#graph-table", DataTable)
         if key in table.rows:
             table.move_cursor(row=table.get_row_index(key), animate=False)
-            self.select_row("graph-table", key)
+            self.select_row("graph-table", key, explicit=True)
+        elif key == "wip":
+            # The sidebar/current-worktree action still opens staging on a clean
+            # checkout, without inventing a row or moving the graph cursor.
+            self.select_row("graph-table", key, explicit=True)
 
     def next_match(self) -> None:
         if self._search_matches:
@@ -1419,6 +1497,9 @@ class GitKraikenApp(App[None]):
             self.action_toggle_graph_style()
         elif ident == "actions":
             self.action_command_picker()
+        elif ident == "back-to-graph":
+            self.back_to_graph()
+            self.query_one("#graph-table").focus()
         elif ident == "refresh":
             self.action_refresh()
         elif self.busy:
@@ -1790,14 +1871,15 @@ class GitKraikenApp(App[None]):
                     snapshot = await asyncio.to_thread(repo.snapshot)
                 self.repo, self.path = repo, repo.root
                 self._clear_reference_selection()
+                self.back_to_graph()
                 self._selected_commit = self._selected_file = None
                 self._history_key = "wip"
+                self.snapshot_data = None
                 self._graph_geometry = ()
                 self.limit = 300
                 self.query_one("#commit-message", TextArea).clear()
                 self.query_one("#graph-filter", Input).value = ""
                 await self.apply_snapshot(snapshot)
-                self.jump_to("wip")
                 self.status(f"Opened {repo.root}")
             except Exception as error:
                 self.show_error(str(error))
@@ -1815,10 +1897,15 @@ class GitKraikenApp(App[None]):
             self.handle_picked_action("create-branch")
 
     def action_focus_filter(self) -> None:
+        self.back_to_graph()
         self.query_one("#graph-filter", Input).focus()
 
     def action_clear_filter(self) -> None:
         if len(self.screen_stack) > 1:
+            return
+        if self._active_diff:
+            self.back_to_graph()
+            self.query_one("#graph-table").focus()
             return
         self.query_one("#graph-filter", Input).value = ""
         self._clear_reference_selection()

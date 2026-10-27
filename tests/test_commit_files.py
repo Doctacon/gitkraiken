@@ -71,7 +71,7 @@ async def test_folders_toggle_and_files_select_with_keyboard() -> None:
         await pilot.press("space")
         assert folder.is_expanded
         await pilot.press("down")
-        assert app.selected[-1].file == files[0]
+        assert not app.selected  # navigation only changes the tree highlight
         await pilot.press("enter")
         assert app.selected[-1].file == files[0]
         assert app.selected[-1].identity == "first"
@@ -158,6 +158,9 @@ async def test_root_toggle_select_file_and_stale_nodes_are_inert() -> None:
         await pilot.pause()
         assert folder.is_collapsed
         assert tree.selected_file == file
+        assert not app.selected
+        tree._activate(tree._path_nodes[tree._key_for(file)])
+        await pilot.pause()
         assert app.selected[-1].identity == "two"
         count = len(app.selected)
         tree.select_file(FileChange("missing.py", index="M"))

@@ -118,7 +118,7 @@ class CommitFileTree(Tree[FileChange | _Directory]):
 
     @on(Tree.NodeHighlighted)
     def _node_highlighted(self, event: Tree.NodeHighlighted[FileChange | _Directory]) -> None:
-        """Arrow-key navigation changes the inspected file without opening folders."""
+        """Remember arrow-key navigation without opening a diff."""
         if self._is_current_file_node(event.node):
             self._select_file(event.node.data)
 
@@ -156,6 +156,7 @@ class CommitFileTree(Tree[FileChange | _Directory]):
             node.toggle()
         elif self._is_current_file_node(node):
             self._select_file(node.data)
+            self.post_message(self.FileSelected(node.data, self._identity or ""))
 
     def _is_current_file_node(self, node: TreeNode[FileChange | _Directory]) -> bool:
         if not isinstance(node.data, FileChange):
@@ -170,7 +171,6 @@ class CommitFileTree(Tree[FileChange | _Directory]):
         if self._selected_key == key:
             return
         self._selected_key = key
-        self.post_message(self.FileSelected(self._files[key], self._identity))
 
     @staticmethod
     def _key_for(file: FileChange) -> str:

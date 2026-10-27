@@ -20,7 +20,6 @@ from gitkraiken.app import GitKraikenApp
 from gitkraiken.commit_files import CommitFileTree
 from gitkraiken.demo import create_demo
 from gitkraiken.dialogs import ActionPicker, BranchContextMenu, MessageDialog, PromptDialog
-from gitkraiken.pane_splitter import PaneSplitter
 from gitkraiken.pull_request_dialog import PullRequestDialog
 from gitkraiken.resizable_table import ResizableDataTable
 from gitkraiken.sidebar import ReferenceSidebar, SidebarSelection
@@ -132,9 +131,12 @@ async def test_real_repository_mount_and_commit_diff(demo_repo):
         app.jump_to(oid)
         await settle(app, pilot)
         assert app.query_one("#inspector-tabs", TabbedContent).active == "details-tab"
-        selected = app.query_one(CommitFileTree).selected_file
-        assert selected
-        preview = app.query_one("#commit-diff", Static).renderable.plain
+        tree = app.query_one(CommitFileTree)
+        selected = next(iter(tree._files.values()))
+        # Detail loading only populates the inspector; activation opens the center diff.
+        app.inspect_commit_file(selected)
+        await settle(app, pilot)
+        preview = app.query_one("#center-diff", Static).renderable.plain
         assert "@@" in preview
         assert "diff --git" not in preview
         assert not any(line.startswith(("index ", "--- ", "+++ ")) for line in preview.splitlines())
@@ -333,47 +335,19 @@ async def test_workspace_pane_drags_survive_refresh_collapse_and_terminal_resize
 
 
 @pytest.mark.parametrize("tab", ["details-tab", "wip-tab"])
-async def test_inspector_file_diff_split_is_draggable_and_bounded(demo_repo, tab):
+async def test_inspector_file_lists_use_reclaimed_preview_space(demo_repo, tab):
     app = GitKraikenApp(demo_repo)
     async with app.run_test(size=(170, 55)) as pilot:
         await settle(app, pilot)
         app.jump_to(app.snapshot_data.head if tab == "details-tab" else "wip")
         await settle(app, pilot)
-        is_commit = tab == "details-tab"
-        files = app.query_one("#commit-file-tree" if is_commit else "#wip-table")
-        preview = app.query_one("#commit-diff-scroll" if is_commit else "#wip-preview")
-        handle = app.query_one(
-            "#commit-files-splitter" if is_commit else "#wip-files-splitter", PaneSplitter
-        )
-        file_height, preview_height = files.region.height, preview.region.height
-        await drag(pilot, handle, (3, 0), (0, 4))
-        assert files.region.height == file_height + 4
-        assert preview.region.height == preview_height - 4
-        app.action_refresh()
-        await settle(app, pilot)
-        assert files.region.height == file_height + 4
-        await pilot.resize_terminal(170, 35)
-        await settle(app, pilot)
-        assert preview.region.height >= handle.flexible_minimum
-        assert preview.region.bottom <= files.parent.region.bottom
-        await pilot.resize_terminal(170, 55)
-        await settle(app, pilot)
-        assert files.region.height == file_height + 4
-        tabs = app.query_one("#inspector-tabs", TabbedContent)
-        tabs.active = "wip-tab" if is_commit else "details-tab"
-        await pilot.pause()
-        tabs.active = tab
-        await settle(app, pilot)
-        assert files.region.height == file_height + 4
-        await drag(pilot, handle, (3, 0), (0, 100))
-        assert preview.region.height >= handle.flexible_minimum
-        await drag(pilot, handle, (3, 0), (0, -100))
-        assert files.region.height == handle.minimum
-        assert app.mouse_captured is None
-        if not is_commit:
-            assert (
-                app.query_one("#commit").region.bottom <= app.query_one("#workspace").region.bottom
-            )
+        files = app.query_one("#commit-file-tree" if tab == "details-tab" else "#wip-table")
+        assert files.region.height >= 8
+        assert not app.query("#commit-files-splitter")
+        assert not app.query("#wip-files-splitter")
+        assert not app.query("#commit-diff-scroll")
+        assert not app.query("#diff-scroll")
+        assert files.region.bottom <= app.query_one("#workspace").region.bottom
 
 
 @pytest.mark.parametrize("selector", ["#refs-splitter", "#graph-table"])
@@ -515,10 +489,10 @@ async def test_mixed_index_worktree_file_has_two_diff_choices(demo_repo):
         assert len(rows) == 2
         app.inspect_worktree_file(*next(row for row in rows if row[1]))
         await settle(app, pilot)
-        assert "UNSTAGED_ONLY" not in str(app.query_one("#diff-view", Static).render())
+        assert "UNSTAGED_ONLY" not in str(app.query_one("#center-diff", Static).render())
         app.inspect_worktree_file(*next(row for row in rows if not row[1]))
         await settle(app, pilot)
-        preview = app.query_one("#diff-view", Static).renderable.plain
+        preview = app.query_one("#center-diff", Static).renderable.plain
         assert "UNSTAGED_ONLY" in preview
         assert "diff --git" not in preview
         assert "@@" in preview
@@ -531,7 +505,7 @@ async def test_empty_repository_and_narrow_screen(tmp_path):
         await settle(app, pilot)
         assert app.snapshot_data is not None
         assert not app._commits
-        assert app.query_one("#graph-table", DataTable).row_count == 1
+        assert app.query_one("#graph-table", DataTable).row_count == 0
         app.action_toggle_refs()
         app.action_toggle_inspector()
         await pilot.pause()
@@ -889,6 +863,7 @@ async def test_graph_double_click_non_tip_checks_out_detached_head(branch_repo, 
 
 
 async def test_graph_double_click_ignores_inert_rows_and_stale_clicks(branch_repo):
+    (branch_repo / "pending.txt").write_text("untracked change\n")
     app = GitKraikenApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
@@ -936,7 +911,7 @@ async def test_checkout_selected_commit_keeps_workspace_running(branch_repo, git
         assert app._history_key == tip
         assert len(app.screen_stack) == 1
         assert app.is_running
-        assert "No file changes" in str(app.query_one("#commit-diff", Static).render())
+        assert app.query_one(CommitFileTree).root.label.plain == "CHANGED FILES (0)"
         assert "[bold]literal[/bold]" in app.query_one(Toast).render().plain
         await pilot.press("ctrl+r")
         await settle(app, pilot)
@@ -1223,12 +1198,13 @@ async def test_compact_commit_header_gives_space_to_file_tree(git_repo, git_run,
         assert header.region.height <= 4
         tree = app.query_one(CommitFileTree)
         assert tree.content_size.height >= 8
-        diff = app.query_one("#commit-diff-scroll")
-        assert diff.region.height >= 5
-        assert diff.region.bottom <= app.query_one("#workspace").region.bottom
+        assert tree.region.bottom <= app.query_one("#workspace").region.bottom
         assert tree.root.label.plain == "CHANGED FILES (12)"
-        assert tree.selected_file.path == paths[0]
-        assert "select 0 as metric" in str(app.query_one("#commit-diff", Static).render())
+        first = tree._path_nodes[tree._key_for(next(iter(tree._files.values())))]
+        tree.move_cursor(first, animate=False)
+        tree._activate(first)
+        await settle(app, pilot)
+        assert "select 0 as metric" in str(app.query_one("#center-diff", Static).render())
         nodes = [
             node for node in tree._path_nodes.values() if getattr(node.data, "path", "") == paths[1]
         ]
@@ -1238,8 +1214,10 @@ async def test_compact_commit_header_gives_space_to_file_tree(git_repo, git_run,
         await pilot.press("j")
         await settle(app, pilot)
         assert tree.selected_file.path == paths[1]
-        preview = app.query_one("#commit-diff", Static).renderable.plain
-        assert "select 1 as metric" in preview
+        # Arrow navigation changes the file-tree selection but does not steal
+        # the explicitly opened center diff.
+        preview = app.query_one("#center-diff", Static).renderable.plain
+        assert "select 0 as metric" in preview
         assert "diff --git" not in preview
         assert "+++ b/" not in preview
         parent = nodes[0].parent
@@ -1250,7 +1228,7 @@ async def test_compact_commit_header_gives_space_to_file_tree(git_repo, git_run,
         await settle(app, pilot)
         assert tree.selected_file.path == paths[1]
         assert tree._path_nodes[parent.data.key].is_collapsed
-        assert "select 1 as metric" in str(app.query_one("#commit-diff", Static).render())
+        assert "select 0 as metric" in str(app.query_one("#center-diff", Static).render())
 
 
 @pytest.mark.parametrize("operation", ["fetch", "pull", "push"])
@@ -1522,6 +1500,7 @@ async def test_context_prompt_rejects_target_move_before_submission(branch_repo,
 async def test_graph_context_uses_clicked_commit_and_ignores_inert_rows(branch_repo):
     from gitkraiken.app import HistoryTable
 
+    (branch_repo / "pending.txt").write_text("untracked change\n")
     app = GitKraikenApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
@@ -1860,6 +1839,9 @@ async def test_commit_selection_waits_for_chained_diff_workers(demo_repo, monkey
         monkeypatch.setattr(app.repo, "diff", slow_diff)
         app.jump_to(next(iter(app._commits)))
         await settle(app, pilot)
-        preview = app.query_one("#commit-diff", Static).renderable.plain
+        file = next(iter(app.query_one(CommitFileTree)._files.values()))
+        app.inspect_commit_file(file)
+        await settle(app, pilot)
+        preview = app.query_one("#center-diff", Static).renderable.plain
         assert "@@" in preview, [worker.group for worker in app.workers]
         assert "diff --git" not in preview

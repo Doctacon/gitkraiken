@@ -122,6 +122,7 @@ Button:focus { text-style: bold; }
     padding: 0;
     background: #f3f8f9;
 }
+#graph-workspace, #diff-workspace { height: 1fr; }
 #history-heading {
     height: 1;
     margin: 0;
@@ -159,16 +160,38 @@ Button:focus { text-style: bold; }
 }
 #load-more:hover, #load-more:focus { background: #b9dfe1; color: #14232c; }
 
+/* An explicit file activation temporarily replaces, but never rebuilds, the graph. */
+#diff-toolbar {
+    height: 2;
+    padding: 0 1;
+    background: #e7f1f2;
+    border-bottom: tall #b7cdd1;
+}
+#back-to-graph {
+    height: 1;
+    margin-right: 1;
+    padding: 0 1;
+    background: #d8eeee;
+    color: #005f68;
+}
+#back-to-graph:hover, #back-to-graph:focus { background: #b9dfe1; color: #10242b; }
+#center-diff-title { width: 1fr; height: 1; color: #36505b; text-style: bold; }
+#center-diff-scroll {
+    height: 1fr;
+    padding: 0 1;
+    overflow-y: auto;
+    background: #ffffff;
+    border-left: tall #a8c1c7;
+}
+#center-diff { height: auto; min-height: 1; color: #18323a; }
+
 TabbedContent { height: 1fr; background: #f3f8f9; }
 TabbedContent ContentTab { color: #48616c; background: #e4f0f1; }
 TabbedContent ContentTab.-active { color: #005f68; background: #d8eeee; text-style: bold; }
 #inspector-tabs > ContentSwitcher, TabPane { height: 1fr; }
 TabPane { padding: 1; }
-#commit-changes, #wip-changes, #wip-preview { height: 1fr; }
-#commit-changes { min-height: 12; }
-#wip-changes { min-height: 10; }
-#wip-preview { min-height: 6; }
-/* Compact commit metadata leaves room for the file tree and diff. */
+#commit-changes, #wip-changes { height: 1fr; min-height: 8; }
+/* Compact commit metadata leaves the whole inspector available to its file tree. */
 #commit-detail {
     height: 4;
     min-height: 4;
@@ -177,9 +200,9 @@ TabPane { padding: 1; }
     padding: 0 1;
     color: #14232c;
 }
-/* Root header plus eight file rows fit in the normal inspector. */
+/* Changed files fill the space formerly occupied by the inline diff. */
 #commit-file-tree {
-    height: 11;
+    height: 1fr;
     min-height: 5;
     margin-top: 1;
     padding: 0 1;
@@ -197,23 +220,7 @@ TabPane { padding: 1; }
     color: #14232c;
     text-style: none;
 }
-#diff-title { height: 1; min-height: 1; color: #36505b; text-style: bold; }
-/* Scroll containers own the flexible height; their Static child stays content-sized. */
-#commit-diff-scroll, #diff-scroll {
-    height: 1fr;
-    min-height: 5;
-    padding: 0 1;
-    overflow-y: auto;
-    background: #ffffff;
-    border-left: tall #a8c1c7;
-}
-#commit-diff, #diff-view {
-    height: auto;
-    min-height: 1;
-    color: #18323a;
-}
-
-/* Working copy: files first, then enough room to inspect and describe a change. */
+/* Working copy keeps its staging controls and composer in the inspector. */
 .wip-actions { height: 2; }
 .wip-actions Button, #stage-all, #unstage-all {
     min-width: 8;
@@ -228,10 +235,18 @@ TabPane { padding: 1; }
 #discard { background: #fde8e8; color: #8d2635; }
 #discard:hover, #discard:focus { background: #f4caca; color: #651d28; }
 #wip-table {
-    height: 8;
+    height: 1fr;
     min-height: 3;
     border: round #a8c1c7;
     background: #ffffff;
+}
+#wip-empty {
+    height: auto;
+    min-height: 3;
+    padding: 0 1;
+    color: #48616c;
+    background: #ffffff;
+    border: round #a8c1c7;
 }
 #wip-table > .datatable--header {
     background: #e5eff1;
@@ -291,6 +306,10 @@ TabPane { padding: 1; }
 .pane-constrained.responsive-history-only #refs-splitter { display: none; }
 .pane-constrained.responsive-inspector #inspector-panel { display: block; }
 .pane-constrained.responsive-inspector #inspector-splitter { display: block; }
+
+/* At 60 columns the inspector gets 25, leaving 34 for the center + divider. */
+.pane-tight #inspector-panel { width: 25; }
+.pane-tight .wip-actions Button { min-width: 0; width: 1fr; margin-right: 0; padding: 0; }
 
 /* Keep the pane toolbar useful instead of clipping ten terse controls. */
 .pane-tight #fetch, .pane-tight #pull, .pane-tight #push, .pane-tight #branch,

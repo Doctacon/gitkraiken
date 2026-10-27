@@ -37,8 +37,8 @@ async def test_workspace_defaults_to_light_with_readable_rich_colors(git_repo):
             "#history-panel",
             "#inspector-panel",
             "#commit-file-tree",
-            "#commit-diff-scroll",
-            "#diff-scroll",
+            "#center-diff-scroll",
+            "#wip-table",
         ):
             assert luminance(app.query_one(selector).styles.background.hex) > 0.8, selector
 
@@ -79,7 +79,7 @@ async def test_workspace_defaults_to_light_with_readable_rich_colors(git_repo):
 
         diff = patch_text("@@ -1 +1 @@\n-old\n+new\n")
         console = Console()
-        background = app.query_one("#diff-scroll").styles.background.hex
+        background = app.query_one("#center-diff-scroll").styles.background.hex
         for span in diff.spans:
             color = diff.get_style_at_offset(console, span.start).color
             assert color is not None
