@@ -251,7 +251,7 @@ class ReferenceSidebar(Widget):
             with Horizontal(classes="worktree-actions"):
                 yield _SidebarButton("New", id="sidebar-worktree-new")
                 yield _SidebarButton("Open", id="sidebar-worktree-open")
-            yield _SidebarButton("Load PRs", id="sidebar-prs-load")
+            yield _SidebarButton("Refresh PRs", id="sidebar-prs-load")
         with VerticalScroll(id="sidebar-state-scroll", can_focus=True):
             yield Static("", id="sidebar-state")
 
@@ -269,7 +269,9 @@ class ReferenceSidebar(Widget):
     def update_pull_requests(
         self, listings: tuple[PullRequestListing, ...] | None, *, loading: bool = False
     ) -> None:
-        """Render supplied PR results only; expanding its group never fetches."""
+        """Render changed PR results only; retain folds, cursor and cached rows."""
+        changed = self._pull_request_listings != listings
+        loading_changed = self._pull_requests_loading != loading
         self._pull_request_listings = listings
         self._pull_requests_loading = loading
         self._pull_requests = {}
@@ -277,9 +279,13 @@ class ReferenceSidebar(Widget):
             for listing in listings:
                 for request in listing.requests:
                     self._pull_requests[request.url] = request
-        if self._snapshot is not None:
+        if self._snapshot is not None and (changed or (listings is None and loading_changed)):
             self._rebuild(self._snapshot)
         self._sync_controls()
+
+    def set_pull_requests_loading(self, loading: bool) -> None:
+        """Keep existing PRs visible while refreshing them in the background."""
+        self.update_pull_requests(self._pull_request_listings, loading=loading)
 
     def _sync_controls(self) -> None:
         if not self.is_mounted:
@@ -300,13 +306,13 @@ class ReferenceSidebar(Widget):
         load = self.query_one("#sidebar-prs-load", Button)
         # A dedicated footer row keeps the network action named in full at
         # every supported width; it is an action, never PR navigation.
-        load.label = "Refresh PRs" if self._pull_request_listings is not None else "Load PRs"
+        load.label = "Refresh PRs"
         state = self.query_one("#sidebar-state", Static)
         details: list[str] = []
         if selected and selected.kind == "linked-worktree":
             # Keep this first: a PR diagnostic must not hide the selected path.
             details.append(selected.label)
-        if self._pull_requests_loading:
+        if self._pull_requests_loading and self._pull_request_listings is None:
             details.append("Loading open pull requests…")
         elif self._pull_request_listings is not None:
             if not self._pull_request_listings:
@@ -751,7 +757,7 @@ class ReferenceSidebar(Widget):
                 paths[token] = self._add_leaf(parent_node, item, current=ref.current)
 
     def _build_pull_requests(self, root: TreeNode) -> None:
-        if self._pull_requests_loading:
+        if self._pull_requests_loading and self._pull_request_listings is None:
             root.add(
                 Text("Loading pull requests…", no_wrap=True),
                 _Group("group:prs-loading", "Loading"),
@@ -760,7 +766,7 @@ class ReferenceSidebar(Widget):
             return
         if self._pull_request_listings is None:
             root.add(
-                Text("Load open pull requests", no_wrap=True),
+                Text("Pull requests load automatically…", no_wrap=True),
                 _Group("group:prs-unloaded", "Not loaded"),
                 allow_expand=False,
             )

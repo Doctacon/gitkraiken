@@ -29,8 +29,10 @@ local demo. A true-color terminal at **120×40 or larger** is recommended.
 - Optional tmux integration: `gitkraiken --tmux /path/to/repository`.
   See the [tmux guide](docs/usage.md#tmux) for the persistent pane hotkey.
 
-Network operations are explicit. Pull is fast-forward-only; push never force-pushes
-history. Selected Git actions run immediately, so take care with discard and reset.
+Remote refs and pull requests refresh automatically on opening/resuming and every
+30 seconds; local changes refresh every two seconds. Pull and push remain explicit:
+pull is fast-forward-only and push never force-pushes history. Selected Git actions
+run immediately, so take care with discard and reset.
 
 [Full usage & setup](docs/usage.md) · [Pull requests](docs/pull-requests.md) ·
 [Development & checks](docs/usage.md#development-and-checks)

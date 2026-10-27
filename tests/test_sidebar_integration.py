@@ -1,4 +1,4 @@
-"""Real-repository integration for sidebar worktrees and explicit hosted reads."""
+"""Real-repository integration for sidebar worktrees and automatic hosted reads."""
 
 import threading
 from pathlib import Path
@@ -124,7 +124,7 @@ async def test_create_worktree_from_sidebar_uses_guarded_head_flow(workspace, gi
         assert git_run(destination, "status", "--porcelain").stdout == ""
 
 
-async def test_pull_requests_only_load_explicitly_and_open_read_only_details(
+async def test_pull_requests_load_automatically_and_open_read_only_details(
     workspace, git_run, monkeypatch
 ):
     git_run(workspace, "remote", "add", "origin", "https://github.com/org/repo")
@@ -140,7 +140,7 @@ async def test_pull_requests_only_load_explicitly_and_open_read_only_details(
         await settle(app, pilot)
         app.poll_repository()
         await settle(app, pilot)
-        assert calls == []
+        assert calls == [workspace]
         sidebar = app.query_one(ReferenceSidebar)
         tree, point = await hit_point(sidebar, pilot, "group:prs", caret=True)
         await click(pilot, tree, point)
@@ -148,10 +148,10 @@ async def test_pull_requests_only_load_explicitly_and_open_read_only_details(
         tree, point = await hit_point(sidebar, pilot, "group:prs")
         await click(pilot, tree, point)
         assert sidebar._tree_nodes["group:prs"].is_expanded
-        assert calls == []
+        assert calls == [workspace]
         assert await pilot.click("#sidebar-prs-load")
         await settle(app, pilot)
-        assert calls == [workspace]
+        assert calls == [workspace, workspace]
         pr = listing().requests[0]
         item = selected(sidebar, "pull-request", pr.url)
         app.set_busy(True)
@@ -167,7 +167,7 @@ async def test_pull_requests_only_load_explicitly_and_open_read_only_details(
         await pilot.press("escape")
         app.poll_repository()
         await settle(app, pilot)
-        assert calls == [workspace]
+        assert calls == [workspace, workspace]
         assert selected(sidebar, "pull-request", pr.url) == item
         assert git_run(workspace, "branch", "--show-current").stdout.strip() == "main"
 
@@ -181,7 +181,8 @@ async def test_pr_loading_rejects_duplicates_and_survives_help_modal(
 
     def load(repo):
         calls.append(repo.root)
-        assert release.wait(10)
+        if len(calls) > 1:
+            assert release.wait(10)
         return (listing(),)
 
     monkeypatch.setattr(Repository, "open_pull_requests", load)
@@ -199,7 +200,7 @@ async def test_pr_loading_rejects_duplicates_and_survives_help_modal(
         finally:
             release.set()
         await settle(app, pilot)
-        assert calls == [workspace]
+        assert calls == [workspace, workspace]
         assert app._last_error == ""
         await pilot.press("escape")
         assert selected(sidebar, "pull-request", listing().requests[0].url)
@@ -207,9 +208,11 @@ async def test_pr_loading_rejects_duplicates_and_survives_help_modal(
 
 async def test_changed_remote_during_listing_discards_old_results(workspace, git_run, monkeypatch):
     git_run(workspace, "remote", "add", "origin", "https://github.com/org/repo")
+    change_remote = [False]
 
     def load(repo):
-        git_run(workspace, "remote", "set-url", "origin", "https://github.com/org/other")
+        if change_remote[0]:
+            git_run(workspace, "remote", "set-url", "origin", "https://github.com/org/other")
         return (listing(),)
 
     monkeypatch.setattr(Repository, "open_pull_requests", load)
@@ -217,6 +220,7 @@ async def test_changed_remote_during_listing_discards_old_results(workspace, git
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         sidebar = app.query_one(ReferenceSidebar)
+        change_remote[0] = True
         sidebar.post_message(ReferenceSidebar.PullRequestsRequested(workspace))
         await settle(app, pilot)
         assert not any(item.kind == "pull-request" for item in sidebar._leaves.values())
@@ -234,15 +238,13 @@ async def test_repository_switch_clears_prs_and_rejects_old_sidebar_requests(
 
     def load(repo):
         calls.append(repo.root)
-        return (listing(),)
+        return (listing(),) if repo.root == workspace else ()
 
     monkeypatch.setattr(Repository, "open_pull_requests", load)
     app = GitKraikenApp(workspace)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         sidebar = app.query_one(ReferenceSidebar)
-        sidebar.post_message(ReferenceSidebar.PullRequestsRequested(workspace))
-        await settle(app, pilot)
         old_pr = selected(sidebar, "pull-request", listing().requests[0].url)
         old_tree = selected(sidebar, "linked-worktree", str(workspace))
         app.open_repository(str(other))
@@ -256,7 +258,7 @@ async def test_repository_switch_clears_prs_and_rejects_old_sidebar_requests(
         ):
             sidebar.post_message(event)
         await pilot.pause()
-        assert calls == [workspace]
+        assert calls == [workspace, other]
         assert app.repo.root == other
         assert len(app.screen_stack) == 1
 

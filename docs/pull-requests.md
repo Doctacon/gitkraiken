@@ -2,19 +2,20 @@
 
 ## Browse open pull requests
 
-Expand **PRs** in the left sidebar, below Worktrees, then choose **Load PRs**.
-This explicitly contacts each
-supported GitHub.com or Azure DevOps fetch repository, using the CLI authentication
-below. Multiple remotes for the same hosted repository are listed only once.
+Open pull requests load automatically in **PRs** in the left sidebar, below Worktrees.
+The app contacts each supported GitHub.com or Azure DevOps fetch repository using
+the CLI authentication below. Multiple remotes for the same hosted repository are listed only once.
 Closed, merged, completed, and abandoned PRs are excluded; open drafts are included.
 Results include the PR number, title, author, draft state, and source/target branches.
 Filter by any of these fields, then click a PR or press Enter for its read-only
 summary and **Open in browser** / **Copy URL** actions. Reviewing and merging remain
-in the provider's web UI; browsing never fetches branches or checks out a PR.
+in the provider's web UI; selecting a PR never checks it out.
 
-Use **Refresh PRs** to reload. Expanding/collapsing sidebar sections and the five-second
-local refresh do not contact a provider. Lists are session-local, reset when the repository
-or remotes change, and invalidated after creating a PR. Each remote has its own
+Lists refresh on opening/resuming the workspace and every 30 seconds. Use
+**Refresh PRs** to reload sooner. Existing results stay visible during automatic
+refreshes; expanding/collapsing sections does not trigger extra requests. Lists are
+session-local, reset when the repository or remotes change, and refreshed after
+creating a PR. Each remote has its own
 empty/error state, so one unavailable provider does not hide successful results.
 Unsupported remotes show a setup explanation rather than an empty-looking success.
 Provider listings are paginated; oversized or malformed responses produce an explicit
@@ -78,7 +79,7 @@ authentication must also work for the branch checks performed on submission.
   Remote upstreams and custom fetch mappings determine the hosted names. Without
   a remote upstream, a local branch uses its own name on the selected remote.
   Tracking a local parent (`remote = .`) does not make that parent the PR source.
-- No automatic push, fetch, merge, checkout, or remote-default-branch guessing.
+- The composer never pushes, fetches, merges, checks out, or guesses a remote default branch.
   On **Done**, an explicit remote read checks that both branches exist and that
   the hosted source is at the captured local HEAD. If not, publish/push first.
   Uncommitted working changes are not part of the PR.

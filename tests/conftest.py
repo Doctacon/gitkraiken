@@ -12,6 +12,20 @@ GitRun = Callable[..., subprocess.CompletedProcess[str]]
 
 
 @pytest.fixture(autouse=True)
+def isolate_network(monkeypatch):
+    """Automatic refresh tests may use local remotes, never real user credentials."""
+    monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "file")
+    run = subprocess.run
+
+    def without_hosted_cli(command, *args, **kwargs):
+        if not isinstance(command, str) and Path(command[0]).name in {"gh", "az"}:
+            raise FileNotFoundError("Hosted CLI disabled in tests; provide a stub")
+        return run(command, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", without_hosted_cli)
+
+
+@pytest.fixture(autouse=True)
 def isolate_system_clipboard(monkeypatch):
     """Headless tests must never overwrite the developer's real clipboard."""
     which = shutil.which

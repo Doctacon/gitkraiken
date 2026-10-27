@@ -989,7 +989,9 @@ def test_local_remote_push_tracking_clone_checkout_and_pull(
     assert clone_snapshot.upstream == "origin/remote-topic"
 
 
-def test_remote_redaction_and_error_validation(git_repo: Path, git_run, tmp_path: Path) -> None:
+def test_remote_redaction_and_error_validation(
+    git_repo: Path, git_run, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     secret_url = "https://alice:supersecret@example.invalid/org/repo.git?token=querysecret"
     git_run(git_repo, "remote", "add", "origin", secret_url)
     remote = Repository(git_repo).snapshot().remotes[0]
@@ -1036,6 +1038,8 @@ def test_remote_redaction_and_error_validation(git_repo: Path, git_run, tmp_path
     assert (git_repo / "untracked").read_text() == "safe\n"
     assert not (tmp_path / "outside").exists()
 
+    # Exercise a real transport error, but only against a closed loopback port.
+    monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "https")
     with pytest.raises(GitError) as caught:
         Repository.clone(
             "https://alice:supersecret@127.0.0.1:1/repo.git?token=querysecret",
@@ -1073,6 +1077,8 @@ def test_repository_environment_cannot_redirect_selected_worktree(
 def test_network_ssh_preserves_repo_command_and_environment_precedence(
     git_repo: Path, git_run, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # The SSH executables below are local recording stubs, not network clients.
+    monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "ssh")
     monkeypatch.delenv("GIT_SSH_COMMAND", raising=False)
     monkeypatch.delenv("GIT_SSH", raising=False)
     config_capture = git_repo.parent / "config-ssh-args"

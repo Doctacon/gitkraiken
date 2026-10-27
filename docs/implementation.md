@@ -23,9 +23,10 @@ hosted PR browsing/creation uses authenticated GitHub/Azure CLIs; see [pull requ
     The UI can open an available entry without mutating either checkout. Opening
     revalidates registration and exact discovered root; stale entries cannot fall
     back to a parent repository. Worktree creation reuses guarded context actions.
-  - `open_pull_requests() -> tuple[PullRequestListing, ...]`: explicit hosted reads
-    for supported fetch remotes, deduplicated by hosted identity. Each listing
-    carries requests or a safe per-repository error; never called by snapshot/polling.
+  - `open_pull_requests() -> tuple[PullRequestListing, ...]`: hosted reads for
+    supported fetch remotes, deduplicated by hosted identity. Each listing carries
+    requests or a safe per-repository error. Kept out of `snapshot`; the app's
+    background network refresh and explicit Refresh PRs action call it.
   - `detail(oid: str) -> CommitDetail`: full commit message, first-parent changes
     (root commits work), stat. `FileChange.index` holds committed change type.
   - `diff(path: str = "", *, staged: bool = False, oid: str = "") -> str`: plaintext
@@ -149,6 +150,12 @@ hosted PR browsing/creation uses authenticated GitHub/Azure CLIs; see [pull requ
   Synchronous Git calls run via `asyncio.to_thread`, not on the UI loop; serialize
   mutation/refresh work and ignore stale selection detail results. No UI-to-shell
   calls. Refresh after success AND failure (conflicts can change repository state).
+  Local polling runs every 2s. A single-flight background worker fetches remotes
+  and lists PRs on opening/resuming and every 30s after completion. It shares the
+  mutation lock but never toggles the workspace's busy styles. Unchanged snapshots
+  and PR lists do not rebuild rows; cached PRs remain visible during reads. New
+  automatic reads defer during modals/mutations, and late snapshots never repaint
+  an active modal. Failed network reads back off until the next interval.
 - `cli.py`, `tmux.py`, `demo.py`: entrypoints, opt-in tmux integration, disposable
   real-Git demo fixture. A demo is never presented as the user's repo.
   `--tmux-config` prints an opt-in prefix+g binding using the installation's Python
@@ -165,7 +172,9 @@ hosted PR browsing/creation uses authenticated GitHub/Azure CLIs; see [pull requ
   Cleanup does not change focus or zoom. Destructive tmux `kill-pane`/`kill-window`
   commands bypass process-exit restoration; no invasive global hooks intercept
   them. Explicit `--tmux` windows and `--popup` sessions are unchanged; the hotkey
-  still detaches a client in a marked popup session. Configuration is generated
+  still detaches a client in a marked popup session. Reusing an app sends a targeted
+  terminal FocusIn event, so resume refresh does not require global focus-events
+  configuration. Configuration is generated
   separately on each machine; no user config is edited automatically.
 
 ## Main screen
@@ -175,8 +184,8 @@ teal active branch, colored graph lanes, compact toolbar, left refs tree, center
 scrollable graph, right selected commit details / staging. One sidebar tree has
 independent collapsible sections: Repository, Local, Remotes, Worktrees, PRs, Tags,
 Stashes. Folding and searching never change graph scope. Worktrees show paths and
-status, with Open/New actions. Expanding PRs never contacts providers; PRs load
-only on explicit request and expose a detail modal
+status, with Open/New actions. Expanding PRs never triggers an extra request; PRs
+load automatically, offer an explicit Refresh PRs action, and expose a detail modal
 with browser/copy actions. Center: Smooth/Compact graph, badges, subjects and SHA;
 WIP appears only when the working directory/index has changes. Clean checkouts
 select HEAD (or a loaded commit if HEAD is outside the history limit), not a
@@ -222,10 +231,10 @@ Git is invoked with argv (no shell), end-of-options / validated revisions and
 literal pathspecs. Never use remote URLs as display text without redacting
 userinfo/query secrets. Network uses existing credential helpers and SSH agent,
 never terminal password prompts; timeout and helpful auth failure instructions.
-No automatic fetch/push, force push of history, or clean. Hard reset is an explicit
+Automatic fetch only updates fetched refs; pull/push, checkout, and destructive
+actions remain explicit. No force push of history or clean. Hard reset is an explicit
 mode choice with discard/overwrite warnings; remote deletion is an explicit
-single-destination choice protected by an OID lease. Poll status locally when
-idle. UI executes selected Git actions immediately, preserving prompts for
+single-destination choice protected by an OID lease. Poll status locally when idle. UI executes selected Git actions immediately, preserving prompts for
 required input and choices. Busy/modal guards prevent overlapping actions;
 context menus capture their repository and exact source/target context. Tests use
 disposable real repositories and local bare

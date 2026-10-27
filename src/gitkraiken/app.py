@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
+from time import monotonic
 from typing import Self
 
 from rich.markup import escape
@@ -154,6 +155,8 @@ class GitKraikenApp(App[None]):
     CSS_PATH = "app.tcss"
     TITLE = "GitKraiken"
     ENABLE_COMMAND_PALETTE = False
+    LOCAL_REFRESH_INTERVAL = 2
+    REMOTE_REFRESH_INTERVAL = 30
     BINDINGS = [
         Binding("ctrl+q", "quit", "Quit"),
         Binding("ctrl+p", "command_picker", "Actions", priority=True),
@@ -203,6 +206,11 @@ class GitKraikenApp(App[None]):
         self._graph_geometry: tuple[tuple[str, int], ...] = ()
         self._search_matches: list[str] = []
         self._last_error = ""
+        self._status_message = "Ready"
+        self._refresh_error = ""
+        self._refreshing = False
+        self._next_remote_refresh = 0.0
+        self._last_remote_refresh = float("-inf")
 
     @property
     def _selected_ref(self) -> str:
@@ -313,9 +321,9 @@ class GitKraikenApp(App[None]):
         self.query_one("#history-heading", Static).tooltip = Text(
             "💻 Local branch / HEAD · 🌳 Worktree · 🐙 GitHub · ☁ Azure DevOps · 🦊 GitLab · ↗ Other remote\n"
             "Markers share a commit when branch, worktree, and remote tips agree.\n"
-            "Remote markers reflect last-fetched refs; Fetch updates them."
+            "Remote markers refresh automatically every 30s and when reopening the workspace."
         )
-        self.set_interval(5, self.poll_repository)
+        self.set_interval(self.LOCAL_REFRESH_INTERVAL, self.poll_repository)
         self.request_refresh()
         self.query_one("#graph-table").focus()
 
@@ -391,9 +399,110 @@ class GitKraikenApp(App[None]):
         for splitter in self.screen_stack[0].query(PaneSplitter):
             splitter.fit()
 
+    def on_app_focus(self, event: events.AppFocus) -> None:
+        # Terminal focus and the tmux resume notification may arrive together.
+        # Keep a request pending if a modal or mutation currently prevents it.
+        if monotonic() - self._last_remote_refresh >= self.LOCAL_REFRESH_INTERVAL:
+            self._next_remote_refresh = 0.0
+        self.poll_repository()
+
     def poll_repository(self) -> None:
-        if not self.busy and len(self.screen_stack) == 1:
-            self.request_refresh(quiet=True)
+        if self.repo and not self._refreshing and self._can_refresh(self.repo):
+            self._refreshing = True
+            self.run_worker(
+                self.refresh_background(self.repo), group="refresh", exit_on_error=False
+            )
+
+    def _can_refresh(self, repo: Repository) -> bool:
+        return self.repo is repo and not self.busy and len(self.screen_stack) == 1
+
+    async def refresh_background(self, repo: Repository) -> None:
+        """Single-flight reads/fetches, without toggling the workspace's busy styles.
+
+        Share the mutation lock, but not its UI state. If an action or modal opens
+        during a read, leave its screen alone; the next poll reconciles local data.
+        Never cancel a to_thread Git operation or overlap it with a mutation.
+        """
+        sidebar = self.screen_stack[0].query_one(ReferenceSidebar)
+        remote_started = False
+        remotes_changed = False
+        requested = None
+        try:
+            async with self._serial:
+                if not self._can_refresh(repo):
+                    return
+                snapshot = await asyncio.to_thread(repo.snapshot, self.limit)
+            if not self._can_refresh(repo):
+                return
+            await self._apply_refresh(snapshot)
+            if monotonic() < self._next_remote_refresh:
+                return
+            requested = snapshot
+            errors: list[str] = []
+            listings = None
+            async with self._serial:
+                if not self._can_refresh(repo):
+                    return
+                remote_started = True
+                sidebar.set_pull_requests_loading(True)
+                if requested.remotes:
+                    try:
+                        await asyncio.to_thread(repo.execute, Action("fetch"))
+                    except Exception as error:
+                        errors.append(str(error))
+                # A failed Git fetch must not prevent an independent hosted read.
+                try:
+                    listings = await asyncio.to_thread(repo.open_pull_requests)
+                except Exception as error:
+                    errors.append(str(error))
+                snapshot = await asyncio.to_thread(repo.snapshot, self.limit)
+            if self.repo is not repo:
+                return
+            if self._can_refresh(repo):
+                await self._apply_refresh(snapshot)
+            remotes_changed = snapshot.remotes != requested.remotes
+            if remotes_changed:
+                sidebar.update_pull_requests(None)
+                self._set_refresh_error(
+                    "Remotes changed while loading PRs; refreshing new destinations shortly."
+                )
+                return
+            if listings is not None:
+                sidebar.update_pull_requests(listings)
+                if self._selected_kind == "pull-request":
+                    self._sidebar_selection = sidebar.get_selection(self._sidebar_selection.key)
+                    sidebar.set_active(self._sidebar_selection)
+            # Background diagnostics must not replace a user action's result
+            # (notably a newly created PR's URL) or interrupt with toast popups.
+            self._set_refresh_error(errors[0] if errors else "")
+        except Exception as error:
+            if self.repo is repo:
+                self._set_refresh_error(str(error))
+        finally:
+            if remote_started and self.repo is repo:
+                sidebar.set_pull_requests_loading(False)
+                self._last_remote_refresh = monotonic()
+                # Back off even after failure. A changed destination needs a fresh
+                # attempt instead of waiting for the old destination's interval.
+                if (
+                    not remotes_changed
+                    and requested
+                    and self.snapshot_data
+                    and requested.remotes == self.snapshot_data.remotes
+                ):
+                    self._next_remote_refresh = monotonic() + self.REMOTE_REFRESH_INTERVAL
+                else:
+                    self._next_remote_refresh = 0.0
+            self._refreshing = False
+            if self.repo is not repo:
+                self.poll_repository()
+
+    async def _apply_refresh(self, snapshot: Snapshot) -> None:
+        if snapshot != self.snapshot_data:
+            await self.apply_snapshot(snapshot)
+        elif self._active_diff and self._active_diff[2] == "":
+            # Porcelain status can stay unchanged while an open file is edited.
+            self.load_diff(*self._active_diff[:2], preserve_scroll=True)
 
     def request_refresh(self, *, quiet: bool = False) -> None:
         if self.busy:
@@ -409,22 +518,22 @@ class GitKraikenApp(App[None]):
                 if self.repo is None:
                     self.repo = await asyncio.to_thread(Repository, self.path)
                 snapshot = await asyncio.to_thread(self.repo.snapshot, self.limit)
-            if snapshot != self.snapshot_data:
-                await self.apply_snapshot(snapshot)
-            elif self._active_diff and self._active_diff[2] == "":
-                # Status codes can stay unchanged while an explicitly opened
-                # worktree file is edited.
-                self.load_diff(*self._active_diff[:2], preserve_scroll=True)
+            if len(self.screen_stack) == 1:
+                await self._apply_refresh(snapshot)
             if not quiet:
-                self.status("Local state refreshed · no network request")
+                self.status("Local state refreshed · remote updates run automatically")
                 self._last_error = ""
         except Exception as error:
             self.show_error(str(error))
         finally:
             self.set_busy(False)
+            self.poll_repository()
 
     async def apply_snapshot(self, snapshot: Snapshot) -> None:
         new_repository = self.snapshot_data is None or self.snapshot_data.root != snapshot.root
+        if new_repository or self.snapshot_data.remotes != snapshot.remotes:
+            self._next_remote_refresh = 0.0
+            self._set_refresh_error("")
         self._generation += 1
         self._detail_token += 1
         self._diff_token += 1
@@ -608,6 +717,7 @@ class GitKraikenApp(App[None]):
             or repo is None
             or snapshot is None
             or event.root != repo.root
+            or self._refreshing
         ):
             return
         if self._selected_kind == "pull-request":
@@ -942,13 +1052,15 @@ class GitKraikenApp(App[None]):
 
             def closed(url: str | None) -> None:
                 if url:
-                    # Creation invalidates the cached list, but never triggers
-                    # another network request without an explicit Load/Refresh.
+                    # A newly created request should appear without another click.
+                    self._next_remote_refresh = 0.0
                     if self._selected_kind == "pull-request":
                         self._clear_reference_selection()
                     self.query_one(ReferenceSidebar).update_pull_requests(None)
                 self.update_controls()
                 self.status(f"Pull request created: {url}" if url else "Pull request cancelled")
+                if url:
+                    self.poll_repository()
 
             self.push_screen(PullRequestDialog(plan, create), closed)
 
@@ -1831,8 +1943,19 @@ class GitKraikenApp(App[None]):
         workspace.query_one(ReferenceSidebar).set_busy(self.busy)
 
     def status(self, message: str) -> None:
+        self._status_message = message.splitlines()[0] if message else "Ready"
+        self._paint_status()
+
+    def _set_refresh_error(self, message: str) -> None:
+        message = message.splitlines()[0] if message else ""
+        if message != self._refresh_error:
+            self._refresh_error = message
+            self._paint_status()
+
+    def _paint_status(self) -> None:
+        suffix = f" · Background refresh: {self._refresh_error}" if self._refresh_error else ""
         self.screen_stack[0].query_one("#status-line", Static).update(
-            Text(message.splitlines()[0] if message else "Ready")
+            Text(self._status_message + suffix)
         )
 
     def show_error(self, message: str) -> None:
@@ -1892,6 +2015,7 @@ class GitKraikenApp(App[None]):
                 self.show_error(str(error))
             finally:
                 self.set_busy(False)
+                self.poll_repository()
 
         self.run_worker(open_path(), group="repository", exit_on_error=False)
 

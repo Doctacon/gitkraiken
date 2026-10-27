@@ -65,10 +65,10 @@ intentionally rejected.
   available worktree or select it and choose **Open** to switch the workspace
   without checking out or changing files in either tree. **New** creates a worktree
   at HEAD on a new branch or detached HEAD; the current workspace stays open.
-  **PRs → Load PRs** explicitly loads open requests (including drafts) from supported
+  **PRs** automatically loads open requests (including drafts) from supported
   GitHub.com and Azure DevOps fetch remotes. Click a PR or press Enter to inspect
   its title, author, source/target branches, and open/copy its browser link.
-  Use **Refresh PRs** to update the list; local refresh never polls providers.
+  Lists refresh every 30 seconds and on opening/resuming; **Refresh PRs** updates sooner.
 - **Center:** a colored commit graph with rounded bends, branch/tag labels,
   authors, date/time, subjects and SHAs. Dates show `YYYY-MM-DD HH:MM` in your computer's
   local timezone, including daylight-saving rules for that date. All branches share
@@ -112,9 +112,15 @@ The graph column cannot shrink enough to hide lanes.
 
 Hover tooltip popups are disabled throughout the workspace and menus.
 
-Local state refreshes every five seconds while no dialog or operation is active.
-Network requests happen **only when you ask**. PR browsing uses optional authenticated
-`gh` / `az` CLIs, not Git's SSH credentials; see [setup](pull-requests.md).
+Local state refreshes every two seconds while no dialog or operation is active.
+Remote refs are fetched and PR lists refreshed automatically on opening/resuming
+(including **prefix + g**) and every 30 seconds after the previous attempt completes.
+Background refresh keeps existing content and controls visible rather than flashing
+the workspace into a busy state. Git operations remain serialized; slow network
+requests can delay a queued operation. Dialogs and operations defer new automatic
+refreshes until they close/finish. Failures retry on the next interval, not in a tight loop.
+Automatic fetch never pulls, pushes, or checks out a branch. PR browsing uses optional
+authenticated `gh` / `az` CLIs, not Git's SSH credentials; see [setup](pull-requests.md).
 Worktree discovery requires Git 2.36+ for unambiguous paths, including spaces and newlines.
 Large patches are clipped with a
 visible notice; binary files have a summary, not a binary-patch dump.

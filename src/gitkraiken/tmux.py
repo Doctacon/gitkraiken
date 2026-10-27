@@ -112,6 +112,26 @@ def _pane_value(pane: str, value: str, *, socket: str, check: bool = True) -> st
     ).stdout.strip()
 
 
+def _notify_focus(target: str, *, socket: str) -> None:
+    """Best-effort notification that a persistent app became visible again."""
+    try:
+        _run(
+            "send-keys",
+            "-t",
+            target,
+            "-H",
+            "1b",
+            "5b",
+            "49",
+            socket=socket,
+            check=False,
+        )
+    except TmuxError:
+        # A resume notification must never turn a successful swap/select into an
+        # open failure or interfere with restoring the user's parked process.
+        pass
+
+
 def launch_pane(root: Path, *, pane: str, socket: str) -> None:
     """Swap a persistent app into exactly this pane's slot, parking its live process.
 
@@ -123,6 +143,7 @@ def launch_pane(root: Path, *, pane: str, socket: str) -> None:
     session = f"gitkraiken-pane-{pane.removeprefix('%')}-{workspace_id(root)}"
     with _pane_lock(pane, socket=socket):
         app = _pane_value(f"={session}:", "#{@gitkraiken_app}", socket=socket, check=False)
+        reused = bool(app)
         if not app:
             size = _pane_value(pane, "#{pane_width}\t#{pane_height}", socket=socket)
             width, height = size.split("\t")
@@ -194,6 +215,8 @@ def launch_pane(root: Path, *, pane: str, socket: str) -> None:
         # Do not kill the app on a swap error: a timed-out client may have already
         # completed the swap, leaving the user's process in the parking session.
         _run("swap-pane", "-d", "-Z", "-s", app, "-t", pane, socket=socket)
+        if reused:
+            _notify_focus(app, socket=socket)
 
 
 def restore_pane(*, pane: str, socket: str) -> None:
@@ -268,12 +291,15 @@ def launch(root: Path, *, popup: bool = False, client: str = "", socket: str = "
     if popup and not inside:
         raise TmuxError("--popup needs an existing tmux client. Use --tmux outside tmux.")
     if popup:
-        if run("has-session", "-t", f"={session}", check=False).returncode:
+        reused = not run("has-session", "-t", f"={session}", check=False).returncode
+        if not reused:
             run("new-session", "-d", "-s", session, "-c", str(root), command)
         # Only our dedicated popup sessions carry this marker. The hotkey can
         # safely detach their client instead of recursively opening another popup.
         # set-option does not accept has-session's '=name' target syntax.
         run("set-option", "-t", session, "@gitkraiken_popup", "1")
+        if reused:
+            _notify_focus(f"={session}:", socket=socket)
         popup_socket = socket or run("display-message", "-p", "#{socket_path}").stdout.strip()
         if not popup_socket:
             raise TmuxError("Could not determine the current tmux server socket.")
@@ -310,6 +336,7 @@ def launch(root: Path, *, popup: bool = False, client: str = "", socket: str = "
             window, _, marker = line.partition("\t")
             if marker == key:
                 run("select-window", "-t", window)
+                _notify_focus(window, socket=socket)
                 return
         window = run(
             "new-window",

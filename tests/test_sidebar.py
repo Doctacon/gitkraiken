@@ -457,7 +457,7 @@ async def test_compact_footer_keeps_worktree_actions_and_pr_loading_explicit():
         assert app.worktree_opens[-1].selection.target == "/repo/linked"
         assert app.worktree_creates[-1].root == Path("/repo")
 
-        assert sidebar.query_one("#sidebar-prs-load").label.plain == "Load PRs"
+        assert sidebar.query_one("#sidebar-prs-load").label.plain == "Refresh PRs"
         await pilot.click("#sidebar-prs-load")
         assert app.pr_loads[-1].root == Path("/repo")
         sidebar.update_pull_requests((), loading=False)
@@ -515,7 +515,7 @@ async def test_unified_tree_has_ordered_coexisting_groups_and_compact_actions():
             for ident, label in (
                 ("sidebar-worktree-new", "New"),
                 ("sidebar-worktree-open", "Open"),
-                ("sidebar-prs-load", "Load PRs"),
+                ("sidebar-prs-load", "Refresh PRs"),
             ):
                 button = sidebar.query_one(f"#{ident}")
                 assert button.render_line(0).text.strip() == label, (width, ident)

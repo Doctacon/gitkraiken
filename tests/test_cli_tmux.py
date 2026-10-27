@@ -72,12 +72,17 @@ def test_existing_window_is_reused(tmp_path, monkeypatch):
     with (
         patch("gitkraiken.tmux.shutil.which", return_value="/bin/tmux"),
         patch(
-            "gitkraiken.tmux._run", side_effect=[result(f"@2\tother\n@4\t{key}\n"), result()]
+            "gitkraiken.tmux._run",
+            side_effect=[result(f"@2\tother\n@4\t{key}\n"), result(), result()],
         ) as run,
     ):
-        launch(tmp_path)
-    assert run.call_args_list[1].args == ("select-window", "-t", "@4")
-    assert run.call_count == 2
+        launch(tmp_path, socket="/tmp/socket")
+    assert [call.args for call in run.call_args_list[1:]] == [
+        ("select-window", "-t", "@4"),
+        ("send-keys", "-t", "@4", "-H", "1b", "5b", "49"),
+    ]
+    assert run.call_args_list[2].kwargs["check"] is False
+    assert all(call.kwargs["socket"] == "/tmp/socket" for call in run.call_args_list)
 
 
 def test_new_window_sets_only_its_marker(tmp_path, monkeypatch):
@@ -99,6 +104,7 @@ def test_new_window_sets_only_its_marker(tmp_path, monkeypatch):
         workspace_id(tmp_path),
     )
     assert all("-g" not in call.args for call in run.call_args_list)
+    assert not any(call.args[0] == "send-keys" for call in run.call_args_list)
 
 
 def test_popup_requires_tmux(monkeypatch, tmp_path):
@@ -124,12 +130,19 @@ def test_popup_reuses_session_and_unsets_tmux(tmp_path, monkeypatch):
         patch("gitkraiken.tmux.shutil.which", return_value="/bin/tmux"),
         patch(
             "gitkraiken.tmux._run",
-            side_effect=[result(), result(), result("/tmp/alternate tmux/socket\n")],
+            side_effect=[result(), result(), result(), result("/tmp/alternate tmux/socket\n")],
         ) as run,
         patch("gitkraiken.tmux.subprocess.run", return_value=result()) as foreground,
     ):
         launch(tmp_path, popup=True)
-    assert run.call_count == 3  # existing session + popup marker + socket discovery
+    session = f"gitkraiken-{workspace_id(tmp_path)}"
+    assert [call.args for call in run.call_args_list] == [
+        ("has-session", "-t", f"={session}"),
+        ("set-option", "-t", session, "@gitkraiken_popup", "1"),
+        ("send-keys", "-t", f"={session}:", "-H", "1b", "5b", "49"),
+        ("display-message", "-p", "#{socket_path}"),
+    ]
+    assert run.call_args_list[2].kwargs["check"] is False
     command = foreground.call_args.args[0]
     assert command[:4] == ["tmux", "-S", "/tmp/alternate tmux/socket", "display-popup"]
     assert shlex.split(command[-1])[:6] == [
@@ -141,7 +154,40 @@ def test_popup_reuses_session_and_unsets_tmux(tmp_path, monkeypatch):
         "/tmp/alternate tmux/socket",
     ]
     # zsh expands an unquoted '=name' as a command path before running tmux.
-    assert shlex.split(command[-1])[-1] == f"gitkraiken-{workspace_id(tmp_path)}"
+    assert shlex.split(command[-1])[-1] == session
+
+
+def test_fresh_popup_does_not_signal_the_new_app(tmp_path, monkeypatch):
+    monkeypatch.setenv("TMUX", "/fake/socket,1,0")
+    with (
+        patch("gitkraiken.tmux.shutil.which", return_value="/bin/tmux"),
+        patch(
+            "gitkraiken.tmux._run",
+            side_effect=[result(returncode=1), result(), result(), result("/tmp/socket\n")],
+        ) as run,
+        patch("gitkraiken.tmux.subprocess.run", return_value=result()),
+    ):
+        launch(tmp_path, popup=True)
+    assert not any(call.args[0] == "send-keys" for call in run.call_args_list)
+
+
+def test_popup_focus_notification_failure_does_not_report_open_failure(tmp_path, monkeypatch):
+    monkeypatch.setenv("TMUX", "/fake/socket,1,0")
+
+    def fake_run(*args, **kwargs):
+        if args[0] == "send-keys":
+            raise TmuxError("notification failed")
+        if args[0] == "display-message":
+            return result("/tmp/socket\n")
+        return result()
+
+    with (
+        patch("gitkraiken.tmux.shutil.which", return_value="/bin/tmux"),
+        patch("gitkraiken.tmux._run", side_effect=fake_run),
+        patch("gitkraiken.tmux.subprocess.run", return_value=result()) as foreground,
+    ):
+        launch(tmp_path, popup=True)
+    foreground.assert_called_once()
 
 
 def test_config_is_printed_without_repository_or_config_mutation(tmp_path, monkeypatch, capsys):
@@ -179,6 +225,10 @@ def test_popup_can_target_explicit_client_without_inherited_tmux(tmp_path, monke
     ):
         launch(tmp_path, popup=True, socket="/tmp/server", client="/dev/pts/42")
     assert all(call.kwargs["socket"] == "/tmp/server" for call in run.call_args_list)
+    session = f"gitkraiken-{workspace_id(tmp_path)}"
+    assert ("send-keys", "-t", f"={session}:", "-H", "1b", "5b", "49") in [
+        call.args for call in run.call_args_list
+    ]
     command = foreground.call_args.args[0]
     assert command[:6] == ["tmux", "-S", "/tmp/server", "display-popup", "-c", "/dev/pts/42"]
 
@@ -231,7 +281,8 @@ def test_hotkey_inside_pane_restores_origin_without_touching_processes():
 
 def test_pane_launch_reuses_parked_app(tmp_path):
     with patch(
-        "gitkraiken.tmux._run", side_effect=[result(), result("%9\n"), result(), result()]
+        "gitkraiken.tmux._run",
+        side_effect=[result(), result("%9\n"), result(), result(), result()],
     ) as run:
         launch_pane(tmp_path, pane="%7", socket="/tmp/socket")
     commands = [call.args for call in run.call_args_list]
@@ -242,10 +293,28 @@ def test_pane_launch_reuses_parked_app(tmp_path):
         f"=gitkraiken-pane-7-{workspace_id(tmp_path)}:",
         "#{@gitkraiken_app}",
     )
-    assert commands[2] == ("swap-pane", "-d", "-Z", "-s", "%9", "-t", "%7")
+    assert commands[2:4] == [
+        ("swap-pane", "-d", "-Z", "-s", "%9", "-t", "%7"),
+        ("send-keys", "-t", "%9", "-H", "1b", "5b", "49"),
+    ]
+    assert run.call_args_list[3].kwargs == {"socket": "/tmp/socket", "check": False}
+    assert commands[4] == ("wait-for", "-U", "gitkraiken-pane-%7")
     assert not any(
         command[0] in {"new-session", "respawn-pane", "display-popup"} for command in commands
     )
+
+
+def test_pane_focus_notification_failure_still_unlocks(tmp_path):
+    def fake_run(*args, **kwargs):
+        if args[0] == "display-message":
+            return result("%9\n")
+        if args[0] == "send-keys":
+            raise TmuxError("notification failed")
+        return result()
+
+    with patch("gitkraiken.tmux._run", side_effect=fake_run) as run:
+        launch_pane(tmp_path, pane="%7", socket="/tmp/socket")
+    assert run.call_args_list[-1].args == ("wait-for", "-U", "gitkraiken-pane-%7")
 
 
 def test_new_pane_is_guarded_before_start_and_swap(tmp_path):
@@ -271,6 +340,7 @@ def test_new_pane_is_guarded_before_start_and_swap(tmp_path):
     assert commands[swap] == ("swap-pane", "-d", "-Z", "-s", "%9", "-t", "%7")
     assert all(call.kwargs["socket"] == "/tmp/socket" for call in run.call_args_list)
     assert all("-g" not in command for command in commands)
+    assert not any(command[0] == "send-keys" for command in commands)
 
 
 @pytest.mark.parametrize("failure", ["respawn-pane", "swap-pane"])
@@ -321,6 +391,7 @@ def test_exit_restores_only_a_parked_origin(app_session, origin_session, swap):
     assert [command for command in commands if command[0].startswith("kill-")] == [
         ("kill-pane", "-t", "%9"),
     ]
+    assert not any(command[0] == "send-keys" for command in commands)
     assert commands[-1] == ("wait-for", "-U", "gitkraiken-pane-%7")
 
 

@@ -72,6 +72,22 @@ def main() -> None:
     try:
         with tempfile.TemporaryDirectory(prefix="gitkraiken-pane-") as temp:
             root, _ = create_fixture(Path(temp) / "repo's parent")
+
+            def git(directory: Path, *args: str) -> str:
+                return subprocess.check_output(
+                    ["git", "-C", str(directory), *args], text=True, stderr=subprocess.STDOUT
+                ).strip()
+
+            # Only local remotes: test freshness without credentials or network.
+            remote, peer = Path(temp) / "remote.git", Path(temp) / "peer"
+            git(root, "clone", "--bare", str(root), str(remote))
+            git(root, "remote", "add", "origin", str(remote))
+            git(root, "push", "-u", "origin", "main")
+            git(root, "clone", str(remote), str(peer))
+            git(peer, "config", "user.name", "Pane Smoke")
+            git(peer, "config", "user.email", "pane-smoke@example.invalid")
+            git(peer, "config", "commit.gpgsign", "false")
+            git(peer, "config", "core.hooksPath", "/dev/null")
             origin = tmux(
                 "-f",
                 "/dev/null",
@@ -251,7 +267,13 @@ def main() -> None:
             hide_app(app, origin)
             assert value(origin, "#{pane_pid}") == origin_pid
             assert value(origin, geometry) == resized_geometry
+            time.sleep(2.1)  # exceed duplicate focus-event debounce
+            old_head = git(root, "rev-parse", "HEAD")
+            git(peer, "commit", "--allow-empty", "-m", "Remote change while hidden")
+            git(peer, "push", "origin", "main")
             assert open_app(origin) == app
+            wait_for(lambda: "↓1" in capture(app), "Reopen did not refresh remote state")
+            assert git(root, "rev-parse", "HEAD") == old_head  # fetch, never pull
             assert int(value(app, "#{pane_pid}")) == app_pid
             wait_for(lambda: "Compact" in capture(app), "Reopen lost the selected graph style")
 
@@ -295,6 +317,7 @@ def main() -> None:
             print(
                 "PASS: prefix+g is pane-local; native resize 80x26 → 60x22 → 110x34; "
                 "neighbors stay interactive; independent origins; concurrent toggles; state and zoom; "
+                "remote state refreshed on resume without pulling; "
                 "Ctrl+Q and visible/hidden crashes restore the original shell without focus theft"
             )
     except Exception:
