@@ -127,14 +127,16 @@ visible notice; binary files have a summary, not a binary-patch dump.
 
 ### Branch pointers and navigation
 
-The graph distinguishes **💻 local branch / HEAD**, **🌳 worktree**, **🐙 GitHub**,
+The graph distinguishes **💻 local branch / HEAD**, **🌳 linked worktree**, **🐙 GitHub**,
 **☁ Azure DevOps**, **🦊 GitLab**, and **↗ other remote** pointers, plus **◇ tags**
 and **▣ stashes**. Markers share a commit when their tips agree. The tree marks
-registered worktree HEADs, including the main checkout and detached linked trees;
-multiple worktrees at one commit share a marker. Bare and unborn entries have no
-worktree commit to mark. A local commit moves its branch and worktree pointers;
-Fetch updates last-fetched remote-tracking pointers. These are not live server
-indicators. Icon appearance depends on your terminal font.
+registered linked worktree HEADs, including detached linked trees, but not the
+primary checkout. This is independent of the branch name or which checkout is
+open. Multiple linked worktrees at one commit share a marker. Bare and unborn
+entries have no worktree commit to mark. A local commit moves its branch pointer
+(and its tree marker if it is in a linked worktree); Fetch updates last-fetched
+remote-tracking pointers. These are not live server indicators. Icon appearance
+depends on your terminal font.
 
 Creating a branch at an existing commit adds a pointer, not an invented graph
 fork. New commits create divergence only when their actual ancestry diverges.

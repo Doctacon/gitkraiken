@@ -698,6 +698,8 @@ class Repository:
                     lock_reason=values.get("locked", ""),
                     prunable="prunable" in markers or "prunable" in values,
                     prune_reason=values.get("prunable", ""),
+                    # Git always lists the main worktree first, even from a linked checkout.
+                    primary=not worktrees,
                 )
             )
 

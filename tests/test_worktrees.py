@@ -38,6 +38,7 @@ def test_worktrees_preserve_paths_states_and_reasons(
         head=head,
         branch="main",
         current=True,
+        primary=True,
     )
     assert by_path[linked.resolve()].branch == "feature/space"
     assert by_path[linked.resolve()].path.name == "linked space\nline"
@@ -49,6 +50,11 @@ def test_worktrees_preserve_paths_states_and_reasons(
     assert by_path[missing.resolve()].prune_reason
 
     assert Repository(git_repo).snapshot().worktrees == worktrees
+
+    for root in (git_repo, linked, detached):
+        entries = Repository(root).worktrees()
+        assert [tree.path.resolve() for tree in entries if tree.primary] == [git_repo.resolve()]
+        assert [tree.path.resolve() for tree in entries if tree.current] == [root.resolve()]
 
 
 def test_worktree_listing_reports_the_git_236_requirement(monkeypatch, git_repo: Path) -> None:
@@ -71,6 +77,7 @@ def test_unborn_worktree_preserves_its_symbolic_branch(git_repo: Path) -> None:
     worktree = Repository(git_repo).worktrees()[0]
 
     assert worktree.current
+    assert worktree.primary
     assert worktree.head == ""
     assert worktree.branch == "main"
 
@@ -90,9 +97,11 @@ def test_bare_registration_is_reported_from_a_linked_worktree(
     by_path = {worktree.path.resolve(): worktree for worktree in worktrees}
 
     assert by_path[bare.resolve()].bare
+    assert by_path[bare.resolve()].primary
     assert not by_path[bare.resolve()].current
     assert by_path[bare.resolve()].head == ""
     assert by_path[bare.resolve()].branch == ""
     assert by_path[linked.resolve()].current
+    assert not by_path[linked.resolve()].primary
     assert by_path[linked.resolve()].head == head
     assert by_path[linked.resolve()].branch == "main"

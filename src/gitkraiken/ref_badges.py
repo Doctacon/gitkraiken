@@ -35,8 +35,9 @@ def build_ref_badges(snapshot: Snapshot, selected_ref: str = "") -> dict[str, Re
     when a long branch label is ellipsized. Descriptions retain every full ref;
     Commit.refs strings are deliberately not used to guess roles or providers.
     Remote tips are local remote-tracking refs, not live server observations.
-    Worktree pointers use registered HEADs, including detached and prunable entries;
-    bare repositories and unborn worktrees have no working-tree commit to mark.
+    Worktree pointers use linked HEADs, including detached and prunable entries.
+    The primary checkout is not a linked worktree; bare and unborn entries also
+    do not add a worktree marker.
     """
     by_oid: dict[str, list[Ref]] = defaultdict(list)
     for ref in snapshot.refs:
@@ -49,7 +50,7 @@ def build_ref_badges(snapshot: Snapshot, selected_ref: str = "") -> dict[str, Re
         by_oid.setdefault(stash.oid, [])
     worktrees: dict[str, list[Worktree]] = defaultdict(list)
     for worktree in snapshot.worktrees:
-        if worktree.head and not worktree.bare:
+        if worktree.head and not worktree.bare and not worktree.primary:
             worktrees[worktree.head].append(worktree)
             by_oid.setdefault(worktree.head, [])
     remotes = {remote.name: remote for remote in snapshot.remotes}

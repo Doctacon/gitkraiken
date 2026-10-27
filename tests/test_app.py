@@ -1033,6 +1033,7 @@ async def test_real_local_remote_badges_separate_when_local_branch_advances(bran
         base = git(branch_repo, "rev-parse", "main")
         assert "💻" in table.get_cell(base, "refs").plain
         assert "↗" in table.get_cell(base, "refs").plain
+        assert "🌳" not in table.get_cell(base, "refs").plain
         (branch_repo / "local.txt").write_text("local advance\n")
         git_run(branch_repo, "add", ".")
         git_run(branch_repo, "commit", "-m", "Advance local main")
@@ -1059,6 +1060,7 @@ async def test_worktree_graph_marker_tracks_other_checkout_without_moving_this_o
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         base = app.snapshot_data.head
+        assert "🌳" not in app._ref_badges[base].text.plain
         geometry = [(row.commit.oid, row.graph.plain) for row in app._graph_rows]
         mode = ["--detach"] if detached else ["-b", "feature/linked"]
         git_run(branch_repo, "worktree", "add", *mode, str(linked), "main")
@@ -1076,7 +1078,7 @@ async def test_worktree_graph_marker_tracks_other_checkout_without_moving_this_o
         assert tip in app._commits  # --all also reaches detached linked worktree HEADs.
         assert "🌳" in table.get_cell(tip, "refs").plain
         assert ("💻" in table.get_cell(tip, "refs").plain) is not detached
-        assert "🌳" in table.get_cell(base, "refs").plain  # The main worktree remains here.
+        assert "🌳" not in table.get_cell(base, "refs").plain  # Only the primary checkout remains.
         assert "↗" in table.get_cell(base, "refs").plain
         assert app.snapshot_data.head == base
         assert app.snapshot_data.branch == "main"
@@ -1086,6 +1088,7 @@ async def test_worktree_graph_marker_tracks_other_checkout_without_moving_this_o
         await settle(app, pilot)
         badge = app._ref_badges.get(tip)
         assert badge is None or "🌳" not in badge.text.plain
+        assert "🌳" not in table.get_cell(base, "refs").plain
         assert git(branch_repo, "rev-parse", "HEAD") == base
 
 

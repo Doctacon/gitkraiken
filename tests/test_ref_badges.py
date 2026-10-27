@@ -1,6 +1,9 @@
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
+
+from gitkraiken.git import Repository
 from gitkraiken.models import Commit, HistoryLine, Ref, Remote, Snapshot, Stash, Worktree
 from gitkraiken.ref_badges import build_ref_badges
 
@@ -16,9 +19,12 @@ def test_aligned_local_and_github_tips_show_both_markers_before_long_names():
             Ref(f"origin/{name}", f"refs/remotes/origin/{name}", "tip", "remote", remote="origin"),
         ),
         remotes=(Remote("origin", "https://github.com/example/demo.git", provider="GitHub"),),
+        worktrees=(Worktree(Path("/demo"), "tip", name, current=True, primary=True),),
     )
     badge = build_ref_badges(snapshot)["tip"]
     assert badge.text.plain.startswith("💻 🐙 ")
+    assert "🌳" not in badge.text.plain
+    assert "Worktree:" not in badge.description.plain
     clipped = badge.text.copy()
     clipped.truncate(12, overflow="ellipsis")
     assert "💻" in clipped.plain and "🐙" in clipped.plain
@@ -26,6 +32,47 @@ def test_aligned_local_and_github_tips_show_both_markers_before_long_names():
     assert f"refs/heads/{name}" in badge.description.plain
     assert f"refs/remotes/origin/{name}" in badge.description.plain
     assert "last-fetched" in badge.description.plain
+
+
+@pytest.mark.parametrize("checkout", ["main", "topic", "detached"])
+def test_primary_checkout_does_not_add_worktree_marker(git_repo, git_run, checkout):
+    git_run(git_repo, "commit", "--allow-empty", "-m", "initial")
+    if checkout == "topic":
+        git_run(git_repo, "switch", "-c", "topic")
+    elif checkout == "detached":
+        git_run(git_repo, "switch", "--detach")
+    snapshot = Repository(git_repo).snapshot()
+
+    badge = build_ref_badges(snapshot)[snapshot.head]
+
+    assert badge.text.plain.startswith("💻 ")
+    assert "🌳" not in badge.text.plain
+    assert "Worktree:" not in badge.description.plain
+
+
+@pytest.mark.parametrize("detached", [False, True])
+def test_linked_worktree_marker_is_independent_of_open_checkout(
+    git_repo, git_run, tmp_path, detached
+):
+    git_run(git_repo, "commit", "--allow-empty", "-m", "initial")
+    primary_head = git_run(git_repo, "rev-parse", "HEAD").stdout.strip()
+    git_run(git_repo, "switch", "-c", "topic")
+    linked = tmp_path / "linked"
+    mode = ["--detach"] if detached else []
+    # Even a linked checkout of main gets the marker; branch names do not decide it.
+    git_run(git_repo, "worktree", "add", *mode, str(linked), "main")
+    git_run(linked, "commit", "--allow-empty", "-m", "advance linked")
+    linked_head = git_run(linked, "rev-parse", "HEAD").stdout.strip()
+
+    for root in (git_repo, linked):
+        badges = build_ref_badges(Repository(root).snapshot())
+
+        assert "💻" in badges[primary_head].text.plain
+        assert "🌳" not in badges[primary_head].text.plain
+        assert "Worktree:" not in badges[primary_head].description.plain
+        assert "🌳" in badges[linked_head].text.plain
+        assert str(linked) in badges[linked_head].description.plain
+        assert ("(current)" in badges[linked_head].description.plain) == (root == linked)
 
 
 def test_worktree_marker_shares_local_and_remote_tip_without_repeating_names():
@@ -39,10 +86,11 @@ def test_worktree_marker_shares_local_and_remote_tip_without_repeating_names():
         ),
         remotes=(Remote("origin", "https://github.com/example/demo.git", provider="GitHub"),),
         worktrees=(
-            Worktree(Path("/demo"), "tip", "main", current=True),
+            Worktree(Path("/demo"), "tip", "main", current=True, primary=True),
             Worktree(
                 Path("/linked [literal]"), "tip", detached=True, locked=True, lock_reason="in use"
             ),
+            Worktree(Path("/linked-topic"), "tip", "topic"),
         ),
     )
     badges = build_ref_badges(snapshot)
@@ -52,7 +100,8 @@ def test_worktree_marker_shares_local_and_remote_tip_without_repeating_names():
     clipped = badge.text.copy()
     clipped.truncate(12, overflow="ellipsis")
     assert all(icon in clipped.plain for icon in ("💻", "🌳", "🐙"))
-    assert "🌳 Worktree: /demo · main (current)" in badge.description.plain
+    assert "Worktree: /demo" not in badge.description.plain
+    assert "🌳 Worktree: /linked-topic · topic" in badge.description.plain
     assert (
         "🌳 Worktree: /linked [literal] · detached HEAD (locked: in use)" in badge.description.plain
     )

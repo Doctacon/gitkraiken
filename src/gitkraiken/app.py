@@ -319,7 +319,7 @@ class GitKraikenApp(App[None]):
         wip_table.add_column("File", key="file")
         self._configure_history_columns()
         self.query_one("#history-heading", Static).tooltip = Text(
-            "💻 Local branch / HEAD · 🌳 Worktree · 🐙 GitHub · ☁ Azure DevOps · 🦊 GitLab · ↗ Other remote\n"
+            "💻 Local branch / HEAD · 🌳 Linked worktree · 🐙 GitHub · ☁ Azure DevOps · 🦊 GitLab · ↗ Other remote\n"
             "Markers share a commit when branch, worktree, and remote tips agree.\n"
             "Remote markers refresh automatically every 30s and when reopening the workspace."
         )

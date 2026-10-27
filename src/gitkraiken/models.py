@@ -44,6 +44,7 @@ class Worktree:
     lock_reason: str = ""
     prunable: bool = False
     prune_reason: str = ""
+    primary: bool = False  # Main checkout (or bare repository), independent of current/branch.
 
 
 @dataclass(frozen=True)

@@ -20,6 +20,8 @@ hosted PR browsing/creation uses authenticated GitHub/Azure CLIs; see [pull requ
     first by author instant (`%at`), with raw `%aI` dates retained for display.
   - `worktrees() -> tuple[Worktree, ...]`: local `git worktree list --porcelain -z`
     (Git 2.36+), preserving literal paths and detached/bare/locked/prunable metadata.
+    `primary` identifies Git's first entry (the main checkout or bare repository),
+    independently of `current`, which identifies the open checkout.
     The UI can open an available entry without mutating either checkout. Opening
     revalidates registration and exact discovered root; stale entries cannot fall
     back to a parent repository. Worktree creation reuses guarded context actions.
@@ -119,12 +121,13 @@ hosted PR browsing/creation uses authenticated GitHub/Azure CLIs; see [pull requ
   exact ref, repository root and screen position; other nodes/carets are inert.
   Carets, categories, Enter, and navigation never check out.
 - `ref_badges.py`: pure typed pointer grouping by OID from refs, remotes, stashes,
-  and registered worktree HEADs, not ambiguous `Commit.refs` strings. Local/HEAD,
-  worktree (🌳), and provider markers precede potentially truncated names. Worktrees
-  sharing an OID use one marker; descriptions retain each full path, branch/detached
-  state, and current/locked/prunable status. Bare and unborn entries do not add
-  markers. A detached linked worktree without another pointer gets a basename
-  label, not an invented local branch. Description metadata retains full refs.
+  and registered linked worktree HEADs, not ambiguous `Commit.refs` strings. Local/HEAD,
+  linked worktree (🌳), and provider markers precede potentially truncated names. Linked
+  worktrees sharing an OID use one marker; descriptions retain each full path,
+  branch/detached state, and current/locked/prunable status. Primary, bare, and unborn
+  entries do not add tree markers, regardless of branch name or the open checkout.
+  A detached linked worktree without another pointer gets a basename label, not an
+  invented local branch. Description metadata retains full refs.
   Remote markers describe local last-fetched state, never live server state.
   Individual name spans carry full-ref metadata for graph branch context menus.
 - `context_actions.py`: immutable clicked targets and pure contextual menu policy.
