@@ -26,8 +26,8 @@ def main() -> None:
         return subprocess.check_output(["tmux", "-L", server, *args], text=True).strip()
 
     old_tmux = os.environ.get("TMUX")
-    try:
-        with tempfile.TemporaryDirectory(prefix="rhizome-smoke-") as temp:
+    with tempfile.TemporaryDirectory(prefix="rhizome-smoke-") as temp:
+        try:
             root = create_demo(Path(temp) / "a repo's directory")
             tmux(
                 "-f",
@@ -56,13 +56,23 @@ def main() -> None:
             else:
                 raise AssertionError(f"UI did not start in tmux:\n{screen}")
             assert "COMMIT GRAPH" in screen
-            print("PASS: real tmux window starts, renders repository, and reuses its window")
-    finally:
-        subprocess.run(["tmux", "-L", server, "kill-server"], capture_output=True, check=False)
-        if old_tmux is None:
-            os.environ.pop("TMUX", None)
-        else:
-            os.environ["TMUX"] = old_tmux
+            # Let the app and its Git workers finish before deleting their repository.
+            pane = tmux("display-message", "-p", "#{pane_id}")
+            tmux("send-keys", "-t", pane, "C-q")
+            for _ in range(100):
+                if pane not in tmux("list-panes", "-a", "-F", "#{pane_id}").splitlines():
+                    break
+                time.sleep(0.1)
+            else:
+                raise AssertionError("Rhizome did not exit before fixture cleanup")
+            print("PASS: real tmux window starts, renders repository, reuses its window, and quits")
+        finally:
+            # This must run inside TemporaryDirectory, before its cleanup starts.
+            subprocess.run(["tmux", "-L", server, "kill-server"], capture_output=True, check=False)
+            if old_tmux is None:
+                os.environ.pop("TMUX", None)
+            else:
+                os.environ["TMUX"] = old_tmux
 
 
 if __name__ == "__main__":

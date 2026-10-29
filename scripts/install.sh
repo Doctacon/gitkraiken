@@ -963,11 +963,14 @@ if [ "$existing_revision" -eq 0 ]; then
             *) fail "verified uv executable reported an unexpected version: $UV_OUTPUT" ;;
         esac
         run_private_uv python install --managed-python --no-config --no-bin "$PYTHON_VERSION"
-        run_private_uv tool install --python "$PYTHON_VERSION" --managed-python \
+        # uv 0.11.7 splits constraint arguments on spaces even when shell-quoted.
+        # Resolve simple relative filenames from the positively owned payload.
+        run_private_uv --directory "$REVISION_STAGE" tool install \
+            --python "$PYTHON_VERSION" --managed-python \
             --no-python-downloads --no-config --no-sources \
             --default-index https://pypi.org/simple --index-strategy first-index \
-            --keyring-provider disabled --constraints "$REVISION_STAGE/runtime-constraints.txt" \
-            --build-constraints "$REVISION_STAGE/build-constraints.txt" \
+            --keyring-provider disabled --constraints runtime-constraints.txt \
+            --build-constraints build-constraints.txt \
             "git+$PROJECT_URL.git@$REVISION"
         [ -x "$REVISION_STAGE/bin/rhizome" ] || fail "uv did not install the rhizome executable"
         printf '%s\n' "$REVISION" > "$REVISION_STAGE/.rhizome-revision"
