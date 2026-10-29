@@ -136,10 +136,12 @@ jobs:
             --output "$sources/git-2.36.0.tar.xz"
           echo "$GIT_SOURCE_SHA256  $sources/git-2.36.0.tar.xz" | sha256sum --check -
           tar -C "$sources" -xf "$sources/git-2.36.0.tar.xz"
+          # GCC 15 defaults to C23, whose unreachable macro conflicts with Git 2.36.
+          # Keep the verified minimum source intact and select its supported dialect.
           make -C "$sources/git-2.36.0" -j2 prefix="$git_prefix" \
-            NO_GETTEXT=YesPlease NO_TCLTK=YesPlease all
+            CFLAGS='-O2 -std=gnu99' NO_GETTEXT=YesPlease NO_TCLTK=YesPlease all
           make -C "$sources/git-2.36.0" prefix="$git_prefix" \
-            NO_GETTEXT=YesPlease NO_TCLTK=YesPlease install
+            CFLAGS='-O2 -std=gnu99' NO_GETTEXT=YesPlease NO_TCLTK=YesPlease install
 
           curl --fail --silent --show-error --location \
             https://github.com/tmux/tmux/releases/download/3.2/tmux-3.2.tar.gz \

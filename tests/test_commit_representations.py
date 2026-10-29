@@ -21,6 +21,9 @@ def _git_path(repository: Path, git_run, name: str) -> Path:
 def _prepare_sparse_index(repository: Path, git_run) -> None:
     repository.mkdir()
     git_run(repository, "init", "-b", "main")
+    git_run(repository, "config", "user.name", "Test User")
+    git_run(repository, "config", "user.email", "test@example.invalid")
+    git_run(repository, "config", "commit.gpgsign", "false")
     (repository / "visible").mkdir()
     (repository / "outside").mkdir()
     (repository / "visible" / "file.txt").write_text("visible base\n")
@@ -92,6 +95,9 @@ def test_sha256_commit_reports_and_verifies_full_native_oid(tmp_path, git_run):
     repository = tmp_path / "sha256-worktree"
     repository.mkdir()
     git_run(repository, "init", "--object-format=sha256", "-b", "main")
+    git_run(repository, "config", "user.name", "Test User")
+    git_run(repository, "config", "user.email", "test@example.invalid")
+    git_run(repository, "config", "commit.gpgsign", "false")
     assert git_run(repository, "rev-parse", "--show-object-format").stdout.strip() == "sha256"
     source = repository / "sha256.txt"
     source.write_text("base\n")
