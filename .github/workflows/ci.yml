@@ -45,7 +45,7 @@ jobs:
         run: uv build
 
   full-suite:
-    name: Linux · complete suite (includes deferred installer regression)
+    name: Linux · complete suite (including installer regressions)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -54,8 +54,7 @@ jobs:
           python-version: '3.13'
           enable-cache: true
       - run: uv sync --locked
-      # This is deliberately a normal, required run: the known installer
-      # crash/retry lifecycle defect remains visible as a red result.
+      # Keep installer crash/retry coverage in the normal required suite.
       - name: Complete test suite
         run: uv run pytest
 

@@ -348,6 +348,8 @@ async def test_remote_change_during_automatic_read_discards_and_retries(
     load = Mock(return_value=listings)
     monkeypatch.setattr(Repository, "open_pull_requests", load)
     app = RhizomeApp(remote_workspace)
+    # Drive each poll explicitly so the timer cannot retry before we inspect the discard.
+    app.LOCAL_REFRESH_INTERVAL = 3600
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         sidebar = app.query_one(ReferenceSidebar)
