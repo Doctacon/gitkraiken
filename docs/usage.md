@@ -1,508 +1,323 @@
 # Rhizome usage guide
 
-[Quickstart](../README.md)
+[Quickstart](../README.md) · [Pinned installation](installation.md)
 
-A GitKraken-inspired Git workspace for your **terminal and tmux**, built with Python
-and Textual. Local-first, mouse-friendly, keyboard-driven, with a high-contrast
-light palette for bright environments. Works with private GitHub and Azure DevOps
-repositories through your existing Git authentication.
-
-![Rhizome's branches, commit graph, and changed files](assets/workspace.png)
+Rhizome is a local-first, terminal-native Git workspace. This development checkout
+contains the precision-core upgrade in progress, not a certified release of the
+entire [roadmap](design/world-class-rhizome.md). Later investigation, integration,
+personalization, and captured hosted-review workflows remain incomplete.
+**Ordinary commit submission is temporarily disabled after a real-Git test exposed
+an index-writer race.** Earlier commit-flow evidence predates this gate. Inspection,
+selected staging, and durable composition remain available while it is addressed.
 
 ## Run
 
-For **macOS or Linux (including WSL2)**. Requires **Git 2.36+**, **Python 3.13+**, and
-[uv](https://docs.astral.sh/uv/).
-A true-color terminal at **120×40 or larger** is recommended; 170 columns gives
-all three panels room. Smaller tmux panes adapt automatically: below 85 columns,
-the inspector collapses; use `Ctrl+Right` to show it or `Ctrl+Left` to return to
-refs. Either side panel can remain alongside history at 60 columns. No special font is required.
+Use Git 2.36+, Python 3.13+, and uv for a development checkout:
 
 ```sh
-git clone https://github.com/Doctacon/rhizome.git
-cd rhizome
-uv sync
-uv run rhizome /path/to/repository
-
-# Explore a disposable REAL Git repository with a local-only remote.
-# Nothing is cloned from or pushed to an external service.
-uv run rhizome --demo
-
-# Clone, then open (destination must be new or empty)
-uv run rhizome --clone git@github.com:ORG/REPO.git ~/work/repo
+uv sync --locked
+uv run --locked rhizome /path/to/repository
+uv run --locked rhizome --demo
+# Explicitly clone into a new or empty destination, then open:
+uv run --locked rhizome --clone git@github.com:ORG/REPO.git ~/work/repo
 ```
 
-To make `rhizome` available from any directory:
+A path inside a worktree is sufficient; bare repositories are rejected. The demo
+uses a disposable real Git repository and a local-only remote. No external service
+is cloned or pushed by the demo. `uv run --locked python -m rhizome [path]` also works.
 
-```sh
-uv tool install .
-rhizome ~/work/repo
+The target environment is macOS/Linux/WSL2, including SSH and optional tmux 3.2+.
+The precision flow has headless **80×24** coverage; that is not proof of every
+terminal, platform, minimum version, assistive technology, or human usability gate.
+At wide sizes all three panels fit. In a constrained terminal, Files, Commit, Refs,
+and Back summon one primary task rather than squeezing all panels together.
+
+## Browse without checking out
+
+- **References:** the searchable tree groups repository, local branches, remotes,
+  worktrees, PRs, tags and stashes. Carets and Space fold groups. Selecting or
+  double-clicking a branch sets context; it never checks out or filters history.
+- **History:** select or double-click a commit to inspect it. Right-click its row
+  for exact commit actions, or its branch-name badge for branch-specific actions.
+- **Details:** activate a changed file to open its diff. Back/Esc restores the
+  graph; merely selecting a commit does not open a file diff.
+- **Worktrees:** opening a registered worktree is navigation to another checkout,
+  not a checkout operation in the current tree. New worktree creation leaves the
+  current checkout intact and asks for an explicit branch/detached choice and path.
+
+Only an explicit **Checkout** command changes the checkout. Remote checkout uses
+exact remote-ref identity: an unrelated same-named local branch is not silently
+substituted. A ref/HEAD/context change while a prompt is open invalidates the action.
+
+Current history still uses the existing author-time timeline, loaded in batches
+of 300 up to 5,000. Search currently covers that loaded history. Complete captured-
+scope search, topology-first ordering, bounded deep pagination, explicit focus,
+comparisons, file history, and blame belong to M2 and are **not yet implemented**.
+Selecting a reference does not pretend to provide those features.
+
+### Graph and pointer details
+
+Smooth and Compact change rendering density, not commit ordering. Press **g** or
+use the graph-style button; the preference now survives restart. Dates use local
+time, including daylight-saving rules. Connector-only rows and the WIP row have
+no invented author/date. WIP appears only when there are changes.
+
+The graph shows local branch/HEAD, linked worktree, provider/remote, tag, and stash
+pointers. Several pointers can share a commit without inventing a fork. Registered
+linked-worktree markers are independent of branch names and include detached
+worktrees. Remote-tracking pointers mean **last fetched**, not live server state.
+
+Crossings are not joins. Dotted tails continue beyond loaded history. If author
+date skew places a parent above its child, an upward parent-SHA annotation names
+it rather than inventing a downward edge. Graph lanes are not cropped away.
+
+Drag pane dividers or column-header grips to resize. Session widths, folds and
+scroll positions survive ordinary refresh. Narrowing limits visible panes;
+expanding restores explicit side-panel preferences. Hover popup tooltips are
+suppressed in the workspace.
+
+## Craft a precise commit
+
+1. Choose **Files / F2**. Staged and unstaged versions of a mixed file have separate
+   entries. A row highlight and an explicitly opened review are independent.
+2. Activate the file to open the canonical unified diff. The diff takes keyboard
+   focus; return focus to Files when changing the whole-file selection.
+3. Press **v** to anchor a contiguous range, extend it with arrows, then **s** to
+   stage or **u** to unstage. Mouse click/Shift-click select ranges. Hunk controls
+   operate on the current hunk. File and all-file staging remain available.
+4. Search, expand context, show whitespace and inspect word emphasis as reading
+   aids. These controls never reconstruct the Git patch from displayed text.
+5. Choose **Commit / F3** and write a summary and optional body. The composer shows
+   staged-file scope. **Commit submission is currently unavailable** pending a proven
+   reviewed-index transaction; do not infer readiness from older flow tests.
+
+Selected staging/unstaging changes the index, not the working file. Unsupported
+representations, conversions, binary/oversized data and stale input fail explicitly;
+Rhizome does not approximate a selected patch or silently fall back to whole-file
+staging. Large static commit previews identify truncation.
+
+### Changed input stays visible
+
+An external edit or Git operation does not silently replace a captured precision
+review. It retains text, selection/cursor and scroll, marks the view **stale**, and
+refuses application. Use the diff's explicit Refresh, inspect the new content and
+select again. A successful action initiated in the app may deliberately show its
+new result. Refreshing summary data is not permission to retarget a selection.
+
+## Drafts and core preferences
+
+Commit drafts are private, worktree-specific state outside the checkout. Linked
+worktrees do not share a draft. Reopening restores text; completing a commit or
+explicitly clearing the editor clears it. A failed write is reported as **not
+saved**, rather than claiming durability.
+
+PR title/body drafts are additionally keyed by hosted provider/repository and
+source/target branch intent. Closing the composer retains them; another target
+gets its own draft. A moving source commit does not erase the draft. Successful
+creation clears that intent's saved text; a cleanup failure does not report the
+already-created PR as a failed creation.
+
+The state location and installation are [separate](installation.md#locations-and-ownership).
+`settings.json` is a versioned editable file in that state location. Existing core
+preferences include `graph_style`, `offline`, `remote_refresh_enabled`,
+`remote_refresh_interval`, and `protected_branches`. For example:
+
+```json
+{
+  "schema_version": 1,
+  "data": {
+    "graph_style": "smooth",
+    "offline": false,
+    "remote_refresh_enabled": true,
+    "remote_refresh_interval": 60,
+    "protected_branches": ["release"]
+  }
+}
 ```
 
-To update a checkout-based tool installation, quit any running Rhizome workspace
-with `Ctrl+Q`, then run `git pull --ff-only` and `uv tool install --force --reinstall .`
-in this checkout. Reopen it normally (or with your existing tmux hotkey).
+Restart after manual edits. Invalid settings surface an error and pause automatic
+network activity rather than silently enabling defaults. Full settings/keymap UI,
+adaptive themes and the broader persistence controls remain M2 work; the storage
+schema alone is not evidence that every preference is wired into the app.
 
-**Migrating from `gitkraiken`:** quit old tmux workspaces, install the renamed
-`rhizome` CLI, and regenerate/replace the old tmux binding with
-`rhizome --tmux-config`. The package, Python module, and generated Python paths
-changed, so the old binding cannot be reused.
+## Safety during the implementation transition
 
-`uv run main.py [path]` and `uv run python -m rhizome [path]` also work. A path
-inside a worktree is enough; Rhizome discovers its root. Bare repositories are
-intentionally rejected.
+Routine supported actions currently include stage/unstage, explicit
+checkout, branch/tag/worktree creation, upstream selection, validated fetch and
+non-force push. Fetch evaluates active refspecs, pruning settings and symbolic
+aliases before transport. It refuses configured refspec destinations outside remote-tracking caches,
+tag pruning, unsupported explicit tag modes, and updates that could move an
+existing user-owned symbolic ref through a cache. Native non-force tag auto-follow
+and explicit `--no-tags` remain supported; configured pruning may remove obsolete
+cached refs. As in native Git, a previously dangling symbolic alias may become
+resolvable when a new cache ref or auto-followed tag arrives; that does not discard
+an existing tip. Use deliberate external Git for refused configurations.
 
-## The main screen
+Plans capture relevant identity, targets, configuration and content, then
+revalidate under common-repository mutation serialization. They cannot be replayed
+or silently retargeted.
 
-- **Left:** one searchable tree with collapsible **Repository**, **Local**,
-  **Remotes**, **Worktrees**, **PRs**, **Tags**, and **Stashes** sections, in that order.
-  Expand or collapse sections, individual remotes, and branch namespaces such as
-  `feature/jlott` using their carets. Worktrees and PRs sit below Remotes and above
-  Tags and Stashes, not in separate tabs. Search reveals matching paths; clearing
-  it restores your folds. Folding sections never filters the commit graph or
-  clears your selected branch.
-  **Single-click selects action context without moving or filtering the graph.**
-  **Double-click a local/remote branch label to check it out immediately.**
-  **Right-click a branch for checkout, integration, creation, reset, upstream,
-  rename/delete, pull request creation, and copy actions.**
-  **Worktrees** lists the main and linked working trees, their branches/paths,
-  current checkout, detached HEAD, and locked/prunable status. Double-click an
-  available worktree or select it and choose **Open** to switch the workspace
-  without checking out or changing files in either tree. **New** creates a worktree
-  at HEAD on a new branch or detached HEAD; the current workspace stays open.
-  **PRs** automatically loads open requests (including drafts) from supported
-  GitHub.com and Azure DevOps fetch remotes. Click a PR or press Enter to inspect
-  its title, author, source/target branches, and open/copy its browser link.
-  Lists refresh every 30 seconds and on opening/resuming; **Refresh PRs** updates sooner.
-- **Center:** a colored commit graph with rounded bends, branch/tag labels,
-  authors, date/time, subjects and SHAs. Dates show `YYYY-MM-DD HH:MM` in your computer's
-  local timezone, including daylight-saving rules for that date. All branches share
-  one timeline, ordered by author timestamp: **newest at the top, oldest at the bottom**.
-  The WIP row appears only when there are staged, unstaged, or untracked changes;
-  a clean checkout selects HEAD without adding a synthetic node. Working changes
-  and connector-only rows have no author or date. Smooth and Compact
-  show the same timeline and actual parent relationships at different row densities.
-  Search by message, author, ref or SHA and
-  jump between matches **without removing graph connections**. Load history in
-  batches of 300, up to 5,000 commits. History stays unified across branch
-  selections and checkouts; sidebar search never changes graph topology.
-- **Right:** selected commit's title and compact author/date/SHA above an expanded
-  changed-file tree. Click a file (or press Enter) to replace the center graph with
-  its syntax-colored diff; **Back to graph** or **Esc** restores the graph. Selecting
-  a commit alone does not open a diff. Fold directories with a click or Space;
-  file labels show just the filename. Commit descriptions do not consume the
-  file list's space. Merge commits are compared to their first parent.
-  The **Working directory** tab has separate staged/unstaged entries, file/all
-  staging, safe discard, and a multiline commit composer. Opening a working file
-  also shows its diff in the center, leaving staging controls on the right.
-  Diff previews hide redundant `diff --git`, index, and `---` / `+++` path headers,
-  while keeping hunk locations and binary, rename, or mode-change summaries.
-- **Toolbar / Actions:** fetch, fast-forward-only pull, push/publish branch,
-  checkout, create/rename/safe-delete branch, merge, rebase, cherry-pick, revert,
-  soft reset, create/delete local tags, stash/apply/pop/drop, and open another repo.
-  **Right-click menus** additionally offer worktree creation, all three reset modes,
-  latest-commit message editing, upstream configuration, remote branch deletion,
-  patch application, and copying names, SHAs, and supported provider links.
-- **Conflicts:** a visible operation banner with Continue/Abort. Resolve files in
-  your editor, stage resolutions, then Continue. Git's errors remain visible;
-  failed operations refresh the screen too.
+The current workspace deliberately refuses **discard, resets, history rewrites,
+merge/rebase/cherry-pick/revert, stash mutations, pull, ref deletion, external-patch
+application, Continue and Abort** while their guided protection/recovery flows
+remain unproven. Some existing menus/prompts remain visible, but submission explains
+the gate and does not execute Git. Selecting a hard-reset mode is not an exception.
+Protected/default refs cannot bypass these guards.
 
-**Resize the workspace:** click, hold, and drag the vertical dividers beside the
-sidebar and inspector. Drag a `│` at the right edge of a graph or working-directory
-column header to change that column's width; scroll
-horizontally to reach off-screen headers. Sizes are remembered for the running
-session across refreshes, graph-style changes, and hiding/showing panes. Shrinking
-the terminal temporarily limits pane sizes; expanding it restores your preference.
-The graph column cannot shrink enough to hide lanes.
+For a gated workflow, inspect `git status` and use Git or your editor explicitly in
+another terminal, then refresh Rhizome. An externally started conflict remains
+visible; finish it externally for now. **Rhizome does not checkpoint or promise
+recovery for external actions.** The underlying recovery component is not yet a
+complete user-facing recovery workflow. There is no universal Undo.
 
-Hover tooltip popups are disabled throughout the workspace and menus.
+Push uses an explicit non-force refspec and destination; broad configured push
+defaults are not substituted. Multiple push destinations are refused. Transport
+failure can leave a remote outcome uncertain: inspect it before deciding to retry.
+No automatic mutation retry, force-push, `git clean`, or automatic stashing is added.
+Repository hooks/signing still run and can reject or time out an operation.
 
-Local state refreshes every two seconds while no dialog or operation is active.
-Remote refs are fetched and PR lists refreshed automatically on opening/resuming
-(including **prefix + g**) and every 30 seconds after the previous attempt completes.
-Background refresh keeps existing content and controls visible rather than flashing
-the workspace into a busy state. Git operations remain serialized; slow network
-requests can delay a queued operation. Dialogs and operations defer new automatic
-refreshes until they close/finish. Failures retry on the next interval, not in a tight loop.
-Automatic fetch never pulls, pushes, or checks out a branch. PR browsing uses optional
-authenticated `gh` / `az` CLIs, not Git's SSH credentials; see [setup](pull-requests.md).
-Worktree discovery requires Git 2.36+ for unambiguous paths, including spaces and newlines.
-Large patches are clipped with a
-visible notice; binary files have a summary, not a binary-patch dump.
+## Refresh and activity
 
-### Branch pointers and navigation
+Local polling runs on a two-second cadence when the workspace permits it. Fetch
+is currently gated (see above). Optional hosted metadata uses a configurable
+**60-second** interval,
+back off after failures, and pause when the terminal is inactive or user work
+prevents a new request. Offline mode pauses automatic network activity. Automatic
+fetch must not modify user-owned local branches or delete local tags; that safety
+proof is pending, so no automatic fetch is currently submitted to Git.
 
-The graph distinguishes **💻 local branch / HEAD**, **🌳 linked worktree**, **🐙 GitHub**,
-**☁ Azure DevOps**, **🦊 GitLab**, and **↗ other remote** pointers, plus **◇ tags**
-and **▣ stashes**. Markers share a commit when their tips agree. The tree marks
-registered linked worktree HEADs, including detached linked trees, but not the
-primary checkout. This is independent of the branch name or which checkout is
-open. Multiple linked worktrees at one commit share a marker. Bare and unborn
-entries have no worktree commit to mark. A local commit moves its branch pointer
-(and its tree marker if it is in a linked worktree); Fetch updates last-fetched
-remote-tracking pointers. These are not live server indicators. Icon appearance
-depends on your terminal font.
+Slow automatic transport no longer owns the local inspection queue. Git mutations
+still serialize, so an already-running fetch can delay another mutation; it is not
+killed to make room. Captured reviews remain stable during summary refresh.
 
-Creating a branch at an existing commit adds a pointer, not an invented graph
-fork. New commits create divergence only when their actual ancestry diverges.
-Use **Actions → Locate … in unified graph** to navigate to a selected tip.
-If it is not loaded, the caption says so; **Load more** can reveal it explicitly.
-Selecting a branch never automatically loads more history.
+**Activity / Ctrl+L** shows queued/planning, running and bounded completed Git work,
+elapsed time, redacted result detail, and checkpoint IDs when applicable. Background
+read status is separate. Keyboard arrows or mouse selection inspect a record.
+**Close/Escape only closes Activity—it never cancels or retries Git.**
 
-Double-click a commit row (including its graph node) to check it out immediately.
-A branch at that commit is preferred over detached HEAD, with local branches
-preferred over remote-tracking refs. If several branches qualify, choose one from
-a picker (Escape cancels). A commit without a branch tip checks out **detached HEAD**.
-Single-click and Enter still only inspect.
+## Controls
 
-Remote checkout uses the exact selected remote ref. An existing same-named local
-branch is reused only if its upstream is that exact ref on that remote; a branch tracking another
-remote (or no upstream) is not silently substituted.
-
-### Right-click branch and commit actions
-
-Right-click a branch in the sidebar or its **name badge** in the graph for branch
-and tip-commit actions. Right-click elsewhere on a commit row for actions on that
-exact commit, independently of the inspector's previous selection. Working-directory
-and connector-only rows do not open a commit menu. Menus scroll in small terminals;
-use arrows and Enter, or click. Escape and outside clicks cancel.
-
-- **Checkout**, **create branch here**, **create worktree here**, and **create tag**
-  use the clicked tip/commit. Branch creation checks out the new branch. Worktree
-  creation asks for a new branch or detached HEAD, then a destination directory;
-  it leaves the current checkout alone. Relative paths start at the repository root.
-- **Merge**, **rebase**, **cherry-pick**, and **revert** act on the checked-out branch.
-  **Reset** asks for a mode: Soft preserves the index and working files; Mixed keeps
-  working files and resets the index; **Hard discards staged/unstaged changes and can overwrite
-  obstructing untracked files**. Choosing a mode executes it immediately.
-- **Edit latest commit message** is available only at HEAD on a branch. The editor
-  preserves multiline messages; staged files are not included in the amendment.
-  This rewrites the commit SHA. Editing older messages, dropping commits, and moving
-  commits require an interactive history-editing workflow and are not offered here.
-- **Start a PR against … from …** creates a GitHub or Azure DevOps pull request from
-  the checked-out feature branch into the right-clicked target branch. A composer
-  asks for a title and optional multiline description; **Done** creates it and
-  displays a browser URL with **Copy URL**. Push your commits first. Reviewers,
-  work items, and tags can be added in the web UI. This optional feature uses an
-  authenticated `gh` or `az` CLI; see [setup and branch rules](pull-requests.md).
-- **Pull** (fast-forward only) and **Push** (never force) appear on the current local
-  branch, not an unrelated clicked branch. **Set upstream** on a local branch asks
-  for an exact remote-tracking branch; on a remote branch it sets the current local
-  branch's upstream. Setting upstream does not fetch or push.
-- **Rename** affects the clicked local branch. **Delete local branch** is merged-only
-  and is not offered on the current branch. **Delete on remote** asks you to select
-  the explicit remote destination, then deletes only that remote branch, provided
-  it still matches its last-fetched SHA. It never also deletes the local branch.
-  Fetch and review again if the server branch has changed.
-- **Apply patch** asks for a patch file, checks it, and applies it to the current
-  working directory without staging or committing. It is not `git am`.
-- Copy branch names, full commit SHAs, or browser links for GitHub.com, GitLab.com,
-  and Azure DevOps. Remote link pickers do not contact a server. Branch links use
-  the remote source name, including custom fetch mappings. Unsupported hosts have
-  no generated link. Copy actions use native clipboard tools when available, so
-  local copying does not require OSC 52. See [clipboard support](#clipboard-support).
-
-Menus omit inapplicable actions. During an unfinished operation, copy actions stay
-available; use the existing Continue/Abort controls to finish it. Captured branch,
-HEAD, and target guards reject stale mutations, including changes made externally
-while a follow-up name, path, or destination prompt is open. AI features and
-combined (non-atomic) local-plus-remote deletion are not included.
-
-### Clipboard support
-
-**Copy URL**, branch-name, SHA, and browser-link actions use the system clipboard:
-
-- **macOS:** built-in `pbcopy`, including when running locally inside tmux.
-- **Linux / Wayland:** `wl-copy` from `wl-clipboard`.
-- **Linux / X11:** `xclip` or `xsel`, explicitly using the clipboard selection.
-- **WSL2:** Windows `clip.exe` when available through WSL interop.
-
-These commands must be available on `PATH`. Missing, failed, or timed-out helpers
-fall back to the terminal's OSC 52 clipboard request. SSH sessions use OSC 52
-rather than modifying the remote host's clipboard. This fallback may need enabling
-in your terminal or tmux; the app asks you to **paste to verify** because terminal
-requests cannot be confirmed. Only a successful native helper reports **Copied to
-system clipboard**. If copying is unavailable, the created PR link stays visible
-and can be opened in your browser to copy from its address bar.
-
-### Rebase your feature branch onto an updated base
-
-While on your feature branch, right-click `test` (or another local/remote branch)
-and choose **Rebase feature/your-branch onto test**. Your feature commits are
-replayed on top of that branch; the clicked branch is not checked out or moved.
-There is no additional confirmation. Escape or clicking outside dismisses the menu
-without changing Git state.
-
-The target is the local branch or last-fetched remote-tracking branch you clicked.
-Update `test` first, or Fetch and choose `origin/test`, when you need newer server
-commits; rebase does not fetch or stash automatically. Commit or stash working
-changes first. If conflicts occur, resolve and stage them, then use Continue, or
-Abort to restore the pre-rebase state. If the branch or target changes while the
-menu is open, refresh and choose the action again.
-
-### Graph styles
-
-Press **g** or click **Smooth [g] / Compact [g]** above the graph to switch:
-
-- **Smooth** (default): rounded Unicode bends, separated lanes, consistent colors
-  along each active lane, and more space between commits. Active lanes do not
-  shuffle sideways just because a neighboring branch ends. Each commit and its
-  outgoing connectors form one selectable row, so arrows / `j` / `k` move directly
-  between commits rather than stopping on empty connector lines.
-- **Compact**: the same chronological graph without optional spacer lines, with
-  required connectors on separate rows. Useful when you want to see more commits at once.
-
-In both styles, `─╴│╶─` is a crossing: the horizontal line passes **behind** the
-vertical lane without joining it; a reminder appears above graphs with crossings.
-Rounded forks/joins represent real parent connections. Dotted tails (`┊`) continue
-beyond the loaded history, not to an
-invented root. If a parent has a newer author timestamp than its child (for example
-following a rebase or clock skew), `↑ parent <SHA>` names that parent above instead
-of drawing a false downward connection or moving the commit out of date order.
-Loading more history extends the same timeline. Wide graphs scroll horizontally
-rather than clipping away lanes.
-
-This uses ordinary terminal characters, not image protocols or a special font,
-so it works in tmux and Windows Terminal/WSL. It is smoother routing, not a
-pixel-rendered Bézier graph. The choice lasts for the running workspace, including
-when its tmux pane is hidden or its explicit popup is detached.
-
-### Controls
-
-| Key | Action |
+| Key/action | Result |
 | --- | --- |
 | Click / arrows / `j`, `k` | Select history or files |
-| `/` or `f` | Search history |
-| Enter in search / **Next** | Next matching commit |
-| `g` | Switch Smooth / Compact graph (not tmux prefix + g) |
-| Sidebar click / Enter | Select a reference without moving the graph |
-| Sidebar double-click | Check out a local/remote branch immediately |
-| Sidebar / graph branch-name right-click | Branch and tip-commit actions |
-| Graph row right-click | Actions on the clicked commit |
-| Graph row double-click | Check out a branch at that commit, or detached HEAD |
-| Tree caret / Space | Collapse or expand references or changed-file directories |
-| `Esc` | Return from diff to graph; otherwise clear focused search/ref selection; cancel a dialog |
-| `Ctrl+P` or `x` | Actions appropriate to the selected ref/commit/stash |
-| `Ctrl+O` | Open a local repository |
-| `Ctrl+R` or `r` | Refresh |
-| `Ctrl+B` | Create a branch |
-| `Ctrl+Left`, `Ctrl+Right` | Hide/show refs or inspector for more space |
-| `?` | Help |
-| `Ctrl+Q` | Quit |
+| Sidebar click / Enter / double-click | Select a reference; never checkout |
+| Graph double-click | Inspect; never checkout |
+| Right-click reference/badge/commit | Exact context actions |
+| Caret / Space | Fold references or changed-file directories |
+| `/` or `f`; Enter / Next | Search loaded history; next match |
+| `g` | Smooth / Compact graph |
+| `F2`; `F3` | Files; Commit composer |
+| `v`, arrows, `s` / `u` in precision diff | Select range; stage / unstage |
+| `Esc` / Back | Return from review; clear selection/search; dismiss a dialog |
+| `Ctrl+P` / `x` | Context actions |
+| `Ctrl+L` / Activity | Read-only activity view |
+| `Ctrl+O` | Open a repository |
+| `Ctrl+R` / `r` | Refresh local state |
+| `Ctrl+B` | Explicit new-branch action |
+| `Ctrl+Left` / `Ctrl+Right` | Refs / inspector visibility |
+| `?`; `Ctrl+Q` | Help; quit |
 
-Ordinary letter shortcuts do not steal input while you search or write a commit message.
-Folds and sidebar search survive local refreshes; opening another repository resets them.
-Git actions run as soon as you select them, without a **Confirm Git Action** screen.
-Name/message prompts and destination pickers remain where input is needed. Reset
-modes and remote deletion destinations are explicit follow-up choices, not implicit defaults.
-Discard immediately removes the selected file's unstaged edits. Only staged changes
-are committed.
+Ordinary letters do not steal typing from search or composers. Explicit global
+Ctrl/function-key commands remain available. Refer to the current visible controls;
+full remapping and broader accessibility validation remain unfinished.
 
 ## tmux
 
-tmux **3.2+** is optional. The design follows
-[apple-pi's current Textual-in-tmux approach](research.md), without requiring
-Pi, a plugin, global key bindings, a web server, or changes to `~/.tmux.conf`.
+Standalone operation is the default. tmux **3.2+** adds a persistent repository
+window, pane-local toggle, or explicit popup without requiring a plugin.
 
 ```sh
-# Inside tmux: open/reuse this repo's window in the current session.
-# Outside tmux: attach a dedicated persistent session.
-uv run rhizome --tmux ~/work/repo
-
-# Inside tmux: persistent popup over your current work.
-uv run rhizome --popup ~/work/repo
+rhizome --tmux ~/work/repo
+rhizome --popup ~/work/repo
+# Print a proposed binding; this command does not edit configuration:
+rhizome --tmux-config
 ```
 
-In a popup, use your normal tmux **prefix + d** to detach; reopening resumes the
-same workspace. `Ctrl+Q` exits it. Custom tmux sockets are supported.
+Review the generated binding before choosing to add it to `~/.tmux.conf` or source
+it in your server. It overrides **prefix + g** if you load it. No installer or app
+command silently changes your bindings. Generate it on the machine/environment
+where it will run; do not copy a macOS binding into WSL.
 
-### Install the `prefix + g` hotkey
+With that opt-in binding, **prefix + g** opens/resumes Rhizome in the invoking pane's
+space and toggles back without losing the original shell/editor. Other panes stay
+visible. Each originating pane/repository pair has its own workspace. Outside a
+repository, the invoking client receives an error. Custom sockets are supported.
 
-After installing with `uv tool install .`, run these **once on the machine where
-you will use tmux**:
+The inactive pane is parked in a detached `rhizome-pane-…` session. Do not kill it
+while it contains your shell/editor. **Ctrl+Q** exits Rhizome and restores the pane;
+process-crash restoration is also exercised by the smoke script. Destructive tmux
+`kill-pane`/`kill-window` commands are not a substitute for this toggle. If the
+original process exits while parked, it cannot be restored.
 
-```sh
-# Append a binding for this installation; no changes are made until you redirect it.
-"$(uv tool dir --bin)/rhizome" --tmux-config >> ~/.tmux.conf
+In an explicit popup, normal **prefix + d** or the opt-in **prefix + g** detaches the
+popup; reopening resumes it. In pane-local mode, normal prefix + d still detaches
+your entire tmux client. **Ctrl+Q** exits the application instead of detaching it.
 
-# Reload if tmux is already running; otherwise it loads the binding on next start.
-tmux source-file ~/.tmux.conf
-```
+Generated bindings contain an absolute Python path. Regenerate after moving a
+development environment or selecting a different managed installation revision.
+For development, use `uv run --locked rhizome --tmux-config`. When migrating from
+`gitkraiken`, replace its old generated binding; module and executable names changed.
 
-Use your configured prefix (normally **Ctrl+B**, release, then **g**):
+For WSL2, run inside the Linux shell and install dependencies there. Prefer the
+Linux filesystem (for example `~/work`) over `/mnt/c` for Git workloads. Authenticate
+inside WSL; Windows credentials/agents are not automatically the same environment.
 
-- In a repository pane, **prefix + g** opens/resumes Rhizome **in that pane's
-  exact space**. Other panes remain visible and interactive; normal tmux pane
-  resizing immediately resizes the app.
-- **prefix + g** again returns to your original shell/editor without losing the
-  app's state. The original process stays running while the app is visible.
-- **Ctrl+Q** quits Rhizome and restores the original pane. App-process crashes
-  also restore it. Use these controls rather than tmux's destructive `kill-pane`
-  or `kill-window` commands, which remove the pane itself.
-- Each originating pane/repository pair has its own workspace, so opening the
-  same repo from two panes does not move or resize the other workspace.
-- It uses the pane's current directory, including subdirectories of a repo.
-- Outside a repository it shows an error on the invoking client's status line.
+## Authentication and hosted metadata
 
-The toggle parks the inactive pane in a detached `rhizome-pane-…` session.
-Do not kill that session while it holds your shell/editor. Quitting the app
-cleans it up automatically. If the original process exits while parked, there is
-no process to restore. `--popup` remains an explicit full-client overlay option;
-inside an explicit popup, **prefix + g** still detaches it. Normal **prefix + d**
-in pane-local mode detaches your entire tmux client, as usual.
+There is no Rhizome login, token database, subscription or telemetry. Normal Git
+operations use your existing credential helper, SSH configuration and agent. Use
+SSH keys or a credential manager, not tokens embedded in remote URLs. Hosted PR
+listing/creation additionally uses optional authenticated `gh` or `az` CLIs; SSH
+alone is not hosted API authentication. See [pull requests](pull-requests.md).
 
-After the `gitkraiken`-to-`rhizome` migration above, later generated hotkeys pick
-up behavior updates by updating the installation and quitting/reopening old
-Rhizome workspaces. No further binding change is required unless the
-installation's Python path changes.
+Authenticate in a normal terminal first. On failure, inspect `git ls-remote` there,
+complete login/host-key acceptance or unlock your SSH agent, then retry the intended
+app operation. Network Git commands have a 60-second timeout and do not prompt for
+passwords or launch askpass dialogs. Custom SSH wrappers must accept OpenSSH's
+`-oBatchMode=yes`. Git paths are literal argv, not interpolated shell source;
+repository-selection environment overrides are isolated. Displayed remote URLs
+are redacted.
 
-The generated binding contains the absolute Python path, so it works even when
-an existing tmux server cannot find `rhizome` or `uv` on its `PATH`. It targets
-the invoking client/pane/socket explicitly. It **does override an existing
-prefix + g binding** when loaded, but does not change your prefix or other keys.
-Remove the generated `bind-key` line and run `tmux unbind-key -T prefix g` to
-remove it (then restore any previous binding).
+Generic Git transport can use organization-hosted servers; the optional hosted
+metadata feature targets GitHub.com and Azure DevOps Services. Captured immutable
+PR diffs/review workspaces are M4 work, not supplied by the existing browser-link
+metadata dialog. PR creation uses pushed branches, never implicitly pushes or
+merges, and leaves reviewers/comments/merging to the provider UI.
 
-For checkout-based development, `uv run rhizome --tmux-config` generates the
-same binding using that checkout's `.venv`. Regenerate the binding if you move or
-remove that environment. Do not copy a generated macOS binding to WSL: generate
-it in WSL after installation.
+## Clipboard support
 
-### WSL2 quick setup (Ubuntu/Debian)
-
-Run inside your **WSL Linux shell**, not PowerShell. With `uv` installed:
-
-```sh
-sudo apt update && sudo apt install -y git tmux
-mkdir -p ~/work
-git clone https://github.com/Doctacon/rhizome.git ~/work/rhizome
-cd ~/work/rhizome
-uv tool install --python 3.13 .         # uv supplies Python if necessary
-"$(uv tool dir --bin)/rhizome" --tmux-config >> ~/.tmux.conf
-
-tmux -V                                # must be 3.2 or newer
-# If tmux is already running:
-tmux source-file ~/.tmux.conf
-# Otherwise start it:
-tmux
-```
-
-Then `cd` into a repository and press **Ctrl+B, then g**. Prefer keeping checkouts
-under WSL's Linux filesystem (for example `~/work`) rather than `/mnt/c` for Git
-performance. Do not copy a macOS/Windows `.venv`; install fresh in WSL. Windows
-Terminal's WSL profile works well. Authenticate with Git **inside WSL** first;
-Windows credentials and SSH agents are not automatically the same as WSL's.
-
-## Private GitHub and Azure DevOps
-
-There is no Rhizome login, token database, or subscription. **Git operations use
-the same credential helper, SSH configuration and agent as command-line Git.**
-Use SSH keys or a system credential manager—not a PAT embedded in a URL.
-Optional **pull request creation** additionally requires an authenticated GitHub
-CLI (`gh auth login`) or Azure CLI with its `azure-devops` extension (`az login`
-or `az devops login`). SSH authentication alone cannot create hosted PRs.
-See [pull request setup](pull-requests.md); credentials stay with those CLIs.
-
-```sh
-# GitHub, including private repositories
-rhizome --clone git@github.com:ORG/REPO.git ~/work/github-repo
-
-# Azure DevOps SSH
-rhizome --clone git@ssh.dev.azure.com:v3/ORG/PROJECT/REPO ~/work/azure-repo
-
-# Azure DevOps HTTPS, with your configured Git Credential Manager
-rhizome --clone https://dev.azure.com/ORG/PROJECT/_git/REPO ~/work/azure-repo
-```
-
-Authenticate **once in a normal terminal** first. For GitHub, `gh auth login`
-followed by `gh auth setup-git` configures HTTPS authentication if you use the
-GitHub CLI. For Azure, use
-[Git Credential Manager](https://github.com/git-ecosystem/git-credential-manager)
-or [Azure's SSH setup](https://learn.microsoft.com/azure/devops/repos/git/use-ssh-keys).
-For GitHub Enterprise or Azure Server, use your organization's regular clone URL;
-provider labeling may be generic, but Git transport is not host-restricted.
-
-If authentication fails:
-
-1. Run `git ls-remote <remote-url>` in a normal terminal and complete login or SSH
-   host-key acceptance there.
-2. Unlock/load the key in your SSH agent as necessary.
-3. Retry Fetch/Pull/Push in the app.
-
-Git runs without terminal password prompts, askpass dialogs or interactive SSH
-login; network commands time out after 60 seconds. Custom `GIT_SSH_COMMAND`/`GIT_SSH`
-wrappers must accept OpenSSH's `-oBatchMode=yes`; shell fragments in custom commands
-are normalized rather than executed as arbitrary shell source. Fetch/push URLs
-are redacted in the interface. Git itself owns its credential storage/configuration.
-
-## Safety and deliberate limits
-
-- Git is invoked with argument arrays, never interpolated shell commands. File
-  paths use literal pathspecs; repository-selection environment variables are
-  isolated so operations apply to the repository you opened.
-- No force push of history, `git clean`, implicit network activity, or automatic
-  stashing. Pull refuses divergence. Safe local branch deletion refuses unmerged
-  branches. Discard only affects explicitly selected tracked worktree changes and
-  preserves the index; untracked/intent-to-add content is protected by Discard.
-  **Hard reset is different:** its explicitly selected mode discards changes and
-  may overwrite untracked files. Remote deletion is an explicit destination choice,
-  limited to one branch with a last-fetched-SHA lease; local deletion is separate.
-- Push sends only the current branch with an explicit non-force refspec, not Git's
-  potentially broad configured push defaults. Destination pickers show redacted
-  push URLs. Multiple configured push URLs are refused.
-- Actions require an explicit selection, but no second confirmation. Git operations
-  are serialized; changing selection/refresh cannot cancel a running mutation.
-  Repository switching is blocked while a picker or operation is active; context
-  actions also reject a changed source branch, HEAD, or target. History-changing
-  context actions are not offered during conflicts or unfinished operations.
-- This is a **terminal adaptation of the main repository screen**, not an official
-  GitKraken product or a pixel-identical clone. No proprietary assets were copied.
-  It intentionally omits issue browsing, OAuth/account management,
-  arbitrary undo/redo, drag-and-drop rebase, interactive rebase editing, hunk-level
-  staging, a graphical conflict editor, and submodule/LFS-specific management.
-  Use Git or your editor for those workflows. Git hooks/signing configured by the
-  repository still run during commits and can reject or time out an operation.
+Copy actions use `pbcopy` on macOS, `wl-copy` on Wayland, `xclip`/`xsel` on X11, or
+WSL's `clip.exe` when available. Missing/failing helpers fall back to OSC 52. SSH
+uses OSC 52 rather than changing the remote machine's clipboard. Terminal requests
+cannot be confirmed: **paste to verify**. Only a successful native helper reports
+system-clipboard success. A created PR URL also stays visible for browser copying.
 
 ## Development and checks
 
 ```sh
 uv sync --locked
-uv run pytest
-uv run ruff check .
-uv run ruff format --check .
-uv run python scripts/tmux_smoke.py  # isolated server; leaves your tmux sessions alone
-uv run python scripts/popup_smoke.py # real checkout, live popup/PID, detach/reopen
-uv run python scripts/popup_smoke.py --hotkey # prefix+g still detaches explicit popups
-uv run python scripts/pane_smoke.py  # pane-local prefix+g, live resize, toggle, quit/crash recovery
+uv run --locked pytest
+uv run --locked ruff check .
+uv run --locked ruff format --check .
+uv run --locked python scripts/tmux_smoke.py
+uv run --locked python scripts/popup_smoke.py
+uv run --locked python scripts/popup_smoke.py --hotkey
+uv run --locked python scripts/pane_smoke.py
 uv build
 ```
 
-Tests use disposable repositories and local bare remotes; they never write to a
-real private repository. Textual pilot tests exercise actual staging/committing,
-selection, immediate double-click checkout, grouped right-click menus and conflicts,
-context-specific creation/reset/upstream/copy actions, worktrees and message editing,
-local-time dates, changed-file folders, fold/search persistence, unified graph geometry,
-local/remote pointers, diffs, dialogs, branch creation, refresh and narrow layouts.
-PR tests cover branch targeting, provider argv/payloads, guarded creation, failure
-recovery, and copyable result links using mocked provider commands (no live PRs).
-Checkout and notification regressions enable toast rendering explicitly; Textual
-otherwise disables notifications in tests. Popup smoke checks exercise real Git
-checkouts and verify that the application process and popup stay alive. Pane smoke
-checks use a real PTY and three-pane layout to verify containment, native resizing,
-independent workspaces, shell/app state preservation, and quit/crash restoration.
-Authentication against your organization's private remotes must still be verified
-with your credentials; none were requested or accessed during development.
-
-For visual inspection:
+Tests isolate state, use disposable repositories/local remotes, and prevent real
+private-provider mutations. New safety proofs use real Git with mocks only at
+external boundaries. Existing legacy tests are not all rewritten to that standard.
+Headless Pilot tests do not certify screen-reader behavior or human usability.
+Smoke scripts use isolated tmux servers; run them only in disposable fixtures.
 
 ```sh
-uv run python scripts/capture_demo.py /tmp/workspace.svg --width 170 --height 48
-# Add --compact to compare the original denser graph.
-# Exercise nested local/remote folders and sidebar-only search:
-uv run python scripts/capture_demo.py /tmp/refs.svg --many-refs --ref-filter jlott
-# Add --collapse-remotes to preview a folded Remotes section instead.
-# Optional: rsvg-convert -o /tmp/workspace.png /tmp/workspace.svg
+uv run --locked python scripts/capture_demo.py /tmp/workspace.svg --width 170 --height 48
+# Optional conversion when librsvg is installed:
+rsvg-convert -o /tmp/workspace.png /tmp/workspace.svg
 ```
 
-Implementation seams and source research are in [implementation.md](implementation.md)
-and [research.md](research.md).
+The complete changed suite and the external/platform/human gates must pass before
+claiming a milestone complete. See the [validation plan](design/validation-plan.md),
+[implementation notes](implementation.md), and [source research](research.md).

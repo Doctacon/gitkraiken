@@ -1,0 +1,83 @@
+[
+  {
+    "source": "https://pypi.org/pypi/hatchling/json",
+    "name": "hatchling",
+    "version": "1.33.0",
+    "requires_python": ">=3.10",
+    "requires_dist": [
+      "packaging>=24.2",
+      "pathspec>=0.10.1",
+      "pluggy>=1.0.0",
+      "tomli>=1.2.2; python_version < \"3.11\"",
+      "tomlkit>=0.11.1",
+      "trove-classifiers"
+    ],
+    "files": [
+      {
+        "filename": "hatchling-1.33.0-py3-none-any.whl",
+        "url": "https://files.pythonhosted.org/packages/32/64/4afe5dd77b2939a93e8c9513f8082dbd049ecba9c1484a379a0f6ae29d6b/hatchling-1.33.0-py3-none-any.whl",
+        "sha256": "415290b84f464d2884303fca8974d38e7b85579069fab02a15db0828fbb1446d"
+      }
+    ]
+  },
+  {
+    "source": "https://pypi.org/pypi/packaging/json",
+    "name": "packaging",
+    "version": "26.3",
+    "requires_python": ">=3.9",
+    "requires_dist": null,
+    "files": [
+      {
+        "filename": "packaging-26.3-py3-none-any.whl",
+        "url": "https://files.pythonhosted.org/packages/63/34/ba1c580383c9eada3711951fef0795c80b829a078d72188184bcab9dd527/packaging-26.3-py3-none-any.whl",
+        "sha256": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c"
+      }
+    ]
+  },
+  {
+    "source": "https://pypi.org/pypi/pathspec/json",
+    "name": "pathspec",
+    "version": "1.1.1",
+    "requires_python": ">=3.9",
+    "requires_dist": [
+      "hyperscan>=0.7; extra == \"hyperscan\"",
+      "typing-extensions>=4; extra == \"optional\"",
+      "google-re2>=1.1; extra == \"re2\""
+    ],
+    "files": [
+      {
+        "filename": "pathspec-1.1.1-py3-none-any.whl",
+        "url": "https://files.pythonhosted.org/packages/f1/d9/7fb5aa316bc299258e68c73ba3bddbc499654a07f151cba08f6153988714/pathspec-1.1.1-py3-none-any.whl",
+        "sha256": "a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189"
+      }
+    ]
+  },
+  {
+    "source": "https://pypi.org/pypi/pluggy/json",
+    "name": "pluggy",
+    "version": "1.7.0",
+    "requires_python": ">=3.10",
+    "requires_dist": null,
+    "files": [
+      {
+        "filename": "pluggy-1.7.0-py3-none-any.whl",
+        "url": "https://files.pythonhosted.org/packages/40/9e/2b38731e0fc536806f16490e1a12d7f0dc2a1235aa8cc07bcc75416a7daa/pluggy-1.7.0-py3-none-any.whl",
+        "sha256": "7dd7b0d8832ba3cb632c306926ded123429211b83641b35dc5c41ad2d34f9bec"
+      }
+    ]
+  },
+  {
+    "source": "https://pypi.org/pypi/trove-classifiers/json",
+    "name": "trove-classifiers",
+    "version": "2026.9.21.13",
+    "requires_python": null,
+    "requires_dist": null,
+    "files": [
+      {
+        "filename": "trove_classifiers-2026.9.21.13-py3-none-any.whl",
+        "url": "https://files.pythonhosted.org/packages/30/81/0da8afb52a71d0a4f2bd3152357b1a441e393b286374802b9d3addab4ab5/trove_classifiers-2026.9.21.13-py3-none-any.whl",
+        "sha256": "8b1ff4f9c191b1040b71c37f1e445ab99732911e3cd91de52838453a854d7a17"
+      }
+    ]
+  }
+]

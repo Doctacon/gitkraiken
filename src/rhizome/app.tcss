@@ -49,6 +49,22 @@ Button:focus { text-style: bold; }
     color: #ffffff;
     text-style: bold;
 }
+#workspace-nav {
+    height: 1;
+    padding: 0 1;
+    background: #edf4f5;
+}
+#workspace-nav Button {
+    height: 1;
+    margin-right: 1;
+    padding: 0 1;
+    background: #dbecee;
+    color: #18323a;
+}
+#workspace-nav Button:hover, #workspace-nav Button:focus {
+    background: #b9dfe1;
+    color: #10242b;
+}
 /* Horizontal containers otherwise consume the vertical free space in history-panel. */
 #search-bar { height: 1; min-height: 1; }
 #history-caption { height: 1; min-height: 1; }
@@ -257,6 +273,8 @@ TabPane { padding: 1; }
     background: #d8eeee;
     color: #14232c;
 }
+#staged-summary { height: 2; color: #36505b; }
+#draft-status { height: 1; color: #48616c; }
 .composer-label { height: 1; margin-top: 1; color: #36505b; }
 #commit-message {
     height: 4;
@@ -296,16 +314,29 @@ TabPane { padding: 1; }
 .narrow .tool, .narrow #open, .narrow #help, .narrow #refresh { width: 5; min-width: 5; }
 .narrow #graph-filter { min-width: 12; }
 
-/* Below 85 columns, the three workspace minima cannot fit side by side.
-   History remains continuously available; the existing Ctrl+Arrow shortcuts
-   let people swap either side panel into the available slot. */
+/* At 80×24 one task owns the canvas. Summoned panels preserve the graph,
+   captured diff, and draft beneath them, and Back restores the primary view. */
+.pane-constrained #repo-header { height: 1; padding: 0 1; }
+.pane-constrained #toolbar { height: 2; padding-top: 0; }
+.pane-constrained #pull, .pane-constrained #stash, .pane-constrained #pop { display: none; }
+.pane-constrained .tool { width: auto; min-width: 7; }
+.pane-constrained #refs-panel, .pane-constrained #refs-splitter,
 .pane-constrained #inspector-panel, .pane-constrained #inspector-splitter { display: none; }
-.pane-constrained.responsive-inspector #refs-panel,
-.pane-constrained.responsive-inspector #refs-splitter,
-.pane-constrained.responsive-history-only #refs-panel,
-.pane-constrained.responsive-history-only #refs-splitter { display: none; }
-.pane-constrained.responsive-inspector #inspector-panel { display: block; }
-.pane-constrained.responsive-inspector #inspector-splitter { display: block; }
+.pane-constrained.responsive-inspector #history-panel,
+.pane-constrained.responsive-refs #history-panel { display: none; }
+.pane-constrained.responsive-inspector #inspector-panel { display: block; width: 1fr; }
+.pane-constrained.responsive-refs #refs-panel { display: block; width: 1fr; }
+.pane-constrained #wip-changes { min-height: 3; }
+.pane-constrained.task-files #staged-summary,
+.pane-constrained.task-files .composer-label,
+.pane-constrained.task-files #commit-message,
+.pane-constrained.task-files #draft-status,
+.pane-constrained.task-files #commit { display: none; }
+.pane-constrained.task-composer .wip-actions,
+.pane-constrained.task-composer #wip-changes { display: none; }
+.pane-constrained.task-composer #commit-message { height: 1fr; min-height: 4; }
+.pane-constrained.task-composer .composer-label { margin-top: 0; }
+.pane-constrained #key-hint { padding: 0 1; }
 
 /* At 60 columns the inspector gets 25, leaving 34 for the center + divider. */
 .pane-tight #inspector-panel { width: 25; }

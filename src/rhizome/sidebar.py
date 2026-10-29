@@ -478,9 +478,9 @@ class ReferenceSidebar(Widget):
                 and first == (data.key, True)
                 and self._root is not None
             ):
-                if data.kind in {"local", "remote"}:
-                    self.post_message(self.CheckoutRequested(data, self._root))
-                elif data.kind == "linked-worktree" and self._worktree_openable(data):
+                # Browsing a ref never checks it out. Checkout is an explicit
+                # command; opening another registered worktree is navigation.
+                if data.kind == "linked-worktree" and self._worktree_openable(data):
                     self.post_message(self.WorktreeOpenRequested(data, self._root))
             return
         self._click_latch = (data.key, label_hit) if isinstance(data, SidebarSelection) else None

@@ -1,0 +1,32 @@
+[
+  {
+    "size": "80x24",
+    "keyboard": {
+      "staged_after_unstage": false,
+      "anchor_set": true
+    },
+    "mouse": {
+      "variant": "B",
+      "stale": true,
+      "staged": true
+    },
+    "variant_during_text_entry": "B",
+    "variant_after_text_entry": "C",
+    "draft": "Keep review context stable"
+  },
+  {
+    "size": "170x48",
+    "keyboard": {
+      "staged_after_unstage": false,
+      "anchor_set": true
+    },
+    "mouse": {
+      "variant": "B",
+      "stale": true,
+      "staged": false
+    },
+    "variant_during_text_entry": "B",
+    "variant_after_text_entry": "C",
+    "draft": "Keep review context stable"
+  }
+]

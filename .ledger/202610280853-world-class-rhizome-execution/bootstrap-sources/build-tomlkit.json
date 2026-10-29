@@ -1,0 +1,14 @@
+{
+  "source": "https://pypi.org/pypi/tomlkit/json",
+  "name": "tomlkit",
+  "version": "0.15.2",
+  "requires_python": ">=3.9",
+  "requires_dist": null,
+  "files": [
+    {
+      "filename": "tomlkit-0.15.2-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/da/46/7d84138a60a8bd796825b2d38ebe92d0d16501ca57d501b7c5d677401bbc/tomlkit-0.15.2-py3-none-any.whl",
+      "sha256": "05562412163a3037b94497385fb7f9204c637bc605af7a48199e41cf2272f437"
+    }
+  ]
+}

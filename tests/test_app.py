@@ -461,20 +461,25 @@ async def test_search_and_branch_selection_preserve_unified_history(demo_repo):
         assert table.row_count == count
 
 
-async def test_discard_runs_without_confirmation_and_preserves_index(demo_repo):
+async def test_discard_without_recovery_fails_closed_and_preserves_content(demo_repo):
     app = RhizomeApp(demo_repo)
     async with app.run_test(size=(150, 45)) as pilot:
         await settle(app, pilot)
         file = next(f for f in app.snapshot_data.files if f.path == "README.md")
-        original = (demo_repo / file.path).read_text()
-        staged = git(demo_repo, "show", f":{file.path}")
+        path = demo_repo / file.path
+        before_worktree = path.read_bytes()
+        before_index = git(demo_repo, "show", f":{file.path}")
+        before_head = git(demo_repo, "rev-parse", "HEAD")
+        before_status = git(demo_repo, "status", "--porcelain=v1", "--", file.path)
         app.inspect_worktree_file(file, False)
         app.wip_action("discard")
         await settle(app, pilot)
         assert len(app.screen_stack) == 1
-        assert (demo_repo / file.path).read_text() != original
-        assert (demo_repo / file.path).read_text().strip() == staged
-        assert git(demo_repo, "show", f":{file.path}") == staged
+        assert "unavailable without a durable recovery checkpoint" in app._last_error
+        assert path.read_bytes() == before_worktree
+        assert git(demo_repo, "show", f":{file.path}") == before_index
+        assert git(demo_repo, "rev-parse", "HEAD") == before_head
+        assert git(demo_repo, "status", "--porcelain=v1", "--", file.path) == before_status
 
 
 async def test_mixed_index_worktree_file_has_two_diff_choices(demo_repo):
@@ -751,56 +756,43 @@ async def test_wide_graph_retains_all_lanes_and_scrolls_instead_of_clipping(tmp_
         assert table.scroll_x > 0
 
 
-async def test_double_click_checkout_runs_immediately_and_keeps_graph_unified(branch_repo):
+async def test_sidebar_double_click_only_selects_without_checkout(branch_repo):
     app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
-        before = [(row.commit.oid, row.graph.plain) for row in app._graph_rows]
-        cursor = app._history_key
-        await click_reference(app, pilot, "refs/heads/test")
-        await settle(app, pilot)
-        assert git(branch_repo, "branch", "--show-current") == "main"
-        assert len(app.screen_stack) == 1
-        assert app._history_key == cursor
-        assert [(row.commit.oid, row.graph.plain) for row in app._graph_rows] == before
-
+        before_head = git(branch_repo, "rev-parse", "HEAD")
+        table = app.query_one("#graph-table", DataTable)
+        before_rows = table.row_count
         await click_reference(app, pilot, "refs/heads/test", times=2)
         await settle(app, pilot)
-        assert git(branch_repo, "branch", "--show-current") == "test"
-        assert app._history_key == cursor
-        assert [(row.commit.oid, row.graph.plain) for row in app._graph_rows] == before
+        assert git(branch_repo, "branch", "--show-current") == "main"
+        assert git(branch_repo, "rev-parse", "HEAD") == before_head
+        assert table.row_count == before_rows
         assert len(app.screen_stack) == 1
+        assert "Checkout" in app.query_one("#status-line", Static).renderable.plain
 
 
 @pytest.mark.parametrize("style", ["smooth", "compact"])
-async def test_graph_node_double_click_requests_branch_checkout(branch_repo, style):
+async def test_graph_double_click_inspects_without_checkout(branch_repo, style):
     app = RhizomeApp(branch_repo)
     app.graph_style = style
     async with app.run_test(size=(170, 50), notifications=True) as pilot:
         await settle(app, pilot)
+        before_head = git(branch_repo, "rev-parse", "HEAD")
         tip = git(branch_repo, "rev-parse", "test")
         table, point = await graph_point(app, pilot, tip)
-        before = [
-            (row.commit.oid if row.commit else None, row.graph.plain) for row in app._graph_rows
-        ]
-        await click(pilot, table, point)
-        await settle(app, pilot)
-        assert app._selected_commit.oid == tip
-        assert len(app.screen_stack) == 1
-        assert git(branch_repo, "branch", "--show-current") == "main"
+        before_rows = table.row_count
         await click(pilot, table, point, times=2)
         await settle(app, pilot)
-        assert git(branch_repo, "branch", "--show-current") == "test"
-        assert app.snapshot_data.branch == "test"
-        assert app._history_key == tip
-        assert [
-            (row.commit.oid if row.commit else None, row.graph.plain) for row in app._graph_rows
-        ] == before
+        assert git(branch_repo, "branch", "--show-current") == "main"
+        assert git(branch_repo, "rev-parse", "HEAD") == before_head
+        assert tip[:8] in app.query_one("#commit-detail", Static).renderable.plain
+        assert table.row_count == before_rows
         assert len(app.screen_stack) == 1
         assert app.is_running
 
 
-async def test_graph_double_click_chooses_between_local_branches(branch_repo, git_run):
+async def test_graph_double_click_does_not_offer_ambiguous_checkout(branch_repo, git_run):
     git_run(branch_repo, "branch", "another", "test")
     app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
@@ -808,48 +800,33 @@ async def test_graph_double_click_chooses_between_local_branches(branch_repo, gi
         tip = git(branch_repo, "rev-parse", "test")
         table, point = await graph_point(app, pilot, tip)
         await click(pilot, table, point, times=2)
-        assert isinstance(app.screen, ActionPicker)
-        options = app.screen.query_one(OptionList)
-        assert options.option_count == 2  # No redundant remote option.
-        options.highlighted = options.get_option_index("refs/heads/test")
-        await pilot.press("enter")
         await settle(app, pilot)
         assert len(app.screen_stack) == 1
-        assert app.snapshot_data.branch == "test"
+        assert git(branch_repo, "branch", "--show-current") == "main"
+        assert tip[:8] in app.query_one("#commit-detail", Static).renderable.plain
         assert app.is_running
 
 
-async def test_graph_double_click_remote_only_tip_uses_exact_owner(
-    branch_repo, git_run, monkeypatch
-):
-    from rhizome.models import Action
-
+async def test_graph_double_click_remote_only_tip_does_not_create_branch(branch_repo, git_run):
     git_run(branch_repo, "branch", "-D", "test")
     app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         tip = git(branch_repo, "rev-parse", "origin/test")
-        calls = []
-        original = app.repo.execute
-
-        def execute(action):
-            calls.append(action)
-            return original(action)
-
-        monkeypatch.setattr(app.repo, "execute", execute)
         table, point = await graph_point(app, pilot, tip)
         await click(pilot, table, point, times=2)
         await settle(app, pilot)
         assert len(app.screen_stack) == 1
-        assert calls == [Action("checkout", target="refs/remotes/origin/test", remote="origin")]
-        assert app.snapshot_data.branch == "test"
-        assert app.snapshot_data.upstream == "origin/test"
+        assert git(branch_repo, "branch", "--show-current") == "main"
+        assert git(branch_repo, "for-each-ref", "--format=%(refname)", "refs/heads/test") == ""
+        assert tip[:8] in app.query_one("#commit-detail", Static).renderable.plain
 
 
-async def test_graph_double_click_non_tip_checks_out_detached_head(branch_repo, git_run):
+async def test_graph_double_click_non_tip_never_detaches_head(branch_repo, git_run):
     base = git(branch_repo, "rev-parse", "main")
     git_run(branch_repo, "commit", "--allow-empty", "-m", "Advance main")
     git_run(branch_repo, "push", "origin", "main")
+    current = git(branch_repo, "rev-parse", "HEAD")
     app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
@@ -857,8 +834,9 @@ async def test_graph_double_click_non_tip_checks_out_detached_head(branch_repo, 
         await click(pilot, table, point, times=2)
         await settle(app, pilot)
         assert len(app.screen_stack) == 1
-        assert not app.snapshot_data.branch
-        assert app.snapshot_data.head == base
+        assert git(branch_repo, "branch", "--show-current") == "main"
+        assert git(branch_repo, "rev-parse", "HEAD") == current
+        assert base[:8] in app.query_one("#commit-detail", Static).renderable.plain
         assert app.is_running
 
 
@@ -935,26 +913,19 @@ async def test_checkout_error_notification_is_literal_and_keeps_workspace_runnin
         assert not app.busy
 
 
-async def test_remote_double_click_uses_full_ref_and_exact_owner(branch_repo, monkeypatch):
-    from rhizome.models import Action
-
+async def test_remote_double_click_selects_without_changing_upstream(branch_repo):
     app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
-        calls = []
-        original = app.repo.execute
-
-        def execute(action):
-            calls.append(action)
-            return original(action)
-
-        monkeypatch.setattr(app.repo, "execute", execute)
+        before_head = git(branch_repo, "rev-parse", "HEAD")
+        before_upstream = git(branch_repo, "rev-parse", "--abbrev-ref", "@{upstream}")
         await click_reference(app, pilot, "refs/remotes/origin/test", times=2)
         await settle(app, pilot)
         assert len(app.screen_stack) == 1
-        assert calls == [Action("checkout", target="refs/remotes/origin/test", remote="origin")]
-        assert app.snapshot_data.branch == "test"
-        assert len(app._commits) == 2
+        assert git(branch_repo, "branch", "--show-current") == "main"
+        assert git(branch_repo, "rev-parse", "HEAD") == before_head
+        assert git(branch_repo, "rev-parse", "--abbrev-ref", "@{upstream}") == before_upstream
+        assert "Checkout" in app.query_one("#status-line", Static).renderable.plain
 
 
 async def test_out_of_window_tip_does_not_filter_or_autoload_but_explicit_load_reveals_it(
@@ -1130,7 +1101,8 @@ async def test_single_click_and_checkout_preserve_scrolled_graph_viewport(branch
         assert app._history_key == key
         assert table.cursor_coordinate == cursor
         assert table.scroll_offset == position
-        await click_reference(app, pilot, "refs/heads/test", times=2)
+        await click_reference(app, pilot, "refs/heads/test", button=3)
+        await choose_option(app, pilot, "checkout")
         await settle(app, pilot)
         assert app.snapshot_data.branch == "test"
         assert [(row.commit.oid, row.graph.plain) for row in app._graph_rows] == geometry
@@ -1235,15 +1207,52 @@ async def test_compact_commit_header_gives_space_to_file_tree(git_repo, git_run,
 
 
 @pytest.mark.parametrize("operation", ["fetch", "pull", "push"])
-async def test_network_toolbar_actions_run_without_confirmation(branch_repo, operation):
+async def test_network_toolbar_actions_obey_m1_gates(
+    branch_repo, bare_remote, git_run, operation
+):
+    remote_before = git(bare_remote, "rev-parse", "refs/heads/main")
+    operation_tip = ""
+    if operation == "push":
+        git_run(branch_repo, "commit", "--allow-empty", "-m", "Local main advance")
+        operation_tip = git(branch_repo, "rev-parse", "HEAD")
+
+    before_head = git(branch_repo, "rev-parse", "HEAD")
+    before_content = (branch_repo / "base.txt").read_bytes()
     app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
+        before_refs = git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)")
+        if operation in {"fetch", "pull"}:
+            tree = git(bare_remote, "rev-parse", "refs/heads/main^{tree}")
+            operation_tip = git_run(
+                bare_remote,
+                "commit-tree",
+                tree,
+                "-p",
+                remote_before,
+                "-m",
+                "Remote main advance",
+            ).stdout.strip()
+            git_run(bare_remote, "update-ref", "refs/heads/main", operation_tip)
+            assert git(branch_repo, "rev-parse", "refs/remotes/origin/main") == remote_before
         await pilot.click(f"#{operation}")
         await settle(app, pilot)
         assert len(app.screen_stack) == 1
-        assert not app._last_error
         assert app.snapshot_data.branch == "main"
+        assert git(branch_repo, "rev-parse", "HEAD") == before_head
+        assert (branch_repo / "base.txt").read_bytes() == before_content
+        if operation == "pull":
+            assert "pull is unavailable until its M3 guarded plan" in app._last_error
+            assert git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)") == before_refs
+            assert git(branch_repo, "rev-parse", "refs/remotes/origin/main") == remote_before
+            assert git(bare_remote, "rev-parse", "refs/heads/main") == operation_tip
+        elif operation == "fetch":
+            assert not app._last_error
+            assert git(branch_repo, "rev-parse", "refs/remotes/origin/main") == operation_tip
+            assert git(bare_remote, "rev-parse", "refs/heads/main") == operation_tip
+        else:
+            assert not app._last_error
+            assert git(bare_remote, "rev-parse", "refs/heads/main") == operation_tip
 
 
 @pytest.fixture
@@ -1262,23 +1271,20 @@ def rebase_repo(branch_repo, git_run):
 
 
 @pytest.mark.parametrize("target", ["refs/heads/test", "refs/remotes/origin/test"])
-async def test_right_click_rebases_current_feature_onto_clicked_branch(
-    rebase_repo, target, monkeypatch
+async def test_right_click_rebase_is_gated_without_mutating_selected_context(
+    rebase_repo, target
 ):
-    before = git(rebase_repo, "rev-parse", "HEAD")
-    base = git(rebase_repo, "rev-parse", target)
+    before_head = git(rebase_repo, "rev-parse", "HEAD")
+    before_index = git(rebase_repo, "ls-files", "--stage")
+    before_status = git(rebase_repo, "status", "--porcelain=v1")
+    feature_content = (rebase_repo / "feature.txt").read_bytes()
+    target_oid = git(rebase_repo, "rev-parse", target)
+    assert not (rebase_repo / "teammate.txt").exists()
     app = RhizomeApp(rebase_repo)
     async with app.run_test(size=(170, 50), notifications=True) as pilot:
         await settle(app, pilot)
-        calls = []
-        execute = app.repo.execute
-
-        def recorded(action):
-            calls.append(action)
-            return execute(action)
-
-        monkeypatch.setattr(app.repo, "execute", recorded)
-        # Neither opening nor dismissing the dropdown changes Git state.
+        before_refs = git(rebase_repo, "for-each-ref", "--format=%(refname) %(objectname)")
+        # Opening and dismissing retain the exact local/remote target context.
         await click_reference(app, pilot, target, button=3)
         assert isinstance(app.screen, BranchContextMenu)
         menu = app.screen.query_one("#branch-context-menu", OptionList)
@@ -1289,23 +1295,24 @@ async def test_right_click_rebases_current_feature_onto_clicked_branch(
         assert label == "Rebase feature/payments onto " + (
             "origin/test" if "remotes" in target else "test"
         )
-        assert not calls
         await pilot.press("escape")
-        assert git(rebase_repo, "rev-parse", "HEAD") == before
+        assert git(rebase_repo, "rev-parse", "HEAD") == before_head
+
         await click_reference(app, pilot, target, button=3)
         await choose_option(app, pilot, "rebase")
         await settle(app, pilot)
         assert len(app.screen_stack) == 1
-        assert len(calls) == 1
-        assert calls[0].operation == "rebase" and calls[0].target == target
+        assert "rebase is unavailable until its M3 guarded plan" in app._last_error
         assert app.snapshot_data.branch == "feature/payments"
-        assert app.snapshot_data.head != before
-        assert git(rebase_repo, "rev-parse", "HEAD^") == base
-        assert git(rebase_repo, "rev-parse", target) == base  # The base branch never moves.
-        assert (rebase_repo / "feature.txt").read_text() == "my feature\n"
-        assert (rebase_repo / "teammate.txt").exists()
+        assert app.snapshot_data.head == before_head
+        assert git(rebase_repo, "rev-parse", target) == target_oid
+        assert git(rebase_repo, "for-each-ref", "--format=%(refname) %(objectname)") == before_refs
+        assert git(rebase_repo, "ls-files", "--stage") == before_index
+        assert git(rebase_repo, "status", "--porcelain=v1") == before_status
+        assert (rebase_repo / "feature.txt").read_bytes() == feature_content
+        assert not (rebase_repo / "teammate.txt").exists()
         assert not app.snapshot_data.operation
-        assert app.is_running and not app._last_error
+        assert app.is_running
 
 
 async def test_rebase_menu_rejects_external_checkout_while_open(rebase_repo, git_run):
@@ -1371,46 +1378,63 @@ async def test_rebase_dirty_worktree_error_keeps_changes_and_refreshes(rebase_re
 
 
 @pytest.mark.parametrize("finish", ["abort", "continue"])
-async def test_right_click_rebase_conflicts_can_abort_or_continue(rebase_repo, git_run, finish):
-    from rhizome.models import Action
-
+async def test_external_rebase_conflict_finish_is_gated_without_altering_operation(
+    rebase_repo, git_run, finish
+):
     (rebase_repo / "base.txt").write_text("feature version\n")
     git_run(rebase_repo, "add", ".")
     git_run(rebase_repo, "commit", "-m", "Feature changes base")
-    before = git(rebase_repo, "rev-parse", "HEAD")
+    feature_ref = git(rebase_repo, "rev-parse", "refs/heads/feature/payments")
     git_run(rebase_repo, "switch", "test")
     (rebase_repo / "base.txt").write_text("test version\n")
     git_run(rebase_repo, "add", ".")
     git_run(rebase_repo, "commit", "-m", "Teammate changes base")
     git_run(rebase_repo, "switch", "feature/payments")
+    result = subprocess.run(
+        ["git", "-C", str(rebase_repo), "rebase", "test"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert git(rebase_repo, "ls-files", "-u", "--", "base.txt")
+    rebase_state = rebase_repo / git(rebase_repo, "rev-parse", "--git-path", "rebase-merge")
+    assert rebase_state.is_dir()
+
     app = RhizomeApp(rebase_repo)
     async with app.run_test(size=(170, 50), notifications=True) as pilot:
-        await settle(app, pilot)
-        await click_reference(app, pilot, "refs/heads/test", button=3)
-        await choose_option(app, pilot, "rebase")
         await settle(app, pilot)
         assert app.snapshot_data.operation == "rebase"
         assert app.snapshot_data.conflicts
         assert app.query_one("#operation-banner").display
-        assert app._last_error
+
         if finish == "continue":
             (rebase_repo / "base.txt").write_text("resolved together\n")
-            app.run_mutation(Action("stage", paths=("base.txt",)))
+            git_run(rebase_repo, "add", "base.txt")
+            app.action_refresh()
             await settle(app, pilot)
+            assert app.snapshot_data.operation == "rebase"
             assert not app.snapshot_data.conflicts
+
+        before_head = git(rebase_repo, "rev-parse", "HEAD")
+        before_refs = git(rebase_repo, "for-each-ref", "--format=%(refname) %(objectname)")
+        before_index = git(rebase_repo, "ls-files", "--stage")
+        before_status = git(rebase_repo, "status", "--porcelain=v1")
+        before_content = (rebase_repo / "base.txt").read_bytes()
         await pilot.click(f"#{finish}")
         await settle(app, pilot)
+
         assert len(app.screen_stack) == 1
-        assert app.snapshot_data.branch == "feature/payments"
-        assert not app.snapshot_data.operation
-        assert not app.query_one("#operation-banner").display
-        if finish == "abort":
-            assert app.snapshot_data.head == before
-            assert (rebase_repo / "base.txt").read_text() == "feature version\n"
-        else:
-            assert app.snapshot_data.head != before
-            assert (rebase_repo / "base.txt").read_text() == "resolved together\n"
-            git_run(rebase_repo, "merge-base", "--is-ancestor", "test", "HEAD")
+        assert f"{finish} is unavailable until its M3 guarded plan" in app._last_error
+        assert app.snapshot_data.operation == "rebase"
+        assert app.query_one("#operation-banner").display
+        assert rebase_state.is_dir()
+        assert git(rebase_repo, "rev-parse", "HEAD") == before_head
+        assert git(rebase_repo, "rev-parse", "refs/heads/feature/payments") == feature_ref
+        assert git(rebase_repo, "for-each-ref", "--format=%(refname) %(objectname)") == before_refs
+        assert git(rebase_repo, "ls-files", "--stage") == before_index
+        assert git(rebase_repo, "status", "--porcelain=v1") == before_status
+        assert (rebase_repo / "base.txt").read_bytes() == before_content
 
 
 @pytest.mark.parametrize("native", [True, False])
@@ -1556,38 +1580,56 @@ async def test_graph_badge_context_resolves_exact_branch(branch_repo):
 
 
 @pytest.mark.parametrize("mode", ["reset-soft", "reset-mixed", "reset-hard"])
-async def test_graph_reset_mode_picker_executes_explicit_choice(branch_repo, git_run, mode):
+async def test_graph_reset_picker_refuses_gated_modes_without_mutation(
+    branch_repo, git_run, mode
+):
     git_run(branch_repo, "switch", "test")
     app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         target = git(branch_repo, "rev-parse", "main")
-        before = app.snapshot_data.head
+        before_head = git(branch_repo, "rev-parse", "HEAD")
+        before_refs = git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)")
+        before_index = git(branch_repo, "ls-files", "--stage")
+        before_status = git(branch_repo, "status", "--porcelain=v1")
+        topic_content = (branch_repo / "topic.txt").read_bytes()
         table, point = await graph_point(app, pilot, target)
         await post_click(pilot, table, point, button=3)
         await choose_option(app, pilot, "reset")
         assert isinstance(app.screen, ActionPicker)
-        assert git(branch_repo, "rev-parse", "HEAD") == before
+        assert git(branch_repo, "rev-parse", "HEAD") == before_head
         await pilot.press("escape")
-        assert git(branch_repo, "rev-parse", "HEAD") == before
+        assert git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)") == before_refs
+
         await post_click(pilot, table, point, button=3)
         await choose_option(app, pilot, "reset")
         await choose_option(app, pilot, mode)
         await settle(app, pilot)
-        assert app.snapshot_data.head == target
+        assert mode in app._last_error and "unavailable" in app._last_error
+        assert app.snapshot_data.head == before_head
         assert app.snapshot_data.branch == "test"
-        assert not app._last_error
-        assert (branch_repo / "topic.txt").exists() == (mode != "reset-hard")
-        assert bool(git(branch_repo, "diff", "--cached", "--name-only")) == (mode == "reset-soft")
+        assert git(branch_repo, "rev-parse", "HEAD") == before_head
+        assert git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)") == before_refs
+        assert git(branch_repo, "ls-files", "--stage") == before_index
+        assert git(branch_repo, "status", "--porcelain=v1") == before_status
+        assert (branch_repo / "topic.txt").read_bytes() == topic_content
 
 
-async def test_context_edit_latest_message_preserves_staged_content(branch_repo, git_run):
+async def test_context_edit_latest_message_is_gated_and_preserves_staged_content(
+    branch_repo, git_run
+):
     (branch_repo / "base.txt").write_text("staged, not part of message edit\n")
     git_run(branch_repo, "add", "base.txt")
-    tree = git(branch_repo, "rev-parse", "HEAD^{tree}")
+    before_head = git(branch_repo, "rev-parse", "HEAD")
+    before_tree = git(branch_repo, "rev-parse", "HEAD^{tree}")
+    before_index = git(branch_repo, "ls-files", "--stage")
+    before_status = git(branch_repo, "status", "--porcelain=v1")
+    staged_content = git(branch_repo, "show", ":base.txt")
+    worktree_content = (branch_repo / "base.txt").read_bytes()
     app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
+        before_refs = git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)")
         await click_reference(app, pilot, "refs/heads/main", button=3)
         await choose_option(app, pilot, "edit-message")
         await settle(app, pilot)
@@ -1597,10 +1639,15 @@ async def test_context_edit_latest_message_preserves_staged_content(branch_repo,
         editor.load_text("A better subject\n\nWith a body.")
         await pilot.click("#confirm")
         await settle(app, pilot)
-        assert git(branch_repo, "log", "-1", "--format=%B") == "A better subject\n\nWith a body."
-        assert git(branch_repo, "rev-parse", "HEAD^{tree}") == tree
-        assert git(branch_repo, "diff", "--cached", "--name-only") == "base.txt"
-        assert not app._last_error
+        assert "protected" in app._last_error.lower() or "unavailable" in app._last_error.lower()
+        assert git(branch_repo, "rev-parse", "HEAD") == before_head
+        assert git(branch_repo, "log", "-1", "--format=%B") == "Base"
+        assert git(branch_repo, "rev-parse", "HEAD^{tree}") == before_tree
+        assert git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)") == before_refs
+        assert git(branch_repo, "ls-files", "--stage") == before_index
+        assert git(branch_repo, "status", "--porcelain=v1") == before_status
+        assert git(branch_repo, "show", ":base.txt") == staged_content
+        assert (branch_repo / "base.txt").read_bytes() == worktree_content
 
 
 async def test_context_create_worktree_keeps_current_checkout(branch_repo, tmp_path):
@@ -1640,52 +1687,75 @@ async def test_context_upstream_updates_explicit_branch(branch_repo, target):
         assert app.snapshot_data.branch == "main"
 
 
-async def test_context_apply_patch_keeps_index_unchanged(branch_repo, tmp_path):
+async def test_context_apply_patch_is_gated_without_mutating_worktree_or_index(
+    branch_repo, tmp_path
+):
     patch = tmp_path / "change.patch"
     patch.write_text(
         "diff --git a/base.txt b/base.txt\n--- a/base.txt\n+++ b/base.txt\n@@ -1 +1 @@\n-base\n+patched\n"
     )
+    before_head = git(branch_repo, "rev-parse", "HEAD")
+    before_index = git(branch_repo, "ls-files", "--stage")
+    before_status = git(branch_repo, "status", "--porcelain=v1")
+    before_content = (branch_repo / "base.txt").read_bytes()
     app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
+        before_refs = git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)")
         await click_reference(app, pilot, "refs/heads/main", button=3)
         await choose_option(app, pilot, "apply-patch")
         app.screen.query_one(Input).value = str(patch)
         await pilot.press("enter")
         await settle(app, pilot)
-        assert not app._last_error
-        assert (branch_repo / "base.txt").read_text() == "patched\n"
-        assert not git(branch_repo, "diff", "--cached", "--name-only")
+        assert "apply-patch is unavailable until its M3 guarded plan" in app._last_error
+        assert git(branch_repo, "rev-parse", "HEAD") == before_head
+        assert git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)") == before_refs
+        assert git(branch_repo, "ls-files", "--stage") == before_index
+        assert git(branch_repo, "status", "--porcelain=v1") == before_status
+        assert (branch_repo / "base.txt").read_bytes() == before_content
 
 
-async def test_context_remote_delete_requires_explicit_destination_and_preserves_local(
+async def test_context_remote_delete_picker_is_explicit_but_m1_refuses_deletion(
     branch_repo, bare_remote
 ):
+    before_head = git(branch_repo, "rev-parse", "HEAD")
+    before_remote_refs = git(bare_remote, "for-each-ref", "--format=%(refname) %(objectname)")
+    before_content = (branch_repo / "base.txt").read_bytes()
     app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
+        before_local_refs = git(
+            branch_repo, "for-each-ref", "--format=%(refname) %(objectname)"
+        )
         await click_reference(app, pilot, "refs/remotes/origin/test", button=3)
         await choose_option(app, pilot, "delete-remote-branch")
         await settle(app, pilot)
         assert isinstance(app.screen, ActionPicker)
-        assert git(bare_remote, "rev-parse", "refs/heads/test")
+        label = app.screen.query_one(OptionList).get_option("delete").prompt.plain
+        assert "Delete test on origin" in label and str(bare_remote) in label
         await pilot.press("escape")
+        assert git(bare_remote, "for-each-ref", "--format=%(refname) %(objectname)") == before_remote_refs
+
         await click_reference(app, pilot, "refs/remotes/origin/test", button=3)
         await choose_option(app, pilot, "delete-remote-branch")
         await settle(app, pilot)
         await choose_option(app, pilot, "delete")
         await settle(app, pilot)
-        assert not app._last_error
-        assert "refs/heads/test" not in git(bare_remote, "for-each-ref", "--format=%(refname)")
-        assert git(branch_repo, "rev-parse", "refs/heads/test")
+        assert "unavailable until exact target-ref restoration is proven" in app._last_error
+        assert git(branch_repo, "rev-parse", "HEAD") == before_head
+        assert git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)") == before_local_refs
+        assert git(bare_remote, "for-each-ref", "--format=%(refname) %(objectname)") == before_remote_refs
+        assert (branch_repo / "base.txt").read_bytes() == before_content
         assert app.snapshot_data.branch == "main"
 
 
-async def test_context_remote_delete_rejects_mapping_change_while_picker_open(
+async def test_context_remote_delete_mapping_change_remains_fail_closed(
     branch_repo, bare_remote, git_run
 ):
     oid = git(branch_repo, "rev-parse", "test")
     git_run(bare_remote, "update-ref", "refs/heads/other", oid)
+    before_head = git(branch_repo, "rev-parse", "HEAD")
+    before_content = (branch_repo / "base.txt").read_bytes()
     app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
@@ -1700,9 +1770,22 @@ async def test_context_remote_delete_rejects_mapping_change_while_picker_open(
             "remote.origin.fetch",
             "+refs/heads/other:refs/remotes/origin/test",
         )
+        before_local_refs = git(
+            branch_repo, "for-each-ref", "--format=%(refname) %(objectname)"
+        )
+        before_remote_refs = git(
+            bare_remote, "for-each-ref", "--format=%(refname) %(objectname)"
+        )
         await choose_option(app, pilot, "delete")
         await settle(app, pilot)
-        assert "mapping changed" in app._last_error
+        assert "unavailable until exact target-ref restoration is proven" in app._last_error
+        assert git(branch_repo, "rev-parse", "HEAD") == before_head
+        assert git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)") == before_local_refs
+        assert git(bare_remote, "for-each-ref", "--format=%(refname) %(objectname)") == before_remote_refs
+        assert git(branch_repo, "config", "remote.origin.fetch") == (
+            "+refs/heads/other:refs/remotes/origin/test"
+        )
+        assert (branch_repo / "base.txt").read_bytes() == before_content
         assert git(bare_remote, "rev-parse", "refs/heads/test") == oid
         assert git(bare_remote, "rev-parse", "refs/heads/other") == oid
 

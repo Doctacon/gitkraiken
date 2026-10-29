@@ -6,13 +6,17 @@ passed as an argv sequence; callers cannot supply command-line fragments.
 
 from __future__ import annotations
 
+import hashlib
 import heapq
 import os
 import re
 import shlex
+import shutil
 import stat
 import subprocess
 import tempfile
+from collections.abc import Callable
+from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlsplit, urlunsplit
@@ -60,8 +64,30 @@ _REPOSITORY_ENVIRONMENT = {
     "GIT_SUPER_PREFIX",
     "GIT_WORK_TREE",
 }
-_URL_RE = re.compile(r"(?P<url>[a-z][a-z0-9+.-]*://[^\s'\"<>]+)", re.IGNORECASE)
-_SCP_URL_RE = re.compile(r"(?P<url>(?<![\w./-])[^@\s/:]+@[^@\s/:]+:[^\s'\"<>]+)", re.IGNORECASE)
+# Start once per maximal scheme-shaped token, not once per character in a
+# long diagnostic. Preserve leading digits/punctuation rather than overlooking
+# a credential-bearing URL immediately after them.
+_URL_RE = re.compile(
+    r"(?<![A-Za-z0-9+.-])(?P<leading>[0-9+.-]*)"
+    r"(?P<url>[A-Za-z][A-Za-z0-9+.-]*://[^\s'\"<>]+)"
+)
+_SCP_URL_RE = re.compile(
+    r"(?<![^@\s/:])(?P<url>[^@\s/:]+@[^@\s/:]+:[^\s'\"<>]+)"
+)
+
+
+@dataclass(frozen=True)
+class _FetchRefspec:
+    raw: str
+    source: str
+    destination: str = ""
+
+
+@dataclass(frozen=True)
+class _FetchRemoteScope:
+    remote: str
+    refspecs: tuple[_FetchRefspec, ...]
+    no_tags: bool = False
 
 
 class GitError(RuntimeError):
@@ -69,6 +95,10 @@ class GitError(RuntimeError):
 
     def __init__(self, message: str) -> None:
         super().__init__(_redact(message))
+
+
+class GitOutcomeUncertain(GitError):
+    """A mutation may have completed; inspect current state before another attempt."""
 
 
 def _redact_url(url: str) -> str:
@@ -102,17 +132,21 @@ def _redact(text: str) -> str:
     def replace(match: re.Match[str]) -> str:
         # Keep common punctuation which the broad URL match may consume.
         value = match.group("url")
-        suffix = ""
-        while value and value[-1] in ".,;)]}":
-            suffix = value[-1] + suffix
-            value = value[:-1]
-        return _redact_url(value) + suffix
+        trimmed = value.rstrip(".,;)]}")
+        suffix = value[len(trimmed):]
+        return match.groupdict().get("leading", "") + _redact_url(trimmed) + suffix
 
     return _SCP_URL_RE.sub(replace, _URL_RE.sub(replace, text))
 
 
 def _decode(value: bytes) -> str:
     return value.decode("utf-8", "surrogateescape")
+
+
+def _commit_date(value: str) -> str:
+    # Git's strict ISO output changed its spelling of UTC across supported
+    # versions. Keep the public date stable without losing nonzero offsets.
+    return value.removesuffix("+00:00") + "Z" if value.endswith("+00:00") else value
 
 
 def _noninteractive_ssh_command(command: str) -> str:
@@ -198,11 +232,11 @@ def _git_environment(configured_ssh_command: str = "", *, network: bool = False)
 def _raise_process_error(
     result: subprocess.CompletedProcess[bytes],
     *,
-    timeout: float,
-    ok_codes: tuple[int, ...],
+    timeout: float | None,
+    ok_codes: tuple[int, ...] | None,
     operation: str,
 ) -> None:
-    if result.returncode in ok_codes:
+    if ok_codes is None or result.returncode in ok_codes:
         return
     raw_detail = result.stderr or result.stdout
     clipped = raw_detail[:_MAX_ERROR_BYTES]
@@ -223,13 +257,19 @@ def _run_process(
     argv: list[str],
     *,
     cwd: Path | None,
-    timeout: float = _LOCAL_TIMEOUT,
-    ok_codes: tuple[int, ...] = (0,),
+    timeout: float | None = _LOCAL_TIMEOUT,
+    ok_codes: tuple[int, ...] | None = (0,),
     operation: str = "command",
     input_bytes: bytes | None = None,
     configured_ssh_command: str = "",
+    index_file: Path | None = None,
 ) -> subprocess.CompletedProcess[bytes]:
     try:
+        env = _git_environment(configured_ssh_command, network=timeout == _NETWORK_TIMEOUT)
+        if index_file is not None:
+            # A private per-call override after inherited repository selectors are
+            # removed. Never change the process environment or accept arbitrary env.
+            env["GIT_INDEX_FILE"] = os.fspath(index_file)
         run_input: dict[str, object]
         if input_bytes is None:
             run_input = {"stdin": subprocess.DEVNULL}
@@ -238,7 +278,7 @@ def _run_process(
         result = subprocess.run(
             argv,
             cwd=cwd,
-            env=_git_environment(configured_ssh_command, network=timeout == _NETWORK_TIMEOUT),
+            env=env,
             capture_output=True,
             timeout=timeout,
             check=False,
@@ -335,6 +375,363 @@ def _friendly_output(result: subprocess.CompletedProcess[bytes], fallback: str) 
     return _redact(output) if output else fallback
 
 
+class _CommitIndexTransaction:
+    """Own a real index lock while native Git and hooks use a private candidate.
+
+    A commit can advance refs before the index is published. Unsettled transactions
+    therefore retain their artifacts and owned lock, never silently roll back refs
+    or discard a candidate which a surviving interrupted hook could still use.
+    """
+
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
+        index = repository._git_path("index")
+        self.directory = index.parent.resolve()
+        self.index = self.directory / index.name
+        self.lock_name = index.name + ".lock"
+        self.directory_fd: int | None = None
+        self.lock_fd: int | None = None
+        self.lock_owner: tuple[int, int] | None = None
+        self.temporary: Path | None = None
+        self.temporary_fd: int | None = None
+        self.temporary_owner: tuple[int, int] | None = None
+        self.context_fd: int | None = None
+        self.context_owner: tuple[int, int] | None = None
+        self.started = False
+        self.git_pid: int | None = None
+        self.git_pgid: int | None = None
+        self.settled = False
+        self.published = False
+        self.created_oid = ""
+
+    @staticmethod
+    def _identity(info: os.stat_result) -> tuple[int, int]:
+        return info.st_dev, info.st_ino
+
+    def _verify_temporary(self) -> None:
+        if self.temporary is None:
+            raise GitError("The commit index transaction is not open.")
+        info = self.temporary.lstat()
+        if (
+            self.temporary_fd is None or not stat.S_ISDIR(info.st_mode)
+            or self._identity(info) != self.temporary_owner
+            or self._identity(os.fstat(self.temporary_fd)) != self.temporary_owner
+        ):
+            raise GitError("Commit temporary directory ownership changed.")
+
+    @property
+    def candidate(self) -> Path:
+        self._verify_temporary()
+        assert self.temporary is not None
+        return self.temporary / "index"
+
+    def _owns_lock(self) -> bool:
+        if self.lock_owner is None or self.directory_fd is None:
+            return False
+        try:
+            return self._identity(os.stat(
+                self.lock_name, dir_fd=self.directory_fd, follow_symlinks=False,
+            )) == self.lock_owner
+        except FileNotFoundError:
+            return False
+
+    def verify(self) -> None:
+        self._verify_temporary()
+        current = self.repository._git_path("index")
+        if (
+            self.directory_fd is None
+            or current.name != self.index.name
+            or current.parent.resolve() != self.directory
+            or self._identity(self.directory.stat()) != self._identity(os.fstat(self.directory_fd))
+            or not self._owns_lock()
+        ):
+            raise GitError("Repository or index lock ownership changed during commit.")
+
+    def __enter__(self) -> _CommitIndexTransaction:
+        nofollow = getattr(os, "O_NOFOLLOW", 0)
+        try:
+            self.directory_fd = os.open(
+                self.directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+            )
+            self.lock_fd = os.open(
+                self.lock_name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow,
+                0o600, dir_fd=self.directory_fd,
+            )
+            self.lock_owner = self._identity(os.fstat(self.lock_fd))
+            self.temporary = Path(tempfile.mkdtemp(prefix="rhizome-commit-", dir=self.directory))
+            self.temporary_fd = os.open(
+                self.temporary, os.O_RDONLY | nofollow | getattr(os, "O_DIRECTORY", 0),
+            )
+            self.temporary_owner = self._identity(os.fstat(self.temporary_fd))
+            source_fd = os.open(
+                self.index.name, os.O_RDONLY | nofollow | getattr(os, "O_NONBLOCK", 0),
+                dir_fd=self.directory_fd,
+            )
+            with os.fdopen(source_fd, "rb") as source:
+                info = os.fstat(source.fileno())
+                if not stat.S_ISREG(info.st_mode):
+                    raise GitError("The Git index is not a regular file; no commit attempted.")
+                with self.candidate.open("xb") as destination:
+                    shutil.copyfileobj(source, destination)
+                self.candidate.chmod(stat.S_IMODE(info.st_mode))
+            self.verify()
+            return self
+        except BaseException as error:
+            self.__exit__(type(error), error, error.__traceback__)
+            raise
+
+    def record(self, head: str, symbolic: str) -> None:
+        """Leave bounded, source/message-free context for interrupted transactions."""
+        context = (
+            "Rhizome ordinary commit index transaction\n"
+            f"pid: {os.getpid()}\noriginal HEAD: {head or '(unborn)'}\n"
+            f"symbolic HEAD: {symbolic or '(detached)'}\n"
+            f"real index: {os.fspath(self.index)!r}\n"
+            f"candidate: {os.fspath(self.candidate)!r}\n"
+            "Do not remove a lock or retry until Git/hooks have stopped and HEAD,\n"
+            "the real index, and this candidate have been inspected. No automatic replay.\n"
+        ).encode()
+        self.context_fd = os.open(
+            self.candidate.parent / "context.txt", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600,
+        )
+        self.context_owner = self._identity(os.fstat(self.context_fd))
+        with os.fdopen(os.dup(self.context_fd), "wb") as stream:
+            stream.write(context)
+            stream.flush()
+            os.fsync(stream.fileno())
+        with os.fdopen(os.dup(self.lock_fd), "wb") as stream:
+            stream.write(context)
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary_fd = os.open(self.candidate.parent, os.O_RDONLY)
+        try:
+            os.fsync(temporary_fd)
+        finally:
+            os.close(temporary_fd)
+        os.fsync(self.directory_fd)
+        self.verify()
+
+    def run(self, args: list[str]) -> tuple[subprocess.CompletedProcess[bytes], str]:
+        """Wait for native Git without a deadline or an exceptional-path kill.
+
+        Regular temporary files avoid pipe deadlocks and unbounded Python
+        buffering. A dedicated inherited process group detects foreground
+        writers surviving their launcher. Deliberate group/session escape is
+        outside this boundary; no group is signalled to terminate or cancel it.
+        """
+        argv = ["git", *args]
+        env = _git_environment()
+        env["GIT_INDEX_FILE"] = os.fspath(self.candidate)
+        search_path = os.pathsep.join(
+            os.fspath(self.repository.root / entry) if not os.path.isabs(entry) else entry
+            for entry in env.get("PATH", os.defpath).split(os.pathsep)
+        )
+        if shutil.which("git", path=search_path) is None:
+            raise GitError("Could not start Git commit: Git executable is unavailable.")
+        with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
+            self._append_context("phase: native-spawn-pending\n")
+            # Once construction is attempted, even OSError may follow a live
+            # child. Only preparation failures before this point are settled.
+            self.started = True
+            process = subprocess.Popen(
+                argv, cwd=self.repository.root, env=env,
+                stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr,
+                process_group=0,
+            )
+            self.git_pid = self.git_pgid = process.pid
+            self._append_context(
+                f"git-pid: {process.pid}\ngit-pgid: {process.pid}\nphase: native-spawned\n"
+            )
+            # No Popen context manager: an exceptional exit must not implicitly
+            # wait for unfinished Git. __exit__ retains the transaction instead.
+            returncode = process.wait()
+            self._append_context(f"native-returncode: {returncode}\nphase: native-returned\n")
+            if returncode >= 0:
+                self._verify_group_quiescence()
+            stdout.seek(0)
+            created_oid = self._created_from_stream(stdout) if returncode == 0 else ""
+            stdout.seek(0)
+            stderr.seek(0)
+            output = stdout.read(_MAX_ERROR_BYTES + 1)
+            diagnostic = stderr.read(_MAX_ERROR_BYTES + 1)
+            if len(output) > _MAX_ERROR_BYTES:
+                output = output[:_MAX_ERROR_BYTES] + b"\n[Git output truncated by Rhizome]\n"
+            return subprocess.CompletedProcess(argv, returncode, output, diagnostic), created_oid
+
+    def _verify_group_quiescence(self) -> None:
+        assert self.git_pgid is not None
+        while True:
+            try:
+                # Signal zero is only an existence probe, never termination.
+                os.killpg(self.git_pgid, 0)
+            except InterruptedError:
+                continue
+            except ProcessLookupError:
+                self._append_context("phase: native-group-absent\n")
+                return
+            except OSError as error:
+                raise GitOutcomeUncertain(
+                    f"Could not establish native process-group quiescence: {error}"
+                ) from error
+            self._append_context("phase: native-group-still-present\n")
+            # Git has returned but its inherited writers may not have. Retain
+            # immediately rather than hanging on a possible orphaned zombie or
+            # pretending the remaining group has completed. No child is killed.
+            raise GitOutcomeUncertain(
+                "Native Git returned but its process group is still present; "
+                "hook or signer writers may remain active."
+            )
+
+    @staticmethod
+    def _created_from_stream(stream) -> str:
+        # Count all native-shaped headers, even beyond retained display output.
+        # Bound a line's prefix so an enormous subject cannot allocate a whole
+        # line. A header beyond this prefix bound is unverified, never guessed.
+        header = re.compile(rb"^\[[^\[\r\n]*? ([0-9a-f]{40}|[0-9a-f]{64})\] ")
+        prefix = b""
+        created: list[bytes] = []
+        while chunk := stream.read(_MAX_ERROR_BYTES):
+            parts = chunk.split(b"\n")
+            for position, part in enumerate(parts):
+                prefix += part[:max(0, _MAX_ERROR_BYTES - len(prefix))]
+                if position < len(parts) - 1:
+                    if match := header.match(prefix):
+                        created.append(match.group(1))
+                    if len(created) > 1:
+                        return ""
+                    prefix = b""
+        if match := header.match(prefix):
+            created.append(match.group(1))
+        return created[0].decode("ascii") if len(created) == 1 else ""
+
+    def _append_context(self, observation: str) -> None:
+        descriptor = os.open(
+            self.candidate.parent / "context.txt",
+            os.O_WRONLY | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_NONBLOCK", 0),
+        )
+        with os.fdopen(descriptor, "wb") as stream:
+            info = os.fstat(stream.fileno())
+            if not stat.S_ISREG(info.st_mode) or self._identity(info) != self.context_owner:
+                raise GitError("Commit recovery context ownership changed.")
+            stream.write(observation.encode("utf-8", "surrogateescape"))
+            stream.flush()
+            os.fsync(stream.fileno())
+
+    def record_created(self, oid: str) -> None:
+        self.created_oid = oid
+        self._append_context(f"native-created-oid: {oid or '(unverified)'}\n")
+
+    def record_observed(self, oid: str, symbolic: str, *, when: str) -> None:
+        self._append_context(
+            f"observation: {when}\n"
+            f"observed HEAD: {oid or '(unborn)'}\n"
+            f"observed symbolic HEAD: {symbolic or '(detached)'}\n"
+        )
+
+    def publish(self) -> None:
+        self.verify()
+        self._append_context("phase: validating-index-publication\n")
+        try:
+            self.candidate.with_name("index.lock").lstat()
+        except FileNotFoundError:
+            pass
+        else:
+            raise GitError("The alternate index is still locked; its state is not stable.")
+        nofollow = getattr(os, "O_NOFOLLOW", 0)
+        candidate_fd = os.open(self.candidate, os.O_RDONLY | nofollow | getattr(os, "O_NONBLOCK", 0))
+        try:
+            candidate_info = os.fstat(candidate_fd)
+            if not stat.S_ISREG(candidate_info.st_mode):
+                raise GitError("Git did not leave a regular commit index.")
+            # Validate the binary index, including extensions/shared storage.
+            self.repository._git(
+                ["ls-files", "--stage", "-z"], index_file=self.candidate,
+                operation="validate commit index",
+            )
+            os.fsync(candidate_fd)
+        finally:
+            os.close(candidate_fd)
+        shared = self.repository._git(
+            ["rev-parse", "--shared-index-path"], index_file=self.candidate,
+            operation="inspect commit split index",
+        ).stdout
+        if shared := _decode(shared).removesuffix("\n"):
+            shared_path = Path(shared)
+            if not shared_path.is_absolute():
+                shared_path = self.repository.root / shared_path
+            if (
+                not re.fullmatch(r"sharedindex\.[0-9a-f]+", shared_path.name)
+                or shared_path.resolve() != self.repository._git_path(shared_path.name).resolve()
+                or shared_path.resolve().is_relative_to(self.candidate.parent.resolve())
+            ):
+                raise GitError("Commit split-index storage is not durable.")
+            shared_fd = os.open(shared_path, os.O_RDONLY | nofollow | getattr(os, "O_NONBLOCK", 0))
+            try:
+                if not stat.S_ISREG(os.fstat(shared_fd).st_mode):
+                    raise GitError("Commit split-index storage is not regular.")
+                os.fsync(shared_fd)
+            finally:
+                os.close(shared_fd)
+            parent_fd = os.open(shared_path.parent, os.O_RDONLY)
+            try:
+                os.fsync(parent_fd)
+            finally:
+                os.close(parent_fd)
+        self.verify()
+        self._append_context("phase: candidate-move-pending\n")
+        os.replace(self.candidate, self.lock_name, dst_dir_fd=self.directory_fd)
+        self.lock_owner = self._identity(candidate_info)
+        self.verify()
+        self._append_context("phase: real-index-replace-pending\n")
+        os.replace(
+            self.lock_name, self.index.name,
+            src_dir_fd=self.directory_fd, dst_dir_fd=self.directory_fd,
+        )
+        self.published = True
+        self._append_context("phase: index-replaced-durability-pending\n")
+        os.fsync(self.directory_fd)
+        self._append_context("phase: index-published\n")
+
+    def __exit__(self, _type: object, error: BaseException | None, _traceback: object) -> bool:
+        preserve = self.started and not self.settled
+        cleanup_error: BaseException | None = None
+        try:
+            if not preserve:
+                if self._owns_lock():
+                    os.unlink(self.lock_name, dir_fd=self.directory_fd)
+                if self.temporary is not None:
+                    self._verify_temporary()
+                    shutil.rmtree(self.temporary)
+        except (OSError, GitError) as failure:
+            cleanup_error = failure
+        finally:
+            for descriptor in (
+                self.context_fd, self.temporary_fd, self.lock_fd, self.directory_fd,
+            ):
+                if descriptor is not None:
+                    try:
+                        os.close(descriptor)
+                    except OSError as failure:
+                        cleanup_error = cleanup_error or failure
+            self.context_fd = self.temporary_fd = self.lock_fd = self.directory_fd = None
+        if preserve or (cleanup_error is not None and self.started):
+            detail = error or cleanup_error or "Commit did not reach a verified outcome."
+            raise GitOutcomeUncertain(
+                f"Commit outcome or index publication is uncertain: {detail}\n"
+                f"Git process: {self.git_pid or '(unobserved)'}. "
+                f"Git process group: {self.git_pgid or '(unobserved)'}. "
+                f"Native Git's reported commit: {self.created_oid or '(unverified)'}. "
+                f"Transaction artifacts: {self.temporary}. "
+                "Any owned index lock is deliberately retained until inspection. "
+                "Inspect HEAD, staged content, and any retained index.lock before retrying. "
+                "Do not remove transaction files while Git or hooks may still be running."
+            ) from (error or cleanup_error)
+        if cleanup_error is not None:
+            raise GitError(f"Commit transaction cleanup failed: {cleanup_error}") from cleanup_error
+        return False
+
+
 class Repository:
     """A discovered non-bare Git worktree with synchronous operations."""
 
@@ -409,10 +806,11 @@ class Repository:
         args: list[str],
         *,
         literal_paths: bool = False,
-        timeout: float = _LOCAL_TIMEOUT,
-        ok_codes: tuple[int, ...] = (0,),
+        timeout: float | None = _LOCAL_TIMEOUT,
+        ok_codes: tuple[int, ...] | None = (0,),
         operation: str = "command",
         input_bytes: bytes | None = None,
+        index_file: Path | None = None,
     ) -> subprocess.CompletedProcess[bytes]:
         argv = ["git"]
         if literal_paths:
@@ -429,7 +827,260 @@ class Repository:
             operation=operation,
             input_bytes=input_bytes,
             configured_ssh_command=configured_ssh_command,
+            index_file=index_file,
         )
+
+    def _attribute_snapshot(self, paths: tuple[str, ...], *, source: str = "") -> bytes:
+        """Read effective attributes at a captured tree without changing the real index.
+
+        Git 2.36 has --cached but not check-attr --source. A private temporary
+        index supplies that tree using the supported interface; split/sparse
+        storage is disabled for this disposable index only, never in user config.
+        """
+        data = b"".join(os.fsencode(path) + b"\x00" for path in paths)
+        command = ["check-attr", "-z", "--all", "--stdin"]
+        if not source:
+            return self._git(
+                command, literal_paths=True, input_bytes=data,
+                operation="review effective path attributes",
+            ).stdout
+        with tempfile.TemporaryDirectory(prefix="rhizome-attributes-") as directory:
+            index = Path(directory) / "index"
+            self._git(
+                ["-c", "core.splitIndex=false", "-c", "core.sparseCheckout=false",
+                 "-c", "index.sparse=false", "read-tree", source],
+                index_file=index, operation="read captured attribute tree",
+            )
+            return self._git(
+                [*command, "--cached"], literal_paths=True, input_bytes=data,
+                index_file=index, operation="review captured path attributes",
+            ).stdout
+
+    def _replace_index_entries(self, records: bytes, validate: Callable[[], None]) -> None:
+        """Publish selected entries while continuously owning Git's real index lock.
+
+        Git builds a candidate from the locked current index. Validation reads the
+        unchanged real index under that same lock; the final rename is the only
+        visibility point. HEAD and arbitrary editor writes have no joint Git lock,
+        so those are rechecked immediately before publication, not claimed atomic.
+        """
+        index = self._git_path("index")
+        directory = index.parent.resolve()
+        index = directory / index.name
+        lock_name = index.name + ".lock"
+        directory_fd = lock_fd = None
+        lock_owner = None
+        published = False
+        nofollow = getattr(os, "O_NOFOLLOW", 0)
+
+        def identity(info: os.stat_result) -> tuple[int, int]:
+            return info.st_dev, info.st_ino
+
+        def owns_lock() -> bool:
+            try:
+                return identity(os.stat(lock_name, dir_fd=directory_fd, follow_symlinks=False)) == lock_owner
+            except FileNotFoundError:
+                return False
+
+        try:
+            directory_fd = os.open(directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+            lock_fd = os.open(
+                lock_name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow, 0o600,
+                dir_fd=directory_fd,
+            )
+            lock_owner = identity(os.fstat(lock_fd))
+            with tempfile.TemporaryDirectory(prefix="rhizome-index-", dir=directory) as temporary:
+                candidate = Path(temporary) / "index"
+                try:
+                    source_fd = os.open(index.name, os.O_RDONLY | nofollow, dir_fd=directory_fd)
+                except FileNotFoundError:
+                    source_fd = None  # Git must create a valid index, not read a zero-byte file.
+                if source_fd is not None:
+                    with os.fdopen(source_fd, "rb") as source:
+                        info = os.fstat(source.fileno())
+                        if not stat.S_ISREG(info.st_mode):
+                            raise GitError("The Git index is not a regular file; no changes applied.")
+                        with candidate.open("xb") as destination:
+                            shutil.copyfileobj(source, destination)
+                        candidate.chmod(stat.S_IMODE(info.st_mode))
+                self._git(
+                    # The real index still references its old shared base until
+                    # publication. Native candidate maintenance must not expire it.
+                    ["-c", "splitIndex.sharedIndexExpire=never", "update-index", "-z", "--index-info"],
+                    input_bytes=records,
+                    index_file=candidate, operation="apply selected patch to index",
+                )
+                candidate_fd = os.open(candidate, os.O_RDONLY | nofollow)
+                try:
+                    candidate_info = os.fstat(candidate_fd)
+                    if not stat.S_ISREG(candidate_info.st_mode):
+                        raise GitError("Git did not create a regular candidate index.")
+                    os.fsync(candidate_fd)
+                finally:
+                    os.close(candidate_fd)
+                shared = self._git(
+                    ["rev-parse", "--shared-index-path"], index_file=candidate,
+                    operation="inspect candidate split index",
+                ).stdout
+                if shared := _decode(shared).removesuffix("\n"):
+                    shared_path = Path(shared)
+                    if not shared_path.is_absolute():
+                        shared_path = self.root / shared_path
+                    # A split index encodes a shared-file hash, not an arbitrary
+                    # path. Its sidecar must live in Git's durable administrative
+                    # directory, never in our soon-to-be-removed candidate folder.
+                    if (
+                        not re.fullmatch(r"sharedindex\.[0-9a-f]+", shared_path.name)
+                        or shared_path.resolve() != self._git_path(shared_path.name).resolve()
+                        or shared_path.resolve().is_relative_to(Path(temporary).resolve())
+                    ):
+                        raise GitError(
+                            "Split-index sidecar storage is not durable; no index changes applied."
+                        )
+                    shared_fd = os.open(shared_path, os.O_RDONLY | nofollow)
+                    try:
+                        if not stat.S_ISREG(os.fstat(shared_fd).st_mode):
+                            raise GitError("Split-index storage is not a regular file.")
+                        os.fsync(shared_fd)
+                    finally:
+                        os.close(shared_fd)
+                    parent_fd = os.open(shared_path.parent, os.O_RDONLY)
+                    try:
+                        os.fsync(parent_fd)
+                    finally:
+                        os.close(parent_fd)
+                if not owns_lock():
+                    raise GitError("Git index lock ownership changed; no changes applied.")
+                os.replace(candidate, lock_name, dst_dir_fd=directory_fd)
+                lock_owner = identity(candidate_info)
+                validate()
+                current = self._git_path("index")
+                if (
+                    current.name != index.name
+                    or current.parent.resolve() != directory
+                    or identity(directory.stat()) != identity(os.fstat(directory_fd))
+                    or not owns_lock()
+                ):
+                    raise GitError("Repository identity changed; no index changes applied.")
+                os.replace(lock_name, index.name, src_dir_fd=directory_fd, dst_dir_fd=directory_fd)
+                published = True
+                os.fsync(directory_fd)
+        except OSError as error:
+            if published:
+                raise GitOutcomeUncertain(
+                    "Index replaced, but durability or cleanup is uncertain. "
+                    "Refresh and inspect before retrying."
+                ) from error
+            raise GitError(f"Git apply selected patch to index failed: {error}") from error
+        finally:
+            if directory_fd is not None and lock_owner is not None and not published:
+                if owns_lock():
+                    os.unlink(lock_name, dir_fd=directory_fd)
+            if lock_fd is not None:
+                os.close(lock_fd)
+            if directory_fd is not None:
+                os.close(directory_fd)
+
+    def _commit_index_fingerprint(self) -> bytes:
+        """Bind flags/extensions as well as entries, without normalizing the index."""
+        try:
+            descriptor = os.open(
+                self._git_path("index"),
+                os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),
+            )
+            with os.fdopen(descriptor, "rb") as stream:
+                if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                    raise GitError("The Git index is not a regular file.")
+                return hashlib.file_digest(stream, "sha256").digest()
+        except OSError as error:
+            raise GitError(f"Could not capture the commit index: {error}") from error
+
+    def _commit_reviewed(self, action: Action, validate: Callable[[], None]) -> str:
+        """Commit a locked reviewed index using native hooks/signing/ref updates."""
+        if not action.message.strip():
+            raise GitError("A commit message is required.")
+        self._ensure_no_operation_or_conflicts("commit")
+        staged = self._git(
+            ["diff", "--cached", "--quiet", "--exit-code", "--no-ext-diff", "--no-textconv"],
+            ok_codes=(0, 1), operation="check staged changes",
+        )
+        if staged.returncode == 0:
+            raise GitError("There are no staged changes to commit.")
+
+        def head_state() -> tuple[str, str]:
+            symbolic = self._git(
+                ["symbolic-ref", "--quiet", "HEAD"], ok_codes=(0, 1),
+                operation="inspect commit HEAD identity",
+            )
+            return self._head(), _decode(symbolic.stdout).removesuffix("\n")
+
+        before = head_state()
+        index_before = self._commit_index_fingerprint()
+        transaction = _CommitIndexTransaction(self)
+        try:
+            with transaction:
+                validate()
+                self._preflight_context(action)
+                self._ensure_no_operation_or_conflicts("commit")
+                if before != head_state() or index_before != self._commit_index_fingerprint():
+                    raise GitError("Repository changed before the commit index was locked. Review again.")
+                staged = self._git(
+                    ["diff", "--cached", "--quiet", "--exit-code", "--no-ext-diff", "--no-textconv"],
+                    index_file=transaction.candidate, ok_codes=(0, 1),
+                    operation="check locked staged changes",
+                )
+                if staged.returncode == 0:
+                    raise GitError("There are no staged changes to commit.")
+                transaction.record(*before)
+                result, created_oid = transaction.run(
+                    ["-c", "core.abbrev=no", "-c", "color.ui=false", "-c", "color.diff=false",
+                     "-c", "splitIndex.sharedIndexExpire=never", "commit", "-m", action.message],
+                )
+                if result.returncode < 0:
+                    raise GitOutcomeUncertain("Git was interrupted by a signal; hook quiescence is unknown.")
+                # Native Git prints its created OID after post-commit, not the
+                # potentially substituted HEAD. This is a bounded compatibility
+                # seam, not porcelain: missing/ambiguous headers fail closed.
+                # Hook stdout is stderr; subjects/indented path summaries are data
+                # (Git 2.36 hook.c/sequencer.c), not competing result identities.
+                transaction.record_created(created_oid)
+                # Synchronous hook index edits survive success and rejection.
+                # Identity ambiguity/ref movement cannot veto index publication.
+                transaction.record_observed(*head_state(), when="before-index-publication")
+                transaction.publish()
+                after = head_state()
+                transaction.record_observed(*after, when="after-index-publication")
+                if result.returncode == 0:
+                    if not created_oid:
+                        raise GitOutcomeUncertain("Git did not report one unambiguous created commit.")
+                    kind = self._git(
+                        ["--no-replace-objects", "cat-file", "-t", created_oid],
+                        operation="verify created commit type",
+                    ).stdout
+                    raw = self._git(
+                        ["--no-replace-objects", "cat-file", "commit", created_oid],
+                        operation="verify created commit parents",
+                    ).stdout
+                    parents = [
+                        line.removeprefix(b"parent ")
+                        for line in raw.split(b"\n\n", 1)[0].split(b"\n")
+                        if line.startswith(b"parent ")
+                    ]
+                    expected = [before[0].encode("ascii")] if before[0] else []
+                    if (
+                        kind != b"commit\n" or created_oid != after[0]
+                        or after != head_state()
+                        or after[0] == before[0] or after[1] != before[1]
+                        or parents != expected
+                    ):
+                        raise GitOutcomeUncertain("HEAD/ref postconditions do not match the created commit.")
+                elif after != before:
+                    raise GitOutcomeUncertain("HEAD/ref changed despite Git reporting a commit failure.")
+                transaction.settled = True
+                _raise_process_error(result, timeout=None, ok_codes=(0,), operation="commit")
+                return _friendly_output(result, "Git commit completed.")
+        except OSError as error:
+            raise GitError(f"Could not prepare the commit index transaction: {error}") from error
 
     def _git_diff(
         self,
@@ -439,7 +1090,9 @@ class Repository:
         ok_codes: tuple[int, ...] = (0,),
         operation: str = "read diff",
     ) -> subprocess.CompletedProcess[bytes]:
-        argv = ["git"]
+        # Git 2.36 diff's stat-cache refresh does not honor optional-locks
+        # alone. Reading a diff must not take or rewrite the real index.
+        argv = ["git", "--no-optional-locks", "-c", "diff.autoRefreshIndex=false"]
         if literal_paths:
             argv.append("--literal-pathspecs")
         argv.extend(args)
@@ -729,7 +1382,7 @@ class Repository:
 
     def _status(self) -> tuple[FileChange, ...]:
         result = self._git(
-            ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=no"],
+            ["--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=no"],
             operation="read status",
         )
         records = _decode(result.stdout).split("\x00")
@@ -776,7 +1429,7 @@ class Repository:
 
     def _git_path(self, name: str) -> Path:
         result = self._git(["rev-parse", "--git-path", name], operation="inspect repository state")
-        value = Path(_decode(result.stdout).rstrip("\n"))
+        value = Path(_decode(result.stdout).removesuffix("\n"))
         return value if value.is_absolute() else self.root / value
 
     def _operation(self) -> str:
@@ -967,7 +1620,7 @@ class Repository:
                 parents=tuple(parents.split()) if parents else (),
                 author=author,
                 email=email,
-                date=date,
+                date=_commit_date(date),
                 subject=subject,
                 refs=tuple(dict.fromkeys(names_by_oid.get(oid, ()))),
             )
@@ -1026,7 +1679,7 @@ class Repository:
             parents=tuple(parents.split()) if parents else (),
             author=author,
             email=email,
-            date=date,
+            date=_commit_date(date),
             subject=subject,
             refs=refs,
         )
@@ -1228,6 +1881,308 @@ class Repository:
             operation="validate remote fetch mapping",
         )
         return result.returncode == 0
+
+    def _fetch_config_values(self, key: str, *, boolean: bool = False) -> tuple[str, ...]:
+        command = ["config", "--includes", "--null"]
+        if boolean:
+            command.append("--type=bool")
+        command.extend(["--get-all", key])
+        result = self._git(
+            command,
+            ok_codes=(0, 1),
+            operation="read effective fetch configuration",
+        )
+        if result.returncode == 1:
+            return ()
+        values = _decode(result.stdout).split("\x00")
+        if values and values[-1] == "":
+            values.pop()
+        return tuple(values)
+
+    def _fetch_boolean(self, key: str) -> bool | None:
+        values = self._fetch_config_values(key, boolean=True)
+        if not values:
+            return None
+        value = values[-1].casefold()
+        if value not in {"true", "false"}:  # Defensive: --type=bool canonicalizes values.
+            raise GitError(f"Fetch configuration {key} is not a valid boolean.")
+        return value == "true"
+
+    @staticmethod
+    def _fetch_patterns_overlap(left: str, right: str) -> bool:
+        if "*" not in left:
+            return Repository._refspec_match(right, left) is not None
+        if "*" not in right:
+            return Repository._refspec_match(left, right) is not None
+        left_prefix, left_suffix = left.split("*", 1)
+        right_prefix, right_suffix = right.split("*", 1)
+        return (
+            left_prefix.startswith(right_prefix) or right_prefix.startswith(left_prefix)
+        ) and (
+            left_suffix.endswith(right_suffix) or right_suffix.endswith(left_suffix)
+        )
+
+    def _valid_fetch_source(self, source: str, *, negative: bool = False) -> bool:
+        if not source or source.count("*") > 1:
+            return False
+        if source == "HEAD":
+            return not negative
+        if not negative and "*" not in source and re.fullmatch(r"[0-9a-fA-F]{40,64}", source):
+            return True
+        return source.startswith("refs/") and self._valid_refspec_pattern(source)
+
+    def _parse_fetch_refspecs(self, remote: str) -> tuple[_FetchRefspec, ...]:
+        raw_refspecs = self._fetch_config_values(f"remote.{remote}.fetch")
+        parsed: list[_FetchRefspec] = []
+        destinations: list[tuple[str, str]] = []
+        for raw in raw_refspecs:
+            if not raw or _CONTROL_RE.search(raw):
+                raise GitError(f"Remote {remote} has a malformed fetch refspec.")
+            if raw.startswith("^"):
+                source = raw[1:]
+                if ":" in source or not self._valid_fetch_source(source, negative=True):
+                    raise GitError(f"Remote {remote} has a malformed negative fetch refspec: {raw}")
+                parsed.append(_FetchRefspec(raw=raw, source=source))
+                continue
+
+            value = raw[1:] if raw.startswith("+") else raw
+            if not value or value.startswith("+") or value.count(":") > 1:
+                raise GitError(f"Remote {remote} has a malformed fetch refspec: {raw}")
+            source, separator, destination = value.partition(":")
+            if not self._valid_fetch_source(source):
+                raise GitError(f"Remote {remote} has a malformed fetch source: {raw}")
+            if not separator:
+                if "*" in source:
+                    raise GitError(
+                        f"Remote {remote} has an unsupported wildcard source-only fetch refspec: {raw}"
+                    )
+                parsed.append(_FetchRefspec(raw=raw, source=source))
+                continue
+            if (
+                not destination
+                or source.count("*") != destination.count("*")
+                or destination.count("*") > 1
+                or not self._valid_refspec_pattern(destination)
+            ):
+                raise GitError(f"Remote {remote} has a malformed fetch refspec: {raw}")
+            if not destination.startswith("refs/remotes/"):
+                raise GitError(
+                    f"Remote {remote} fetch destination {destination} is outside the "
+                    "remote-tracking cache namespace."
+                )
+            for prior_raw, prior_destination in destinations:
+                if (
+                    self._fetch_patterns_overlap(prior_destination, destination)
+                    and prior_raw != raw
+                ):
+                    raise GitError(
+                        f"Remote {remote} has ambiguous fetch destinations "
+                        f"{prior_destination} and {destination}."
+                    )
+            destinations.append((raw, destination))
+            parsed.append(_FetchRefspec(raw=raw, source=source, destination=destination))
+        if parsed and all(raw.raw.startswith("^") for raw in parsed):
+            raise GitError(
+                f"Remote {remote} has negative fetch refspecs without a positive source."
+            )
+        return tuple(parsed)
+
+    def _loose_fetch_symbolic_refs(self) -> dict[str, str]:
+        storage = self._fetch_config_values("extensions.refStorage")
+        if storage and storage[-1].casefold() != "files":
+            raise GitError(
+                "Fetch destination validation does not support this repository ref storage."
+            )
+        # An unreadable user-ref directory can hide an inbound cache alias.
+        # Inspect all loose storage, while retaining immediate cache targets.
+        root = self._git_path("refs")
+        symbolic: dict[str, str] = {}
+        if not root.exists():
+            return symbolic
+        if root.is_symlink() or not root.is_dir():
+            raise GitError("Git ref storage is not a safe directory.")
+        def unreadable(error: OSError) -> None:
+            raise error
+
+        try:
+            for directory, names, files in os.walk(root, followlinks=False, onerror=unreadable):
+                directory_path = Path(directory)
+                for name in names:
+                    if (directory_path / name).is_symlink():
+                        raise GitError("Git ref storage contains an unsupported symlink.")
+                for name in files:
+                    path = directory_path / name
+                    if path.is_symlink() or not path.is_file():
+                        raise GitError("Git ref storage contains an unsupported ref file.")
+                    with path.open("rb") as ref_file:
+                        data = ref_file.read(4097)
+                    relative = path.relative_to(root).as_posix()
+                    refname = f"refs/{relative}"
+                    if not data.startswith(b"ref: ") or not refname.startswith("refs/remotes/"):
+                        continue
+                    if len(data) > 4096:
+                        raise GitError("Remote-tracking symbolic ref is malformed.")
+                    target = _decode(data[5:]).removesuffix("\n")
+                    if (
+                        _CONTROL_RE.search(target)
+                        or not self._valid_refspec_pattern(refname)
+                        or not self._valid_refspec_pattern(target)
+                    ):
+                        raise GitError("Remote-tracking symbolic ref is malformed.")
+                    symbolic[refname] = target
+        except OSError as error:
+            raise GitError(f"Could not inspect fetch symbolic refs: {error}") from error
+        return symbolic
+
+    def _fetch_symbolic_refs(self) -> tuple[dict[str, str], dict[str, str]]:
+        symbolic = self._loose_fetch_symbolic_refs()
+        aliases: dict[str, str] = {}
+        result = self._git(
+            ["for-each-ref", "--format=%(refname)%00%(objectname)%00%(symref)"],
+            operation="inspect fetch symbolic refs",
+        )
+        for line in _decode(result.stdout).splitlines():
+            fields = line.split("\x00")
+            if len(fields) != 3:
+                raise GitError("Git returned an incomplete symbolic-ref inventory.")
+            refname, oid, target = fields
+            if not target:
+                continue
+            if refname.startswith("refs/remotes/"):
+                # Keep the immediate loose target, including dangling chains;
+                # for-each-ref reports the terminal referent of resolving refs.
+                symbolic.setdefault(refname, target)
+            elif oid and oid.strip("0"):
+                aliases[refname] = target
+        return symbolic, aliases
+
+    def _validate_fetch_symbolic_destinations(
+        self, remote: str, refspecs: tuple[_FetchRefspec, ...]
+    ) -> None:
+        destinations = tuple(item.destination for item in refspecs if item.destination)
+        if not destinations:
+            return
+        symbolic, aliases = self._fetch_symbolic_refs()
+        terminal_destinations: set[str] = set()
+        candidates = {
+            refname
+            for refname in symbolic
+            if any(self._refspec_match(pattern, refname) is not None for pattern in destinations)
+        }
+        candidates.update(pattern for pattern in destinations if "*" not in pattern)
+        for destination in candidates:
+            current = destination
+            seen: set[str] = set()
+            while True:
+                if current in seen:
+                    raise GitError(
+                        f"Remote {remote} fetch destination {destination} has a symbolic ref cycle."
+                    )
+                seen.add(current)
+                target = symbolic.get(current)
+                if target is None:
+                    result = self._git(
+                        ["symbolic-ref", "--quiet", current],
+                        ok_codes=(0, 1),
+                        operation="inspect fetch symbolic destination",
+                    )
+                    if result.returncode == 1:
+                        terminal_destinations.add(current)
+                        break
+                    target = _decode(result.stdout).removesuffix("\n")
+                    symbolic[current] = target
+                if not target.startswith("refs/remotes/"):
+                    raise GitError(
+                        f"Remote {remote} fetch symbolic destination {destination} resolves "
+                        f"outside the remote-tracking cache namespace to {target}."
+                    )
+                current = target
+        for refname, target in aliases.items():
+            if target in terminal_destinations or any(
+                self._refspec_match(pattern, target) is not None for pattern in destinations
+            ):
+                raise GitError(
+                    f"Remote {remote} fetch could change user-owned symbolic ref {refname} "
+                    f"through its remote-tracking target {target}. Inspect it with external Git."
+                )
+
+    def _fetch_remote_scope(self, remote: str) -> _FetchRemoteScope:
+        refspecs = self._parse_fetch_refspecs(remote)
+        remote_prune = self._fetch_boolean(f"remote.{remote}.pruneTags")
+        global_prune = self._fetch_boolean("fetch.pruneTags")
+        effective_prune = remote_prune if remote_prune is not None else global_prune
+        if effective_prune:
+            raise GitError(
+                f"Remote {remote} has effective tag pruning enabled; Rhizome fetch will not "
+                "delete user-owned tags."
+            )
+        tag_options = self._fetch_config_values(f"remote.{remote}.tagOpt")
+        if tag_options and (
+            any(value not in {"--tags", "--no-tags"} for value in tag_options)
+            or tag_options[-1] != "--no-tags"
+        ):
+            raise GitError(
+                f"Remote {remote} has explicit tag fetch behavior; only native default "
+                "non-force tag auto-follow or explicit --no-tags is supported."
+            )
+        self._validate_fetch_symbolic_destinations(remote, refspecs)
+        return _FetchRemoteScope(remote=remote, refspecs=refspecs, no_tags=bool(tag_options))
+
+    def _validate_fetch_scope(self, requested_remote: str = "") -> tuple[_FetchRemoteScope, ...]:
+        """Return a pinned safe fetch scope for coordinator planning and execution.
+
+        This is a fail-closed preflight, not an atomic lock against another process
+        changing refs or configuration after validation.
+        """
+        if requested_remote:
+            names = (self._remote(requested_remote),)
+        else:
+            selected: list[str] = []
+            for name in self._remote_names():
+                skip_default = self._fetch_boolean(f"remote.{name}.skipDefaultUpdate")
+                skip_all = self._fetch_boolean(f"remote.{name}.skipFetchAll")
+                if skip_default or skip_all:
+                    continue
+                selected.append(name)
+            names = tuple(selected)
+        scopes = tuple(self._fetch_remote_scope(name) for name in names)
+        destinations: list[tuple[str, str]] = []
+        for scope in scopes:
+            for refspec in scope.refspecs:
+                if not refspec.destination:
+                    continue
+                for prior_remote, prior_destination in destinations:
+                    if (
+                        prior_remote != scope.remote
+                        and self._fetch_patterns_overlap(prior_destination, refspec.destination)
+                    ):
+                        raise GitError(
+                            f"Remotes {prior_remote} and {scope.remote} have ambiguous overlapping "
+                            f"fetch destination {refspec.destination}."
+                        )
+                destinations.append((scope.remote, refspec.destination))
+        return scopes
+
+    def _execute_fetch(self, requested_remote: str = "") -> subprocess.CompletedProcess[bytes]:
+        scopes = self._validate_fetch_scope(requested_remote)
+        result = subprocess.CompletedProcess(["git", "fetch"], 0, b"", b"")
+        for scope in scopes:
+            command = [
+                "-c",
+                "fetch.pruneTags=false",
+                "-c",
+                f"remote.{scope.remote}.pruneTags=false",
+                "fetch",
+                "--no-force",
+                "--no-prune-tags",
+            ]
+            command.append("--refmap=")
+            if scope.no_tags:
+                command.append("--no-tags")
+            pinned_refspecs = [item.raw for item in scope.refspecs] or ["HEAD"]
+            command.extend(["--", scope.remote, *pinned_refspecs])
+            result = self._git(command, timeout=_NETWORK_TIMEOUT, operation="fetch")
+        return result
 
     def _remote_source_ref(self, remote: str, tracking_ref: str) -> str:
         """Reverse exactly one remote fetch refspec for *tracking_ref*."""
@@ -1948,16 +2903,7 @@ class Repository:
                 operation="discard worktree changes",
             )
         elif operation == "commit":
-            if not action.message.strip():
-                raise GitError("A commit message is required.")
-            staged = self._git(
-                ["diff", "--cached", "--quiet", "--exit-code", "--no-ext-diff", "--no-textconv"],
-                ok_codes=(0, 1),
-                operation="check staged changes",
-            )
-            if staged.returncode == 0:
-                raise GitError("There are no staged changes to commit.")
-            result = self._git(["commit", "-m", action.message], operation="commit")
+            return self._commit_reviewed(action, lambda: self._preflight_context(action))
         elif operation == "apply-patch":
             if len(action.paths) != 1:
                 raise GitError("Apply patch requires exactly one patch filename.")
@@ -1970,9 +2916,7 @@ class Repository:
             )
             result = self._git(["apply"], operation="apply patch", input_bytes=patch)
         elif operation == "fetch":
-            remote = self._remote(action.remote) if action.remote else ""
-            command = ["fetch", "--", remote] if remote else ["fetch", "--all"]
-            result = self._git(command, timeout=_NETWORK_TIMEOUT, operation="fetch")
+            result = self._execute_fetch(action.remote)
         elif operation == "pull":
             command = ["pull", "--ff-only"]
             if action.remote:

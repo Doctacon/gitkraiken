@@ -58,10 +58,15 @@ class PullRequestDialog(ModalScreen[str | None]):
         self,
         plan: PullRequestPlan,
         create: Callable[[str, str], Awaitable[str]],
+        *,
+        draft: tuple[str, str] = ("", ""),
+        save_draft: Callable[[str, str], None] | None = None,
     ) -> None:
         super().__init__()
         self.plan = plan
         self._create = create
+        self._draft = draft
+        self._save_draft = save_draft
         self._submitting = False
         self._copying = False
         self.created_url = ""
@@ -81,9 +86,10 @@ class PullRequestDialog(ModalScreen[str | None]):
                 yield Static("", id="pr-feedback")
                 with Vertical(id="pr-form"):
                     yield Label("Title (required)", classes="pr-field-label")
-                    yield Input(placeholder="Summarize this change", id="pr-title")
+                    yield Input(self._draft[0], placeholder="Summarize this change", id="pr-title")
                     yield Label("Description (optional · Markdown)", classes="pr-field-label")
-                    yield TextArea(id="pr-description", theme="github_light")
+                    yield TextArea(self._draft[1], id="pr-description", theme="github_light")
+                    yield Static("", id="pr-draft-status", classes="dialog-detail")
                     yield Static(
                         "Uses pushed branches; does not push or merge.\n"
                         "Add reviewers, work items and tags in the web UI afterward.",
@@ -100,6 +106,33 @@ class PullRequestDialog(ModalScreen[str | None]):
     def on_mount(self) -> None:
         self.query_one("#pr-copy", Button).display = False
         self.query_one("#pr-title", Input).focus()
+        self._persist_draft()
+
+    def _persist_draft(self) -> None:
+        if not self.is_mounted or self.created_url:
+            return
+        status = self.query_one("#pr-draft-status", Static)
+        if self._save_draft is None:
+            status.update("Draft is kept only in this dialog")
+            return
+        title = self.query_one("#pr-title", Input).value
+        description = self.query_one("#pr-description", TextArea).text
+        try:
+            self._save_draft(title, description)
+        except Exception as error:
+            status.update(Text("Draft not saved: " + str(error)))
+        else:
+            status.update("Draft saved locally" if title or description else "Draft is empty")
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id == "pr-title":
+            event.stop()
+            self._persist_draft()
+
+    def on_text_area_changed(self, event: TextArea.Changed) -> None:
+        if event.text_area.id == "pr-description":
+            event.stop()
+            self._persist_draft()
 
     def action_cancel(self) -> None:
         if not self._submitting:

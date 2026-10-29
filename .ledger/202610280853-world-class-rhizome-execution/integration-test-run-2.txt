@@ -1,0 +1,18 @@
+........................................................................ [ 12%]
+........................................................................ [ 24%]
+........................................................................ [ 36%]
+........................................................................ [ 49%]
+........................................................................ [ 61%]
+........................................................................ [ 73%]
+........................................................................ [ 85%]
+........................................................F............... [ 98%]
+...........                                                              [100%]
+=================================== FAILURES ===================================
+___________ test_changed_remote_during_listing_discards_old_results ____________
+tests/test_sidebar_integration.py:226: in test_changed_remote_during_listing_discards_old_results
+    assert not any(item.kind == "pull-request" for item in sidebar._leaves.values())
+E   assert not True
+E    +  where True = any(<generator object test_changed_remote_during_listing_discards_old_results.<locals>.<genexpr> at 0x109e23030>)
+=========================== short test summary info ============================
+FAILED tests/test_sidebar_integration.py::test_changed_remote_during_listing_discards_old_results
+1 failed, 586 passed in 691.80s (0:11:31)

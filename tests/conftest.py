@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import time
@@ -9,6 +10,29 @@ from pathlib import Path
 import pytest
 
 GitRun = Callable[..., subprocess.CompletedProcess[str]]
+
+
+@pytest.fixture(autouse=True)
+def isolate_git_configuration(tmp_path, monkeypatch):
+    """Never read real user templates/hooks/config or redirect fixture Git writes."""
+    for name in tuple(os.environ):
+        if name.startswith("GIT_"):
+            monkeypatch.delenv(name)
+    home = tmp_path / "isolated-git-home"
+    config = tmp_path / "isolated-git-config"
+    home.mkdir()
+    config.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    # Set this here as well so isolation does not depend on autouse-fixture order.
+    monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "file")
+
+
+@pytest.fixture(autouse=True)
+def isolate_application_state(tmp_path, monkeypatch):
+    """Draft, preference, and recovery tests must never touch real user state."""
+    monkeypatch.setenv("RHIZOME_STATE_HOME", str(tmp_path / "rhizome-state"))
 
 
 @pytest.fixture(autouse=True)

@@ -1,5 +1,6 @@
 """Automatic refresh stays current without flashing or resetting the workspace."""
 
+import subprocess
 import threading
 from unittest.mock import Mock
 
@@ -80,6 +81,24 @@ def remote_workspace(git_repo, git_run, bare_remote):
     return git_repo
 
 
+@pytest.fixture
+def hosted_transport(remote_workspace, git_run, monkeypatch):
+    """Use a real bare Git transport behind the fixture's declared hosted identity."""
+    destination = git_run(remote_workspace, "remote", "get-url", "origin").stdout.strip()
+    git_run(remote_workspace, "remote", "set-url", "origin", "https://github.com/org/repo")
+    run = subprocess.run
+
+    def local_fetch(command, *args, **kwargs):
+        if command[0] == "git" and "fetch" in command:
+            command = [
+                command[0], "-c", f"url.{destination}.insteadOf=https://github.com/org/repo",
+                *command[1:],
+            ]
+        return run(command, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", local_fetch)
+
+
 async def test_remote_poll_cadence_and_resume_refresh(remote_workspace, monkeypatch):
     clock = [100.0]
     monkeypatch.setattr(app_module, "monotonic", lambda: clock[0])
@@ -89,7 +108,7 @@ async def test_remote_poll_cadence_and_resume_refresh(remote_workspace, monkeypa
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         load.assert_called_once()
-        clock[0] += 29
+        clock[0] += 59
         app.poll_repository()
         await settle(app, pilot)
         load.assert_called_once()
@@ -100,7 +119,7 @@ async def test_remote_poll_cadence_and_resume_refresh(remote_workspace, monkeypa
         clock[0] += 5
         app.post_message(events.AppFocus())
         await settle(app, pilot)
-        assert load.call_count == 3  # resume does not wait for the 30-second timer
+        assert load.call_count == 3  # resume does not wait for the 60-second timer
         app.post_message(events.AppFocus())
         await settle(app, pilot)
         assert load.call_count == 3  # duplicate focus notification is coalesced
@@ -114,6 +133,7 @@ async def wait_started(started, pilot):
     raise AssertionError("Background read never started")
 
 
+@pytest.mark.usefixtures("hosted_transport")
 async def test_background_fetch_keeps_cached_ui_and_does_not_disturb_modal(
     remote_workspace, monkeypatch, listings
 ):
@@ -211,13 +231,13 @@ async def test_failed_fetch_still_loads_prs_and_backs_off(remote_workspace, monk
         app.poll_repository()
         await settle(app, pilot)
         fetch.assert_called_once()
-        clock[0] += 30
+        clock[0] += 60
         app.poll_repository()
         await settle(app, pilot)
         assert fetch.call_count == 2
         fetch.side_effect = None
         fetch.return_value = ""
-        clock[0] += 30
+        clock[0] += 60
         app.poll_repository()
         await settle(app, pilot)
         assert "Offline" not in app.query_one("#status-line", Static).renderable.plain
@@ -243,6 +263,7 @@ async def test_focus_refresh_waits_until_dialog_closes(remote_workspace, monkeyp
         assert load.call_count == 2
 
 
+@pytest.mark.usefixtures("hosted_transport")
 async def test_failed_listing_preserves_cache_and_action_result(
     remote_workspace, monkeypatch, listings
 ):
@@ -267,6 +288,7 @@ async def test_failed_listing_preserves_cache_and_action_result(
         assert app._last_error == ""  # no intrusive background error toast
 
 
+@pytest.mark.usefixtures("hosted_transport")
 async def test_closed_pull_request_selection_is_reconciled(remote_workspace, monkeypatch, listings):
     load = Mock(return_value=listings)
     monkeypatch.setattr(Repository, "open_pull_requests", load)
@@ -275,6 +297,7 @@ async def test_closed_pull_request_selection_is_reconciled(remote_workspace, mon
         await settle(app, pilot)
         sidebar = app.query_one(ReferenceSidebar)
         selection = sidebar.get_selection(listings[0].requests[0].url)
+        assert selection is not None
         app._sidebar_selection = selection
         sidebar.set_active(selection)
         load.return_value = ()
@@ -285,6 +308,7 @@ async def test_closed_pull_request_selection_is_reconciled(remote_workspace, mon
         assert sidebar._active_key is None
 
 
+@pytest.mark.usefixtures("hosted_transport")
 async def test_remote_change_during_automatic_read_discards_and_retries(
     remote_workspace, git_run, monkeypatch, listings
 ):
@@ -296,6 +320,7 @@ async def test_remote_change_during_automatic_read_discards_and_retries(
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         sidebar = app.query_one(ReferenceSidebar)
+        assert sidebar._pull_request_listings == listings
 
         def change_remote():
             git_run(remote_workspace, "remote", "rename", "origin", "renamed")

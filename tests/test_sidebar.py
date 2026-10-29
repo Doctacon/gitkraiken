@@ -133,7 +133,7 @@ async def test_filter_reveals_only_matching_refs_and_root_resets_folds() -> None
         assert sidebar._tree_nodes["group:remote:origin"].is_expanded
 
 
-async def test_real_mouse_selection_checkout_and_carets_are_separate():
+async def test_real_mouse_selection_and_carets_never_request_checkout():
     app = SidebarApp()
     async with app.run_test(size=(40, 25)) as pilot:
         sidebar = app.query_one(ReferenceSidebar)
@@ -144,19 +144,19 @@ async def test_real_mouse_selection_checkout_and_carets_are_separate():
         assert len(app.selections) == 1
         assert not app.checkouts
         await click(pilot, tree, point, times=2)
-        assert len(app.checkouts) == 1
-        assert app.checkouts[0].selection.target == "refs/heads/main"
-        assert app.checkouts[0].root == Path("/repo")
+        assert not app.checkouts
+        assert app.selections[-1].selection.target == "refs/heads/main"
+        assert app.selections[-1].root == Path("/repo")
 
         tree, point = await hit_point(sidebar, pilot, "group:remote:origin", caret=True)
         await click(pilot, tree, point, times=2)
         assert sidebar._tree_nodes["group:remote:origin"].is_collapsed
-        assert len(app.checkouts) == 1
+        assert not app.checkouts
         # Category labels toggle but never select a branch or request checkout.
         tree, point = await hit_point(sidebar, pilot, "group:local")
         await click(pilot, tree, point, times=2)
         assert sidebar._tree_nodes["group:local"].is_collapsed
-        assert len(app.checkouts) == 1
+        assert not app.checkouts
         assert len(app.selections) == 2
 
 
@@ -236,8 +236,9 @@ async def test_remote_label_double_click_uses_exact_owner_and_full_target():
             sidebar, pilot, "remote:refs/remotes/origin/feature/jlott/demo"
         )
         await click(pilot, tree, point, times=2)
-        assert len(app.checkouts) == 1
-        selection = app.checkouts[0].selection
+        assert not app.checkouts
+        assert len(app.selections) == 1
+        selection = app.selections[0].selection
         assert selection.target == "refs/remotes/origin/feature/jlott/demo"
         assert selection.remote == "origin"
 
@@ -433,8 +434,9 @@ async def test_local_namespaces_and_branch_labels_with_children_remain_distinct(
         assert not app.selections and not app.checkouts
         tree, point = await hit_point(sidebar, pilot, key)
         await click(pilot, tree, point, times=2)
-        assert len(app.checkouts) == 1
-        assert app.checkouts[0].selection.target == "refs/remotes/origin/team"
+        assert not app.checkouts
+        assert len(app.selections) == 1
+        assert app.selections[0].selection.target == "refs/remotes/origin/team"
         sidebar.update_snapshot(replace(data, stashes=()), app.selections[-1].selection)
         await pilot.pause()
         assert sidebar._tree_nodes[key].is_expanded

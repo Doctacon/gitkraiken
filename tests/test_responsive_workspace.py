@@ -19,9 +19,19 @@ async def settle(app, pilot) -> None:
 def assert_workspace_fits(app) -> None:
     workspace = app.query_one("#workspace")
     history = app.query_one("#history-panel")
-    assert history.region.width >= 34
-    assert workspace.region.x <= history.region.x
-    assert history.region.right <= workspace.region.right
+    if history.display:
+        assert history.region.width >= 34
+        assert workspace.region.x <= history.region.x
+        assert history.region.right <= workspace.region.right
+    else:
+        # Constrained workspaces summon one primary task panel, not a cramped
+        # permanent graph plus inspector. The graph remains mounted underneath.
+        primary = [
+            app.query_one(selector) for selector in ("#refs-panel", "#inspector-panel")
+            if app.query_one(selector).display
+        ]
+        assert len(primary) == 1
+        assert primary[0].region.width == workspace.region.width
     assert app.query_one("#graph-table", DataTable).row_count == len(app._graph_rows) + bool(
         app.snapshot_data.files
     )
@@ -44,7 +54,7 @@ async def test_workspace_scales_through_tmux_pane_sizes(git_repo):
                 inspector = app.query_one("#inspector-panel")
                 assert inspector.display is (width >= 85)
 
-        # Ctrl+Arrow shortcuts still expose both side panels in the constrained slot.
+        # Ctrl+Arrow shortcuts summon either side panel as the primary task.
         await pilot.resize_terminal(60, 24)
         await settle(app, pilot)
         app.action_toggle_inspector()
