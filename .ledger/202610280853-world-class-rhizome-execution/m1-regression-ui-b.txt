@@ -1,0 +1,4 @@
+Modules: tests/test_precision_workspace.py tests/test_pull_request_details.py tests/test_pull_request_dialog.py tests/test_refresh.py tests/test_refresh_workspace.py tests/test_resizable_table.py tests/test_responsive_workspace.py tests/test_sidebar.py tests/test_sidebar_integration.py tests/test_theme.py tests/test_working_directory_graph.py tests/test_workspace_state.py
+........................................................................ [ 74%]
+.........................                                                [100%]
+97 passed in 199.55s (0:03:19)

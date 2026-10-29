@@ -17,6 +17,15 @@ from textual.widgets._tree import TreeNode
 from .models import FileChange
 from .theme import TEAL
 
+_TREE_LINES = dict(Tree.LINES)
+_TREE_ICON_NODE = Tree.ICON_NODE
+_TREE_ICON_NODE_EXPANDED = Tree.ICON_NODE_EXPANDED
+_PLAIN_TREE_LINES = {
+    "default": ("  ", "| ", "\\-", "+-"),
+    "bold": ("  ", "| ", "\\-", "+-"),
+    "double": ("  ", "| ", "\\-", "+-"),
+}
+
 
 @dataclass(frozen=True)
 class _Directory:
@@ -54,6 +63,18 @@ class CommitFileTree(Tree[FileChange | _Directory]):
         self._path_nodes: dict[str, TreeNode[FileChange | _Directory]] = {}
         self._files: dict[str, FileChange] = {}
         self._selected_key: str | None = None
+        self._plain_glyphs = False
+
+    def set_plain_glyphs(self, enabled: bool) -> None:
+        """Switch generated tree chrome without changing any file path text."""
+        enabled = bool(enabled)
+        if enabled == self._plain_glyphs:
+            return
+        self._plain_glyphs = enabled
+        self.LINES = _PLAIN_TREE_LINES if enabled else _TREE_LINES
+        self.ICON_NODE = "> " if enabled else _TREE_ICON_NODE
+        self.ICON_NODE_EXPANDED = "v " if enabled else _TREE_ICON_NODE_EXPANDED
+        self._invalidate()
 
     @property
     def selected_file(self) -> FileChange | None:

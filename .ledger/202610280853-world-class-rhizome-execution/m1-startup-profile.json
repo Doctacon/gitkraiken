@@ -1,0 +1,88 @@
+{
+  "dimensions": {
+    "commits": 100000,
+    "tracked_files": 20000,
+    "refs": 1000,
+    "changed_files": 200,
+    "ordinary_diff_path": "tracked/f00000.txt",
+    "ordinary_diff_bytes": 203371,
+    "ordinary_diff_kib": 198.6044921875,
+    "remotes": 0
+  },
+  "snapshot_seconds": 0.9206669591367245,
+  "history_rows": 300,
+  "calls": [
+    {
+      "operation": "read history index",
+      "seconds": 0.5167529170867056
+    },
+    {
+      "operation": "read status",
+      "seconds": 0.10109583311714232
+    },
+    {
+      "operation": "list refs",
+      "seconds": 0.03860058286227286
+    },
+    {
+      "operation": "read history metadata",
+      "seconds": 0.0207630000077188
+    },
+    {
+      "operation": "list worktrees",
+      "seconds": 0.01826112507842481
+    },
+    {
+      "operation": "inspect repository state",
+      "seconds": 0.01654175017029047
+    },
+    {
+      "operation": "inspect repository state",
+      "seconds": 0.01630404102616012
+    },
+    {
+      "operation": "list remotes",
+      "seconds": 0.014994375174865127
+    },
+    {
+      "operation": "inspect repository state",
+      "seconds": 0.014860500115901232
+    },
+    {
+      "operation": "read upstream",
+      "seconds": 0.014751291833817959
+    },
+    {
+      "operation": "inspect repository state",
+      "seconds": 0.014690249925479293
+    },
+    {
+      "operation": "list stashes",
+      "seconds": 0.014562541153281927
+    },
+    {
+      "operation": "read HEAD",
+      "seconds": 0.01454966701567173
+    },
+    {
+      "operation": "read current branch",
+      "seconds": 0.014548792038112879
+    },
+    {
+      "operation": "list remotes",
+      "seconds": 0.014119334053248167
+    },
+    {
+      "operation": "read current branch",
+      "seconds": 0.014038959052413702
+    },
+    {
+      "operation": "inspect repository state",
+      "seconds": 0.01360929082147777
+    },
+    {
+      "operation": "inspect repository state",
+      "seconds": 0.013403249904513359
+    }
+  ]
+}

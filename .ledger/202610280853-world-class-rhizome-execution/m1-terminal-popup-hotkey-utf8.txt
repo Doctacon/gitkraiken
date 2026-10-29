@@ -1,0 +1,67 @@
+--- rhizome-b8647b10766d10c7 ---
+RHIZOME  / repo  ⑂ detached HEAD   ↑0 ↓0
+
+
+   Open     Fetch     ↓ Pull     ↑ Push     ⑂ Branch     Stash     Pop     Actions ▾      ↻       ?
+▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+   Files [F2]     Commit [F3]     Refs     Back [Esc]     Activity     Workspace [F4]
+                         │ COMMIT GRAPH                                                                 │ Commit  Working directory
+  Filter refs…           │ Search commits, authors, refs or SHA…                     Next   Smooth [g]  │╸━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                         │ All branches + remotes · 2 commits                                           │
+ ▼ Repository            │ GRAPH│ BRANCH / TAG   │ AUTHOR     │ DATE / TIME     │ COMMIT                │  Popup checkout target
+ ├ Working directory     │  ●     💻 HEAD · test╭────────────────────────────────────────────────────╮t │  Popup Smoke · 32647b7c
+ └ All history           │  │                   │                                                    │  │  2026-10-29 09:52:43 MST (-0700)
+ ▼ Local (2)             │  ●     💻 main       │  REPOSITORY ACTIONS                                │  │
+ ├ main                  │                      │                                                    │  │
+ └ test                  │                      │  ╭──────────────────────────────────────────────╮  │  │ ╭──────────────────────────────────────────╮
+ ▼ Remotes (0)           │                      │  │ Open another repository                      │  │  │ │ ▼ CHANGED FILES (1)                      │
+ ▼ Worktrees (1)         │                      │  │ Refresh local repository                     │  │  │ │ └ A topic.txt                            │
+ └ current, detached ·   │                      │  │ Create and check out a branch                │  │  │ │                                          │
+ ▼ PRs                   │                      │  │ Check out selected commit (detached HEAD)    │  │  │ │                                          │
+ └ No supported remote   │                      │  │ Cherry-pick selected commit                  │  │  │ │                                          │
+ ▶ Tags (0)              │                      │  │ Revert selected commit                       │  │  │ │                                          │
+ ▶ Stashes (0)           │                      │  │ Soft reset to selected commit (keep          │  │  │ │                                          │
+                         │                      │  │ changes staged)                           ▆▆ │  │  │ │                                          │
+                         │                      │  │ Tag selected commit                          │  │  │ │                                          │
+                         │                      │  │ Stash working changes                        │  │  │ │                                          │
+                         │                      │  │ Fetch all remotes                            │  │  │ │                                          │
+                         │                      │  │ Pull upstream (fast-forward only)            │  │  │ │                                          │
+                         │                      │  ╰──────────────────────────────────────────────╯  │  │ │                                          │
+                         │                      │   Cancel                                           │  │ │                                          │
+                         │                      │                                                    │  │ │                                          │
+                         │                      ╰────────────────────────────────────────────────────╯  │ │                                          │
+                         │                                                                              │ │                                          │
+    ▍                    │                                                                              │ │                                          │
+     New       Open      │                                                                              │ │                                          │
+       Refresh PRs       │                                                                              │ │                                          │
+   PR listing            │                                                                              │ │                                          │
+   supports              │                                                                              │ │                                          │
+   GitHub.com and    ▂   │                                                                              │ │                                          │
+   Azure DevOps. No      │                                                                              │ ╰──────────────────────────────────────────╯
+                         │                                                                           ▏  │
+  Inspecting commit · use Checkout in Actions or the context menu to switch
+  Ctrl+P actions   / search   g graph   Ctrl+R refresh   ? help   Ctrl+Q quit
+--- host ---
+sh-3.2$ /Users/crlough/Code/personal/rhizome/.venv/bin/python3 -m rhizome --popup '/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/rhizome-popup-jwn1qgso/repo'
+"'"'s parent/repo'; printf 'POPUP_0_EXIT:%s\n' "$?"
+--- clients ---
+/dev/ttys004	host	89103
+/dev/ttys007	rhizome-b8647b10766d10c7	89127
+--- panes ---
+host	89099	dead=0	python3.13
+rhizome-b8647b10766d10c7	89122	dead=0	python3.13
+--- PTY tail ---
+[48;5;249m                     [48;5;250m  [38;5;16m [38;5;66m[48;5;251m│[38;5;235m                                                                              [38;5;66m│[38;5;16m[48;5;250m [38;5;109m[48;5;251m│[38;5;16m [38;5;23m                                        [38;5;16m [38;5;109m│[38;5;16m[48;5;250m [34;5H [38;5;66m[48;5;249m[7m   (B[m[38;5;66m[48;5;247m▍[38;5;17m                 [48;5;250m  [38;5;16m [38;5;66m[48;5;251m│[38;5;235m                                                                              [38;5;66m│[38;5;16m[48;5;250m [38;5;109m[48;5;251m│[38;5;16m [38;5;23m                                        [38;5;16m (B[m[38;5;109m[48;5;251m│[38;5;16m[48;5;250m [35;5H  [48;5;146m   [38;5;17m[1mNew(B[m[38;5;16m[48;5;146m    [48;5;152m   [38;5;243m[1mOpen(B[m[38;5;16m[48;5;152m    [48;5;250m  [38;5;66m[48;5;251m│[38;5;235m                                                                              [38;5;66m│[38;5;16m[48;5;250m [38;5;109m[48;5;251m│[38;5;16m [38;5;23m                                        [38;5;16m [38;5;109m│[38;5;16m[48;5;250m [36;5H  [48;5;146m     [38;5;17m[1mRefresh PRs(B[m[38;5;16m[48;5;146m     [48;5;250m  [38;5;66m[48;5;251m│[38;5;235m                                                                              [38;5;66m│[38;5;16m[48;5;250m [38;5;109m[48;5;251m│[38;5;16m [38;5;23m                                        [38;5;16m [38;5;109m│[38;5;16m[48;5;250m [37;5H [38;5;17m [38;5;16m [38;5;17mPR listing [38;5;16m       [38;5;66m[7m (B[m[38;5;16m[48;5;250m [38;5;17m [38;5;16m [38;5;66m[48;5;251m│[38;5;235m                          (B[m[38;5;235m[48;5;251m                                                    [38;5;66m│[38;5;16m[48;5;250m [38;5;109m[48;5;251m│[38;5;16m [38;5;23m                                        [38;5;16m [38;5;109m│[38;5;16m[48;5;250m [38;5H [38;5;17m [38;5;16m [38;5;17msupports [38;5;16m         [38;5;66m[7m (B[m[38;5;16m[48;5;250m [38;5;17m [38;5;16m [38;5;66m[48;5;251m│[38;5;235m                                                                              [38;5;66m│[38;5;16m[48;5;250m [38;5;109m[48;5;251m│[38;5;16m [38;5;23m                                        [38;5;16m [38;5;109m│[38;5;16m[48;5;250m [39;5H [38;5;17m [38;5;16m [38;5;17mGitHub.com and [38;5;16m   [38;5;66m[48;5;247m[7m▂(B[m[38;5;16m[48;5;250m [38;5;17m [38;5;16m [38;5;66m[48;5;251m│[38;5;235m                                                                              [38;5;66m│[38;5;16m[48;5;250m [38;5;109m[48;5;251m│[38;5;16m [38;5;23m                                   (B[m[38;5;23m[48;5;251m     [38;5;16m [38;5;109m│[38;5;16m[48;5;250m [40;5H [38;5;17m [38;5;16m [38;5;17mAzure DevOps. No [38;5;16m [38;5;59m[48;5;247m [38;5;16m[48;5;250m [38;5;17m [38;5;16m [38;5;66m[48;5;251m│[38;5;235m                                                                              [38;5;66m│[38;5;16m[48;5;250m [38;5;109m[48;5;251m╰──────────────────────────────────────────╯[38;5;16m[48;5;250m [41;5H                         [38;5;66m[48;5;251m│[7m                                                                           (B[m[38;5;66m[48;5;247m▏[38;5;235m  [38;5;66m[48;5;251m│[38;5;16m[48;5;250m                                              [42;5H[48;5;251m  [38;5;59mInspecting commit · use Checkout in Actions or the context menu to switch[38;5;16m                                                                            (B[m[43;5H[38;5;16m[48;5;251m  [38;5;59mCtrl+P actions   / search   g graph   Ctrl+R refresh   ? help   Ctrl+Q quit[38;5;16m                                                                          [3;7H(B[m
+Traceback (most recent call last):
+  File "/Users/crlough/Code/personal/rhizome/scripts/popup_smoke.py", line 393, in <module>
+    main(use_hotkey=parser.parse_args().hotkey)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/crlough/Code/personal/rhizome/scripts/popup_smoke.py", line 288, in main
+    open_actions("Check out refs/heads/test", "Branch test was not explicitly selectable")
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/crlough/Code/personal/rhizome/scripts/popup_smoke.py", line 258, in open_actions
+    wait_for(opened, message)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/Users/crlough/Code/personal/rhizome/scripts/popup_smoke.py", line 95, in wait_for
+    raise AssertionError(message) from error
+AssertionError: Branch test was not explicitly selectable

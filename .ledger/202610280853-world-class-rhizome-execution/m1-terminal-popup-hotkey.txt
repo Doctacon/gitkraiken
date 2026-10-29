@@ -1,0 +1,124 @@
+can't find pane: rhizome-e0ff53a945d86b5c
+--- host ---
+sh-3.2$ /Users/crlough/Code/personal/rhizome/.venv/bin/python3 -m rhizome --popup '/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/rhizome-popup-8pf2lt5k/repo'
+"'"'s parent/repo'; printf 'POPUP_0_EXIT:%s\n' "$?"
+--- clients ---
+/dev/ttys004_host_85810
+--- panes ---
+host_85806_dead=0_python3.13
+--- PTY tail ---
+[?1049h[22;0;0t[?1h=[H[2J[?12l[?25h[?1000l[?1002l[?1003l[?1006l[?1005l[?2004h(B[m[?12l[?25h[?1006l[?1000l[?1002l[?1003l[1;1H[1;48r[c[>c[>q]10;?\]11;?\[1;9H[?25l[Hsh-3.2$ [K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K[30m[42m
+[host] 0:zsh*                                                                                                             "Mountain-Quail.local" 09:41 29-Oct-26(B[m[?12l[?25h[1;9H(B[m[?12l[?25h[?1006l[?1000l[?1002l[?1003l[1;1H[1;48r[?25l[1;1Hsh-3.2$ [K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K[30m[42m
+[host] 0:zsh*                                                                                                             "Mountain-Quail.local" 09:41 29-Oct-26(B[m[?12l[?25h[1;9H/Users/crlough/Code/personal/rhizome/.venv/bin/python3 -m rhizome --popup '/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/rhizome-popup-8pf2lt5k/repo'"'"'s parent/repo'; printf 'POPUP_0_EXIT:%s\n' "$?"
+
+Traceback (most recent call last):
+  File "/Users/crlough/Code/personal/rhizome/scripts/popup_smoke.py", line 393, in <module>
+    main(use_hotkey=parser.parse_args().hotkey)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/crlough/Code/personal/rhizome/scripts/popup_smoke.py", line 184, in main
+    wait_for(popup_attached, "Popup did not attach")
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/crlough/Code/personal/rhizome/scripts/popup_smoke.py", line 90, in wait_for
+    if check():
+       ~~~~~^^
+  File "/Users/crlough/Code/personal/rhizome/scripts/popup_smoke.py", line 181, in popup_attached
+    inner, inner_pid = popup_client(target)
+                       ~~~~~~~~~~~~^^^^^^^^
+  File "/Users/crlough/Code/personal/rhizome/scripts/popup_smoke.py", line 82, in popup_client
+    match = next((line.split("\t") for line in clients if line.split("\t")[1] == target), None)
+  File "/Users/crlough/Code/personal/rhizome/scripts/popup_smoke.py", line 82, in <genexpr>
+    match = next((line.split("\t") for line in clients if line.split("\t")[1] == target), None)
+                                                          ~~~~~~~~~~~~~~~~^^^
+IndexError: list index out of range

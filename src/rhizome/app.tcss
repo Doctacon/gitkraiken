@@ -13,7 +13,9 @@ ModalScreen Input { background: #ffffff; color: #14232c; border: tall #a8c1c7; }
 ModalScreen Input:focus { border: tall #006d77; }
 Input > .input--placeholder, Input > .input--suggestion { color: #48616c; }
 Button { min-width: 0; border: none; }
-Button:focus { text-style: bold; }
+/* Focus is a shape and type treatment as well as a colour change. */
+Button:focus { text-style: bold underline; }
+Input:focus, TextArea:focus, Select:focus { border: tall #006d77; }
 
 /* Repository identity is the calm topmost anchor, not another toolbar. */
 #repo-header, #brand {
@@ -65,6 +67,12 @@ Button:focus { text-style: bold; }
     background: #b9dfe1;
     color: #10242b;
 }
+#workspace-settings {
+    background: #d8eeee;
+    color: #005f68;
+    text-style: bold;
+}
+#workspace-settings:hover, #workspace-settings:focus { background: #b9dfe1; color: #10242b; }
 /* Horizontal containers otherwise consume the vertical free space in history-panel. */
 #search-bar { height: 1; min-height: 1; }
 #history-caption { height: 1; min-height: 1; }
@@ -164,6 +172,7 @@ Button:focus { text-style: bold; }
 #graph-table > .datatable--cursor {
     background: #d8eeee;
     color: #14232c;
+    text-style: bold underline;
 }
 #graph-table > .datatable--hover { background: #edf7f8; }
 #load-more {
@@ -234,7 +243,7 @@ TabPane { padding: 1; }
 #commit-file-tree > .tree--cursor, #commit-file-tree:focus > .tree--cursor {
     background: #d8eeee;
     color: #14232c;
-    text-style: none;
+    text-style: bold underline;
 }
 /* Working copy keeps its staging controls and composer in the inspector. */
 .wip-actions { height: 2; }
@@ -272,8 +281,18 @@ TabPane { padding: 1; }
 #wip-table > .datatable--cursor {
     background: #d8eeee;
     color: #14232c;
+    text-style: bold underline;
 }
 #staged-summary { height: 2; color: #36505b; }
+#composer-guidance {
+    height: auto;
+    min-height: 1;
+    margin-top: 1;
+    padding: 0 1;
+    border-left: tall #a8c1c7;
+    background: #f5fafa;
+    color: #48616c;
+}
 #draft-status { height: 1; color: #48616c; }
 .composer-label { height: 1; margin-top: 1; color: #36505b; }
 #commit-message {
@@ -320,6 +339,10 @@ TabPane { padding: 1; }
 .pane-constrained #toolbar { height: 2; padding-top: 0; }
 .pane-constrained #pull, .pane-constrained #stash, .pane-constrained #pop { display: none; }
 .pane-constrained .tool { width: auto; min-width: 7; }
+.pane-constrained #open { width: 6; min-width: 6; }
+.pane-constrained #refresh { width: auto; min-width: 5; }
+/* Button labels already include one cell on each side; avoid double padding. */
+.pane-constrained #workspace-nav Button { padding: 0; margin-right: 0; }
 .pane-constrained #refs-panel, .pane-constrained #refs-splitter,
 .pane-constrained #inspector-panel, .pane-constrained #inspector-splitter { display: none; }
 .pane-constrained.responsive-inspector #history-panel,
@@ -328,12 +351,14 @@ TabPane { padding: 1; }
 .pane-constrained.responsive-refs #refs-panel { display: block; width: 1fr; }
 .pane-constrained #wip-changes { min-height: 3; }
 .pane-constrained.task-files #staged-summary,
+.pane-constrained.task-files #composer-guidance,
 .pane-constrained.task-files .composer-label,
 .pane-constrained.task-files #commit-message,
 .pane-constrained.task-files #draft-status,
 .pane-constrained.task-files #commit { display: none; }
 .pane-constrained.task-composer .wip-actions,
 .pane-constrained.task-composer #wip-changes { display: none; }
+.pane-constrained.task-composer #composer-guidance { margin-top: 0; }
 .pane-constrained.task-composer #commit-message { height: 1fr; min-height: 4; }
 .pane-constrained.task-composer .composer-label { margin-top: 0; }
 .pane-constrained #key-hint { padding: 0 1; }

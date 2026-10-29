@@ -129,6 +129,7 @@ class PrecisionDiff(Vertical):
     PrecisionDiff #precision-lines > .datatable--cursor {
         background: #d8eeee;
         color: #14232c;
+        text-style: bold underline;
     }
     PrecisionDiff #precision-lines > .datatable--hover { background: #edf7f8; }
     PrecisionDiff #precision-note {
@@ -181,6 +182,7 @@ class PrecisionDiff(Vertical):
         self._anchor: int | None = None
         self._cursor_id: int | None = None
         self._show_whitespace = False
+        self._plain_glyphs = False
         self._search_matches: list[_Match] = []
         self._search_index = -1
         self._base_lines: dict[int, Text] = {}
@@ -194,10 +196,15 @@ class PrecisionDiff(Vertical):
             yield Input(placeholder="Find literal text", id="precision-search")
             yield Button("Find", id="precision-find", classes="precision-search-button")
         yield _PatchTable(
-            id="precision-lines", cursor_type="row", zebra_stripes=False, show_header=False,
+            id="precision-lines",
+            cursor_type="row",
+            zebra_stripes=False,
+            show_header=False,
         )
         with Horizontal(classes="precision-actions"):
-            yield Button("Stage [s]", id="precision-stage", classes="precision-action precision-primary")
+            yield Button(
+                "Stage [s]", id="precision-stage", classes="precision-action precision-primary"
+            )
             yield Button("Unstage [u]", id="precision-unstage", classes="precision-action")
             yield Button("Mark [v]", id="precision-mark", classes="precision-action")
             yield Button("Hunk [h]", id="precision-hunk", classes="precision-action")
@@ -208,7 +215,9 @@ class PrecisionDiff(Vertical):
             yield Button("More context", id="precision-context", classes="precision-action")
             yield Button("Refresh", id="precision-refresh", classes="precision-action")
             yield Button("Back", id="precision-hunk-back", classes="precision-action")
-        yield Static("↑↓ move  ·  v anchors a contiguous range  ·  w shows whitespace", id="precision-note")
+        yield Static(
+            "↑↓ move  ·  v anchors a contiguous range  ·  w shows whitespace", id="precision-note"
+        )
 
     def set_document(self, document: PatchDocument, *, context: int = 3) -> None:
         """Render *document* while retaining that exact immutable object for apply."""
@@ -238,7 +247,9 @@ class PrecisionDiff(Vertical):
         self._search_matches = []
         self._search_index = -1
         changed = next((line for line in document.lines if line.kind in {"add", "delete"}), None)
-        self._cursor_id = changed.id if changed else (document.lines[0].id if document.lines else None)
+        self._cursor_id = (
+            changed.id if changed else (document.lines[0].id if document.lines else None)
+        )
         self._render_lines()
         self._refresh_chrome()
         self.call_after_refresh(self.focus_lines)
@@ -247,6 +258,24 @@ class PrecisionDiff(Vertical):
         self._stale = stale
         self.set_class(stale, "-stale")
         self._refresh_chrome()
+
+    def set_plain_glyphs(self, enabled: bool) -> None:
+        """Use ASCII only for generated diff and whitespace chrome.
+
+        The captured document, canonical source text, selection, cursor, and
+        scroll location are deliberately retained while its presentation changes.
+        """
+        enabled = bool(enabled)
+        if enabled == self._plain_glyphs:
+            return
+        self._plain_glyphs = enabled
+        if not self.is_mounted or self._document is None:
+            return
+        table = self.query_one("#precision-lines", _PatchTable)
+        scroll = table.scroll_offset
+        self._render_lines()
+        self._refresh_chrome()
+        self.call_after_refresh(table.scroll_to, scroll.x, scroll.y, animate=False)
 
     def on_resize(self, event: events.Resize) -> None:
         self.set_class(event.size.width <= 90, "-narrow")
@@ -277,12 +306,21 @@ class PrecisionDiff(Vertical):
             table.cursor_coordinate = (cursor_row, 0)
 
     def _line_text(self, line: PatchLine) -> Text:
-        marker = {"add": "+", "delete": "−", "context": " ", "hunk": "@", "meta": "·"}[line.kind]
+        marker = {
+            "add": "+",
+            "delete": "-" if self._plain_glyphs else "−",
+            "context": " ",
+            "hunk": "@",
+            "meta": "." if self._plain_glyphs else "·",
+        }[line.kind]
         number = line.new_line if line.kind != "delete" else line.old_line
         prefix = f"{number or '':>4} {marker} "
         display = line.text[1:] if line.kind in {"add", "delete", "context"} else line.text
         if self._show_whitespace:
-            display = display.replace("\t", "⇥").replace(" ", "·")
+            # This is a display-only transformation of generated whitespace
+            # indicators, never a modification of captured patch source.
+            tab, space = (">", ".") if self._plain_glyphs else ("⇥", "·")
+            display = display.replace("\t", tab).replace(" ", space)
         palette = {
             "add": "#28733a",
             "delete": "#b13a48",
@@ -363,13 +401,16 @@ class PrecisionDiff(Vertical):
         selected = self._range()
         marked = (
             {line_id for line_id in self._base_lines if selected[0] <= line_id <= selected[1]}
-            if selected else set()
+            if selected
+            else set()
         )
         table = self.query_one("#precision-lines", _PatchTable)
         for line_id in marked ^ self._painted_selection:
             rendered = self._base_lines[line_id].copy()
             if line_id in marked:
-                rendered.stylize("on #d8eeee")
+                # The fill makes scanning quick; the underline/bold marker keeps
+                # a selected range legible on monochrome or low-saturation terminals.
+                rendered.stylize("bold underline on #d8eeee")
             table.update_cell(str(line_id), "line", rendered)
         self._painted_selection = marked
         status = self.query_one("#precision-status", Static)
@@ -390,7 +431,11 @@ class PrecisionDiff(Vertical):
                     line.kind in {"add", "delete"} and line.id in marked
                     for line in self._document.lines
                 )
-                status.update(f"Selected {len(marked)} diff rows · {changed} changed lines · captured patch")
+                status.update(
+                    f"SELECTION: {len(marked)} diff rows | {changed} changed lines | captured patch"
+                    if self._plain_glyphs
+                    else f"SELECTION: {len(marked)} diff rows · {changed} changed lines · captured patch"
+                )
             else:
                 status.update(
                     f"Cursor: displayed line {self._cursor_id} · press v, then move to extend"
@@ -446,7 +491,9 @@ class PrecisionDiff(Vertical):
         if self._typing() or not self._document or self._cursor_id is None:
             return
         hunks = sorted({line.hunk for line in self._document.lines if line.hunk is not None})
-        current = next((line.hunk for line in self._document.lines if line.id == self._cursor_id), None)
+        current = next(
+            (line.hunk for line in self._document.lines if line.id == self._cursor_id), None
+        )
         if current not in hunks:
             return
         target_index = max(0, min(len(hunks) - 1, hunks.index(current) + direction))

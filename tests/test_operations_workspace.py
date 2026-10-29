@@ -29,6 +29,7 @@ async def test_activity_shows_real_stage_outcome_and_fits_narrow_terminal(git_re
         assert "never cancels" in str(app.screen.query_one("#activity-notice", Static).renderable)
         close = app.screen.query_one("#activity-close", Button)
         assert close.region.bottom <= app.screen.size.height
+        assert close.region.bottom <= app.screen.query_one("#activity-dialog").content_region.bottom
         await pilot.click("#activity-close")
         await pilot.pause()
         assert len(app.screen_stack) == 1

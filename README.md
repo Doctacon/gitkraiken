@@ -15,7 +15,9 @@ is in progress; later investigation, integration, and hosted-review milestones a
 not yet complete. Ordinary staged commits use a reviewed-index transaction and
 native Git hooks/signing. The workspace temporarily hands the terminal to Git
 and returns afterward; failures retain the draft. This does not establish release
-or cross-platform acceptance. The screenshot above predates the precision workspace.
+or cross-platform acceptance. The screenshot above predates the precision workspace;
+see the current [wide precision view](docs/assets/m1-precision-wide.png) and
+[80×24 composer](docs/assets/m1-composer-80x24.png).
 
 Run an inspected development checkout with Python 3.13+, Git 2.36+, and
 [uv](https://docs.astral.sh/uv/):
@@ -49,7 +51,10 @@ action. If a reviewed file changes externally, the captured review remains visib
 and becomes stale: refresh and select again before applying it.
 
 **Ctrl+P** opens actions, **Ctrl+L / Activity** shows queued/running/completed Git
-work, **?** shows help, and **Ctrl+Q** quits. Closing Activity does not cancel Git.
+work, **F4 / Workspace** opens core preferences, saved-state controls and local
+diagnostics, **?** shows help, and **Ctrl+Q** quits. Closing Activity does not cancel Git.
+See [workspace controls](docs/usage.md#drafts-and-core-preferences) for global offline,
+plain glyphs, session-only exclusion and exact-preview diagnostic export.
 
 ## Safety and network behavior
 

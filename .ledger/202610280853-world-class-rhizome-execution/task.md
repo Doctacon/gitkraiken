@@ -1,33 +1,68 @@
 Status: open
 Created: 2026-10-28
-Updated: 2026-10-28
+Updated: 2026-10-29
 
 # Execute the approved world-class Rhizome roadmap
 
-## Intent
+## Intent and current authorization
 
-Execute the approved M1–M4 roadmap in `docs/design/world-class-rhizome.md` and its validation plan. The operator explicitly authorized implementation and local validation after approving the two design documents, then confirmed the public test interfaces and creation of this execution ledger. Preserve the approved product contracts; use targeted refactoring, real-Git correctness evidence, and fail-closed safety.
+Execute the approved roadmap in `docs/design/world-class-rhizome.md` and its
+validation plan. **Current scope is M1 only; stop before M2.** The operator asked
+for remaining M1 work using engineering recommendations, then required every
+increment to stay within 15 minutes. See `m1-completion.md` for the bounded work log.
 
-## Current State
+Installer crash/retry remains explicitly deferred. No commits, publication,
+private-provider writes, live user installation changes, invented human/platform
+results, or M2 settings/keymap/theme/history/split-diff work. Public test interfaces
+were confirmed earlier in `plan.md`. The earlier existing-checks-only choice applied
+to the completed initial composer increment, not this M1 acceptance-closure work.
 
-- **Current operator scope:** resume the roadmap with recommendations; continue deferring the crash/retry item. The next bounded increment is M1 composer templates and Git-native message semantics, preserving restored ordinary commits. Installer crash/retry recovery remains untouched and release-blocking. The operator explicitly selected **existing checks only** for this increment: no new tests, fixtures, or smoke scripts; document the new behavior's coverage gaps. See `composer-progress.md`; `commit-restoration.md` records the prior scope reset.
-- Starting baseline: `70005ce6dd23510d6f16af73ff5247fba32b81dc` on `main`.
-- The two approved design documents are existing untracked work and must be preserved.
-- Confirmed host: macOS/Darwin ARM64; Git 2.50.1 (Apple Git-155); tmux 3.5a; Python 3.13.0.
-- Existing baseline: `uv run --locked pytest` (background task `task-1`) passed all 456 tests, exit 0 (~565 seconds).
-- Non-mutating sidebar/graph browsing has focused green regression evidence. Initial canonical patch, durable state/diagnostics, recovery, and precision-prototype modules are present; integration and broader validation remain pending.
-- Operation coordination is now wired for routine mutations and canonical range/hunk staging after focused safety proof. The workspace has no recovery journal attached yet, so destructive workflows stay unavailable rather than bypassing protection.
-- Ordinary commit is restored in the working coordinator/UI after fixing real terminal access without removing reviewed-index or process-group protection. Real PTY hooks (including stderr prompts), real disposable-key SSH signing, unchanged writer/coordinator/draft/core success tests, and an automated real-terminal 80×24 review→partial-stage→reject→commit flow pass. Actual Git 2.36 batch: 89 passed, plus 3 PTY cases and the real-terminal smoke. No direct UI bypass or weakened success oracle. See `commit-restoration.md`. Fresh broad discovery: 697 passed, 2 failed (a fixture assumption since corrected and verified; the known deferred installer defect). No fully green changed full-suite or milestone acceptance is claimed. Templates/encoding are the current follow-on composer increment, not a new gate on ordinary text commits.
-- Commit and intent-keyed PR drafts survive reopening; second-target PR isolation is covered. Offline/remote cadence and graph-style preferences are integrated. Broader state failure/lifecycle and settings work remain.
-- Background transport no longer holds the local inspection queue; real Git stalled-transport, mutation/read-overlap and hidden/focus regressions pass. Mutations remain serialized. Compact activity is integrated and its 80×24 stage/outcome/Close test passes; broader queued/running UI evidence remains.
-- Second full discovery finished with 1 failure and 586 passes (`task-9`, `integration-test-run-2.txt`). The unchanged stale hosted-result regression exposed a real bug, now fixed with independent ABA coverage. Refresh/sidebar/state batch passed 36 tests in 103.95 s (`task-13`, BEFORE the commit gate). No changed full suite has passed; current commit success tests have now passed after the bounded restoration in `commit-restoration.md`. See `evidence.md` and `refresh-race.md`.
-- Installer recovery hardening had 61 passing installer/CLI/persistence tests (`task-23`), but a new intermediate-launcher regression is red: a second installer succeeds while a surviving child remains active. Root reproduced 1 failure in 3.38 s. No production fence fixes this yet; V05/live installation remain blocked. See `distribution-guard-quiescence-result.md`. Boundary doubles are not installation or release acceptance.
-- Fetch scope repair is integrated and manual/automatic fetch are restored after public coordinator/UI proof. It rejects unsafe destinations/pruning and existing inbound user-ref aliases whose tips would move through a cache. Real tests exposed three old tips becoming unreachable through branch/tag/notes aliases; fixed. Current and actual Git 2.36 fetch suites: 37 passed each; manual/Pilot + automatic/refresh/sidebar/activity batch: 29 passed in 97.37 s (`task-25`). That batch predates the separately completed commit restoration. See `fetch-root-evidence.md`.
-- Forced split-index shared-base rebuild exposed native candidate GC deleting storage still referenced by the real index. Per-call expiry deferral fixed commit and selected-patch cases. The 44-case minimum-Git rerun passed; later 46-case runs passed on both versions. Root expanded discovery (`task-22`): current Git 126 passed; Git 2.36 123 passed/3 failures. Two compatibility defects were fixed; the third was a missing HTTPS helper in the disposable build, corrected without installation. Subsequent minimum-Git engine/fetch slice passed 73 tests. Latest combined engine/patch/native/fetch/read-only/plan validation (`task-27`) passed 151 tests on current Git in 120.02 s and 151 on actual Git 2.36 in 56.47 s, including linked+split and artifact ownership. This is not full-suite or coordinator/UI commit acceptance.
-- Commit-template facts and `composer-implementation-plan.md` are collected from pinned Git v2.36 sources. Composer work now resumes with private template/encoding helpers and editor-mode native stdin delivery; the old plan's commit-gating instructions are obsolete. Source reasoning and existing regression checks are not new-feature oracle/acceptance evidence. Draft failure/corruption, linked-worktree/recreated identity and hook-retention have prior full-discovery/minimum-Git coverage.
-- Public test interfaces explicitly confirmed before adding/editing tests; see `plan.md`.
-- No commits, publication, real private-provider mutations, human-pilot claims, or untested-platform claims are authorized or implied.
+## Current state
 
-## Outcome
+- Current M1 baseline is the operator's `0a1ea66` (`feat: security pass`). All current
+  changes remain uncommitted. Earlier roadmap work started at `70005ce`; its
+  historical evidence is preserved in the linked artifacts below.
+- Precision UI, narrow/wide layouts, plain rendering, successive-template composer,
+  F4 core controls, worktree exclusion/reset/context restoration, conflict-aware
+  draft saves, and captured-preview/no-clobber diagnostic export are integrated.
+- Ordinary reviewed-index commits, terminal hooks/signing and supported Git actions
+  remain available. Unproven destructive workflows remain refused; no recovery
+  supervisor or universal Undo was added.
+- A duplicate refresh scan was removed without removing post-fetch reconciliation.
+  Remaining startup performance is profiled but still misses the approved warm
+  startup target. No history-order change, persistent repository cache or target
+  waiver was introduced.
+- Current Git regression collection has 746 cases. Bounded partitions plus the
+  additional CLI locale case cover 745 passes and the one deferred installer
+  failure. This is aggregate local coverage, not one completely green full run.
+- Dedicated composer tests pass on current Git and Git 2.36.0. Real 80×24 native
+  commit journeys pass on both. Current-tmux startup, popup, hotkey and pane
+  journeys pass in isolated UTF-8 environments. Fresh full minimum-tmux and
+  cross-platform runs remain pending.
+- M1-owned Python files were formatted with unchanged ASTs. Root lint and local
+  wheel/sdist construction pass. The full formatter still flags untouched baseline
+  files; no whole-tree formatter pass or hosted-CI success is claimed.
 
-Normal commit restoration has focused and real-terminal proof. Prior broad discovery finished with 697 passes and two failures; the unrelated CLI fixture was corrected/verified, while the known installer failure remains deferred. Roadmap execution has resumed with the composer increment; see `composer-progress.md`. No milestone or release acceptance is claimed.
+## Evidence and navigation
+
+- `m1-completion.md`: current checklist, increment timings, commands/results and gaps.
+- `m1-composer-validation.md`: exact current/minimum Git composer results.
+- `m1-regression-*.txt`: complete bounded regression partitions and retained failures.
+- `m1-terminal-*.txt`: isolated real-terminal results, including superseded failures.
+- `m1-static-summary.txt`, `m1-build-local.txt`: static/build outcomes.
+- `docs/validation/m1-performance.md`: full reference workload and unwaived misses.
+- `docs/validation/m1-compatibility.md`: local versus pending environment matrix.
+- `docs/validation/m1-usability.md`: real-user pilot plan, not fabricated results.
+
+Historical execution detail remains in `evidence.md`, `commit-restoration.md`,
+`composer-progress.md`, `fetch-root-evidence.md`, `refresh-race.md`, and the original
+planning artifacts. Those reports describe their own candidates, not this final
+local working tree.
+
+## Outcome / remaining acceptance
+
+M1 has substantial implemented and locally verified progress, but **M1 and release
+acceptance are not declared complete**. Startup performance, pre-existing formatting
+debt, the deferred installer defect, OS-cache-cold/resource/slow-provider evidence,
+hosted and other-platform checks, and the real-user usability pilot remain open.
+No M2 work has started.

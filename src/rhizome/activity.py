@@ -29,7 +29,7 @@ class ActivityDialog(ModalScreen[None]):
     ActivityDialog > #activity-dialog {
         width: 76;
         max-width: 100%;
-        height: 24;
+        height: 22;
         max-height: 100%;
         padding: 0 2;
         border: round #4f8790;
@@ -40,7 +40,7 @@ class ActivityDialog(ModalScreen[None]):
     ActivityDialog .activity-label {
         height: 1;
         color: #36505b;
-        text-style: bold;
+        text-style: bold underline;
     }
     ActivityDialog #activity-context {
         height: 3;
@@ -62,10 +62,10 @@ class ActivityDialog(ModalScreen[None]):
     ActivityDialog #activity-list > .option-list--option-highlighted {
         background: #d8eeee;
         color: #14232c;
-        text-style: none;
+        text-style: bold underline;
     }
     ActivityDialog #activity-detail {
-        height: 4;
+        height: 3;
         min-height: 3;
         padding: 0 1;
         border-left: tall #4f8790;
@@ -73,7 +73,7 @@ class ActivityDialog(ModalScreen[None]):
     }
     ActivityDialog #activity-notice {
         height: 2;
-        margin-top: 1;
+        margin-top: 0;
         color: #6b4300;
     }
     ActivityDialog .dialog-buttons { height: 3; align: right middle; }
@@ -92,7 +92,7 @@ class ActivityDialog(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="activity-dialog"):
-            yield Label("ACTIVITY", classes="dialog-title")
+            yield Label("ACTIVITY — LOCAL WORK", classes="dialog-title")
             yield Label("BACKGROUND READS", classes="activity-label")
             with VerticalScroll(id="activity-context"):
                 yield Static(id="activity-context-text")
@@ -101,7 +101,7 @@ class ActivityDialog(ModalScreen[None]):
             with VerticalScroll(id="activity-detail"):
                 yield Static("No Git mutations have been recorded.", id="activity-detail-text")
             yield Static(
-                "Closing this view never cancels a running Git operation.",
+                "Read activity is separate from Git mutations. Closing never cancels a running mutation.",
                 id="activity-notice",
             )
             with Horizontal(classes="dialog-buttons"):
@@ -117,7 +117,9 @@ class ActivityDialog(ModalScreen[None]):
         options = self.query_one("#activity-list", OptionList)
         selected_id = self._selected_id(options)
         self._records = tuple(
-            sorted(self._activity(), key=lambda record: record.started, reverse=True)[: self._MAX_RECORDS]
+            sorted(self._activity(), key=lambda record: record.started, reverse=True)[
+                : self._MAX_RECORDS
+            ]
         )
         self._update_context()
         options.clear_options()
@@ -147,9 +149,7 @@ class ActivityDialog(ModalScreen[None]):
         self.query_one("#activity-context-text", Static).update(Text(text))
 
     def _record_label(self, record: OperationActivity) -> Text:
-        return Text(
-            f"{record.state.upper():9} {record.operation}  ·  {self._elapsed(record)}"
-        )
+        return Text(f"{record.state.upper():9} {record.operation}  ·  {self._elapsed(record)}")
 
     def _elapsed(self, record: OperationActivity) -> str:
         elapsed = record.elapsed

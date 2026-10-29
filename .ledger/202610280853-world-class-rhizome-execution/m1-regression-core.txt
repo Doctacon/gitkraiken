@@ -1,0 +1,8 @@
+Modules: tests/test_cli.py tests/test_cli_tmux.py tests/test_commit_faults.py tests/test_commit_processes.py tests/test_commit_publication.py tests/test_commit_representations.py tests/test_commit_terminal.py tests/test_commit_transactions.py tests/test_context_actions.py tests/test_dates.py tests/test_diagnostics.py tests/test_diff.py tests/test_fetch_safety.py tests/test_git.py tests/test_git_context_actions.py tests/test_git_pull_requests.py tests/test_graph.py tests/test_open_pull_requests.py tests/test_operations.py tests/test_patches.py tests/test_persistence.py tests/test_pull_requests.py tests/test_read_only_index.py tests/test_recovery.py tests/test_ref_badges.py tests/test_worktrees.py
+........................................................................ [ 16%]
+........................................................................ [ 33%]
+........................................................................ [ 50%]
+........................................................................ [ 66%]
+........................................................................ [ 83%]
+......................................................................   [100%]
+430 passed in 245.85s (0:04:05)

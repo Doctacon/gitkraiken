@@ -1,0 +1,1863 @@
+unformatted: File would be reformatted
+   --> scripts/commit_smoke.py:7:1
+    |
+6   | """
+7   +
+8   | from __future__ import annotations
+--------------------------------------------------------------------------------
+20  |
+    - RUNNER = r'''
+21  + RUNNER = r"""
+22  | import asyncio
+--------------------------------------------------------------------------------
+78  | (base / "result.json").write_text(json.dumps(result))
+    - '''
+79  + """
+80  |
+--------------------------------------------------------------------------------
+90  |     for name, directory in (
+    -         ("HOME", "home"), ("XDG_CONFIG_HOME", "config"),
+91  +         ("HOME", "home"),
+92  +         ("XDG_CONFIG_HOME", "config"),
+93  |         ("RHIZOME_STATE_HOME", "state"),
+--------------------------------------------------------------------------------
+126 |             f"base={shlex.quote(str(base))}\n"
+    -             "printf '%s\\n' \"$$\" >> \"$base/attempts\"\n"
+127 +             'printf \'%s\\n\' "$$" >> "$base/attempts"\n'
+128 |             "printf 'APP_TTY_APPROVAL\\n' >&2\n"
+129 |             "IFS= read -r answer < /dev/tty\n"
+    -             "printf '%s\\n' \"$answer\" >> \"$base/answers\"\n"
+    -             "test \"$answer\" = approve\n"
+    -             "if test -e \"$base/reject\"; then\n"
+    -             "  : > \"$base/refused\"\n"
+130 +             'printf \'%s\\n\' "$answer" >> "$base/answers"\n'
+131 +             'test "$answer" = approve\n'
+132 +             'if test -e "$base/reject"; then\n'
+133 +             '  : > "$base/refused"\n'
+134 |             "  printf 'Fixture hook refused commit\\n' >&2\n  exit 1\nfi\n"
+--------------------------------------------------------------------------------
+139 |         pane = tmux(
+    -             "-f", "/dev/null", "new-session", "-d", "-P", "-F", "#{pane_id}",
+    -             "-s", "commit", "-x", "80", "-y", "24", "/bin/sh",
+140 +             "-f",
+141 +             "/dev/null",
+142 +             "new-session",
+143 +             "-d",
+144 +             "-P",
+145 +             "-F",
+146 +             "#{pane_id}",
+147 +             "-s",
+148 +             "commit",
+149 +             "-x",
+150 +             "80",
+151 +             "-y",
+152 +             "24",
+153 +             "/bin/sh",
+154 |         )
+155 |         tmux("set-option", "-t", "commit", "remain-on-exit", "on")
+    -         tmux("send-keys", "-t", pane, "-l", shlex.join(["exec", sys.executable, str(runner), str(base)]))
+156 +         tmux(
+157 +             "send-keys",
+158 +             "-t",
+159 +             pane,
+160 +             "-l",
+161 +             shlex.join(["exec", sys.executable, str(runner), str(base)]),
+162 +         )
+163 |         tmux("send-keys", "-t", pane, "Enter")
+164 |         answered = 0
+165 |         deadline = time.monotonic() + 90
+166 |         while time.monotonic() < deadline:
+    -             attempts = (base / "attempts").read_text().splitlines() if (base / "attempts").exists() else []
+    -             if len(attempts) > answered and "APP_TTY_APPROVAL" in tmux("capture-pane", "-p", "-t", pane):
+167 +             attempts = (
+168 +                 (base / "attempts").read_text().splitlines() if (base / "attempts").exists() else []
+169 +             )
+170 +             if len(attempts) > answered and "APP_TTY_APPROVAL" in tmux(
+171 +                 "capture-pane", "-p", "-t", pane
+172 +             ):
+173 |                 tmux("send-keys", "-t", pane, "-l", "approve")
+    |
+
+unformatted: File would be reformatted
+   --> src/rhizome/distribution.py:88:32
+    |
+87  |     except HTTPError as error:
+    -         raise UpdateCheckError(f"GitHub returned HTTP {error.code} while resolving the tag.") from error
+88  +         raise UpdateCheckError(
+89  +             f"GitHub returned HTTP {error.code} while resolving the tag."
+90  +         ) from error
+91  |     raise UpdateCheckError("GitHub tag metadata is nested too deeply to resolve safely.")
+--------------------------------------------------------------------------------
+121 |     script_url = (
+    -         "https://raw.githubusercontent.com/Doctacon/rhizome/"
+    -         f"{release.commit}/scripts/install.sh"
+122 +         f"https://raw.githubusercontent.com/Doctacon/rhizome/{release.commit}/scripts/install.sh"
+123 |     )
+    |
+
+unformatted: File would be reformatted
+    --> src/rhizome/git.py:82:26
+     |
+81   | )
+     - _SCP_URL_RE = re.compile(
+     -     r"(?<![^@\s/:])(?P<url>[^@\s/:]+@[^@\s/:]+:[^\s'\"<>]+)"
+     - )
+82   + _SCP_URL_RE = re.compile(r"(?<![^@\s/:])(?P<url>[^@\s/:]+@[^@\s/:]+:[^\s'\"<>]+)")
+83   |
+--------------------------------------------------------------------------------
+148  |         trimmed = value.rstrip(".,;)]}")
+     -         suffix = value[len(trimmed):]
+149  +         suffix = value[len(trimmed) :]
+150  |         return match.groupdict().get("leading", "") + _redact_url(trimmed) + suffix
+--------------------------------------------------------------------------------
+429  |             try:
+     -                 yield [sys.executable, "-I", "-S", "-c", _COMMIT_TERMINAL_EXEC,
+     -                        str(terminal), *argv], (terminal,)
+430  +                 yield (
+431  +                     [sys.executable, "-I", "-S", "-c", _COMMIT_TERMINAL_EXEC, str(terminal), *argv],
+432  +                     (terminal,),
+433  +                 )
+434  |             finally:
+--------------------------------------------------------------------------------
+484  |         if (
+     -             self.temporary_fd is None or not stat.S_ISDIR(info.st_mode)
+485  +             self.temporary_fd is None
+486  +             or not stat.S_ISDIR(info.st_mode)
+487  |             or self._identity(info) != self.temporary_owner
+--------------------------------------------------------------------------------
+501  |         try:
+     -             return self._identity(os.stat(
+     -                 self.lock_name, dir_fd=self.directory_fd, follow_symlinks=False,
+     -             )) == self.lock_owner
+502  +             return (
+503  +                 self._identity(
+504  +                     os.stat(
+505  +                         self.lock_name,
+506  +                         dir_fd=self.directory_fd,
+507  +                         follow_symlinks=False,
+508  +                     )
+509  +                 )
+510  +                 == self.lock_owner
+511  +             )
+512  |         except FileNotFoundError:
+--------------------------------------------------------------------------------
+530  |             self.directory_fd = os.open(
+     -                 self.directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+531  +                 self.directory,
+532  +                 os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+533  |             )
+534  |             self.lock_fd = os.open(
+     -                 self.lock_name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow,
+     -                 0o600, dir_fd=self.directory_fd,
+535  +                 self.lock_name,
+536  +                 os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow,
+537  +                 0o600,
+538  +                 dir_fd=self.directory_fd,
+539  |             )
+540  |             self.lock_owner = self._identity(os.fstat(self.lock_fd))
+541  |             self.temporary = Path(tempfile.mkdtemp(prefix="rhizome-commit-", dir=self.directory))
+542  |             self.temporary_fd = os.open(
+     -                 self.temporary, os.O_RDONLY | nofollow | getattr(os, "O_DIRECTORY", 0),
+543  +                 self.temporary,
+544  +                 os.O_RDONLY | nofollow | getattr(os, "O_DIRECTORY", 0),
+545  |             )
+546  |             self.temporary_owner = self._identity(os.fstat(self.temporary_fd))
+547  |             source_fd = os.open(
+     -                 self.index.name, os.O_RDONLY | nofollow | getattr(os, "O_NONBLOCK", 0),
+548  +                 self.index.name,
+549  +                 os.O_RDONLY | nofollow | getattr(os, "O_NONBLOCK", 0),
+550  |                 dir_fd=self.directory_fd,
+--------------------------------------------------------------------------------
+576  |         self.context_fd = os.open(
+     -             self.candidate.parent / "context.txt", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600,
+577  +             self.candidate.parent / "context.txt",
+578  +             os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+579  +             0o600,
+580  |         )
+--------------------------------------------------------------------------------
+598  |     def run(
+     -         self, args: list[str], *, input_bytes: bytes,
+599  +         self,
+600  +         args: list[str],
+601  +         *,
+602  +         input_bytes: bytes,
+603  |     ) -> tuple[subprocess.CompletedProcess[bytes], str]:
+--------------------------------------------------------------------------------
+635  |             process = subprocess.Popen(
+     -                 command, cwd=self.repository.root, env=env,
+     -                 stdin=stdin, stdout=stdout, stderr=stderr,
+     -                 process_group=0, pass_fds=terminal_fds,
+636  +                 command,
+637  +                 cwd=self.repository.root,
+638  +                 env=env,
+639  +                 stdin=stdin,
+640  +                 stdout=stdout,
+641  +                 stderr=stderr,
+642  +                 process_group=0,
+643  +                 pass_fds=terminal_fds,
+644  |             )
+--------------------------------------------------------------------------------
+661  |                         while offset < end:
+     -                             chunk = os.pread(stderr.fileno(), min(_MAX_ERROR_BYTES, end - offset), offset)
+662  +                             chunk = os.pread(
+663  +                                 stderr.fileno(), min(_MAX_ERROR_BYTES, end - offset), offset
+664  +                             )
+665  |                             if not chunk:
+--------------------------------------------------------------------------------
+669  |                             while remaining:
+     -                                 remaining = remaining[os.write(terminal_fds[0], remaining):]
+670  +                                 remaining = remaining[os.write(terminal_fds[0], remaining) :]
+671  |                     finally:
+--------------------------------------------------------------------------------
+733  |             for position, part in enumerate(parts):
+     -                 prefix += part[:max(0, _MAX_ERROR_BYTES - len(prefix))]
+734  +                 prefix += part[: max(0, _MAX_ERROR_BYTES - len(prefix))]
+735  |                 if position < len(parts) - 1:
+--------------------------------------------------------------------------------
+747  |             self.candidate.parent / "context.txt",
+     -             os.O_WRONLY | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
+     -             | getattr(os, "O_NONBLOCK", 0),
+748  +             os.O_WRONLY | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),
+749  |         )
+--------------------------------------------------------------------------------
+778  |         nofollow = getattr(os, "O_NOFOLLOW", 0)
+     -         candidate_fd = os.open(self.candidate, os.O_RDONLY | nofollow | getattr(os, "O_NONBLOCK", 0))
+779  +         candidate_fd = os.open(
+780  +             self.candidate, os.O_RDONLY | nofollow | getattr(os, "O_NONBLOCK", 0)
+781  +         )
+782  |         try:
+--------------------------------------------------------------------------------
+787  |             self.repository._git(
+     -                 ["ls-files", "--stage", "-z"], index_file=self.candidate,
+788  +                 ["ls-files", "--stage", "-z"],
+789  +                 index_file=self.candidate,
+790  |                 operation="validate commit index",
+--------------------------------------------------------------------------------
+795  |         shared = self.repository._git(
+     -             ["rev-parse", "--shared-index-path"], index_file=self.candidate,
+796  +             ["rev-parse", "--shared-index-path"],
+797  +             index_file=self.candidate,
+798  |             operation="inspect commit split index",
+--------------------------------------------------------------------------------
+828  |         os.replace(
+     -             self.lock_name, self.index.name,
+     -             src_dir_fd=self.directory_fd, dst_dir_fd=self.directory_fd,
+829  +             self.lock_name,
+830  +             self.index.name,
+831  +             src_dir_fd=self.directory_fd,
+832  +             dst_dir_fd=self.directory_fd,
+833  |         )
+--------------------------------------------------------------------------------
+852  |             for descriptor in (
+     -                 self.context_fd, self.temporary_fd, self.lock_fd, self.directory_fd,
+853  +                 self.context_fd,
+854  +                 self.temporary_fd,
+855  +                 self.lock_fd,
+856  +                 self.directory_fd,
+857  |             ):
+--------------------------------------------------------------------------------
+989  |             return self._git(
+     -                 command, literal_paths=True, input_bytes=data,
+990  +                 command,
+991  +                 literal_paths=True,
+992  +                 input_bytes=data,
+993  |                 operation="review effective path attributes",
+--------------------------------------------------------------------------------
+997  |             self._git(
+     -                 ["-c", "core.splitIndex=false", "-c", "core.sparseCheckout=false",
+     -                  "-c", "index.sparse=false", "read-tree", source],
+     -                 index_file=index, operation="read captured attribute tree",
+998  +                 [
+999  +                     "-c",
+1000 +                     "core.splitIndex=false",
+1001 +                     "-c",
+1002 +                     "core.sparseCheckout=false",
+1003 +                     "-c",
+1004 +                     "index.sparse=false",
+1005 +                     "read-tree",
+1006 +                     source,
+1007 +                 ],
+1008 +                 index_file=index,
+1009 +                 operation="read captured attribute tree",
+1010 |             )
+1011 |             return self._git(
+     -                 [*command, "--cached"], literal_paths=True, input_bytes=data,
+     -                 index_file=index, operation="review captured path attributes",
+1012 +                 [*command, "--cached"],
+1013 +                 literal_paths=True,
+1014 +                 input_bytes=data,
+1015 +                 index_file=index,
+1016 +                 operation="review captured path attributes",
+1017 |             ).stdout
+--------------------------------------------------------------------------------
+1040 |             try:
+     -                 return identity(os.stat(lock_name, dir_fd=directory_fd, follow_symlinks=False)) == lock_owner
+1041 +                 return (
+1042 +                     identity(os.stat(lock_name, dir_fd=directory_fd, follow_symlinks=False))
+1043 +                     == lock_owner
+1044 +                 )
+1045 |             except FileNotFoundError:
+--------------------------------------------------------------------------------
+1050 |             lock_fd = os.open(
+     -                 lock_name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow, 0o600,
+1051 +                 lock_name,
+1052 +                 os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow,
+1053 +                 0o600,
+1054 |                 dir_fd=directory_fd,
+--------------------------------------------------------------------------------
+1066 |                         if not stat.S_ISREG(info.st_mode):
+     -                             raise GitError("The Git index is not a regular file; no changes applied.")
+1067 +                             raise GitError(
+1068 +                                 "The Git index is not a regular file; no changes applied."
+1069 +                             )
+1070 |                         with candidate.open("xb") as destination:
+--------------------------------------------------------------------------------
+1075 |                     # publication. Native candidate maintenance must not expire it.
+     -                     ["-c", "splitIndex.sharedIndexExpire=never", "update-index", "-z", "--index-info"],
+1076 +                     [
+1077 +                         "-c",
+1078 +                         "splitIndex.sharedIndexExpire=never",
+1079 +                         "update-index",
+1080 +                         "-z",
+1081 +                         "--index-info",
+1082 +                     ],
+1083 |                     input_bytes=records,
+     -                     index_file=candidate, operation="apply selected patch to index",
+1084 +                     index_file=candidate,
+1085 +                     operation="apply selected patch to index",
+1086 |                 )
+--------------------------------------------------------------------------------
+1095 |                 shared = self._git(
+     -                     ["rev-parse", "--shared-index-path"], index_file=candidate,
+1096 +                     ["rev-parse", "--shared-index-path"],
+1097 +                     index_file=candidate,
+1098 |                     operation="inspect candidate split index",
+--------------------------------------------------------------------------------
+1163 |                 ["config", "--includes", "--null", "--get", "i18n.commitEncoding"],
+     -                 ok_codes=(0, 1), operation="read commit encoding configuration",
+1164 +                 ok_codes=(0, 1),
+1165 +                 operation="read commit encoding configuration",
+1166 |             )
+1167 |         except GitError as error:
+1168 |             raise GitError("Could not read the commit encoding configuration.") from error
+1169 |         raw = b"UTF-8\0" if result.returncode == 1 else result.stdout
+     -         if (
+     -             len(raw) > 129 or not raw.endswith(b"\0")
+     -             or b"\0" in raw[:-1] or len(raw) == 1
+     -         ):
+1170 +         if len(raw) > 129 or not raw.endswith(b"\0") or b"\0" in raw[:-1] or len(raw) == 1:
+1171 |             raise GitError("The commit encoding configuration is malformed.")
+--------------------------------------------------------------------------------
+1204 |                 ["config", "--includes", "--null", "--path", "--get", "commit.template"],
+     -                 ok_codes=(0, 1), operation="read commit template configuration",
+1205 +                 ok_codes=(0, 1),
+1206 +                 operation="read commit template configuration",
+1207 |             )
+--------------------------------------------------------------------------------
+1213 |         if (
+     -             len(raw_path) > 16 * 1024 or not raw_path.endswith(b"\0")
+     -             or b"\0" in raw_path[:-1] or len(raw_path) == 1
+1214 +             len(raw_path) > 16 * 1024
+1215 +             or not raw_path.endswith(b"\0")
+1216 +             or b"\0" in raw_path[:-1]
+1217 +             or len(raw_path) == 1
+1218 |         ):
+--------------------------------------------------------------------------------
+1254 |         stable_fields = (
+     -             "st_dev", "st_ino", "st_mode", "st_nlink", "st_uid", "st_gid",
+     -             "st_size", "st_mtime_ns", "st_ctime_ns",
+1255 +             "st_dev",
+1256 +             "st_ino",
+1257 +             "st_mode",
+1258 +             "st_nlink",
+1259 +             "st_uid",
+1260 +             "st_gid",
+1261 +             "st_size",
+1262 +             "st_mtime_ns",
+1263 +             "st_ctime_ns",
+1264 |         )
+--------------------------------------------------------------------------------
+1276 |         except (LookupError, UnicodeError, TypeError) as error:
+     -             raise GitError(
+     -                 f"The commit template is not valid {encoding.label} text."
+     -             ) from error
+1277 +             raise GitError(f"The commit template is not valid {encoding.label} text.") from error
+1278 |         if "\0" in decoded:
+--------------------------------------------------------------------------------
+1282 |     def _encode_commit_message(
+     -         self, message: str, encoding: _CommitEncoding | None = None,
+1283 +         self,
+1284 +         message: str,
+1285 +         encoding: _CommitEncoding | None = None,
+1286 |     ) -> bytes:
+--------------------------------------------------------------------------------
+1293 |         except (LookupError, UnicodeError, TypeError) as error:
+     -             raise GitError(
+     -                 f"The commit message cannot be encoded as {encoding.label}."
+     -             ) from error
+1294 +             raise GitError(f"The commit message cannot be encoded as {encoding.label}.") from error
+1295 |
+--------------------------------------------------------------------------------
+1316 |             ["diff", "--cached", "--quiet", "--exit-code", "--no-ext-diff", "--no-textconv"],
+     -             ok_codes=(0, 1), operation="check staged changes",
+1317 +             ok_codes=(0, 1),
+1318 +             operation="check staged changes",
+1319 |         )
+--------------------------------------------------------------------------------
+1326 |             symbolic = self._git(
+     -                 ["symbolic-ref", "--quiet", "HEAD"], ok_codes=(0, 1),
+1327 +                 ["symbolic-ref", "--quiet", "HEAD"],
+1328 +                 ok_codes=(0, 1),
+1329 |                 operation="inspect commit HEAD identity",
+--------------------------------------------------------------------------------
+1341 |                 if before != head_state() or index_before != self._commit_index_fingerprint():
+     -                     raise GitError("Repository changed before the commit index was locked. Review again.")
+1342 +                     raise GitError(
+1343 +                         "Repository changed before the commit index was locked. Review again."
+1344 +                     )
+1345 |                 staged = self._git(
+     -                     ["diff", "--cached", "--quiet", "--exit-code", "--no-ext-diff", "--no-textconv"],
+     -                     index_file=transaction.candidate, ok_codes=(0, 1),
+1346 +                     [
+1347 +                         "diff",
+1348 +                         "--cached",
+1349 +                         "--quiet",
+1350 +                         "--exit-code",
+1351 +                         "--no-ext-diff",
+1352 +                         "--no-textconv",
+1353 +                     ],
+1354 +                     index_file=transaction.candidate,
+1355 +                     ok_codes=(0, 1),
+1356 |                     operation="check locked staged changes",
+--------------------------------------------------------------------------------
+1361 |                 result, created_oid = transaction.run(
+     -                     ["-c", "core.abbrev=no", "-c", "color.ui=false", "-c", "color.diff=false",
+     -                      "-c", "splitIndex.sharedIndexExpire=never",
+     -                      "-c", f"i18n.commitEncoding={commit_encoding.configured}",
+     -                      "commit", "--edit", "--no-status", "--no-verbose", "-F", "-"],
+1362 +                     [
+1363 +                         "-c",
+1364 +                         "core.abbrev=no",
+1365 +                         "-c",
+1366 +                         "color.ui=false",
+1367 +                         "-c",
+1368 +                         "color.diff=false",
+1369 +                         "-c",
+1370 +                         "splitIndex.sharedIndexExpire=never",
+1371 +                         "-c",
+1372 +                         f"i18n.commitEncoding={commit_encoding.configured}",
+1373 +                         "commit",
+1374 +                         "--edit",
+1375 +                         "--no-status",
+1376 +                         "--no-verbose",
+1377 +                         "-F",
+1378 +                         "-",
+1379 +                     ],
+1380 |                     input_bytes=message_bytes,
+1381 |                 )
+1382 |                 if result.returncode < 0:
+     -                     raise GitOutcomeUncertain("Git was interrupted by a signal; hook quiescence is unknown.")
+1383 +                     raise GitOutcomeUncertain(
+1384 +                         "Git was interrupted by a signal; hook quiescence is unknown."
+1385 +                     )
+1386 |                 # Native Git prints its created OID after post-commit, not the
+--------------------------------------------------------------------------------
+1399 |                     if not created_oid:
+     -                         raise GitOutcomeUncertain("Git did not report one unambiguous created commit.")
+1400 +                         raise GitOutcomeUncertain(
+1401 +                             "Git did not report one unambiguous created commit."
+1402 +                         )
+1403 |                     kind = self._git(
+--------------------------------------------------------------------------------
+1417 |                     if (
+     -                         kind != b"commit\n" or created_oid != after[0]
+1418 +                         kind != b"commit\n"
+1419 +                         or created_oid != after[0]
+1420 |                         or after != head_state()
+     -                         or after[0] == before[0] or after[1] != before[1]
+1421 +                         or after[0] == before[0]
+1422 +                         or after[1] != before[1]
+1423 |                         or parents != expected
+1424 |                     ):
+     -                         raise GitOutcomeUncertain("HEAD/ref postconditions do not match the created commit.")
+1425 +                         raise GitOutcomeUncertain(
+1426 +                             "HEAD/ref postconditions do not match the created commit."
+1427 +                         )
+1428 |                 elif after != before:
+     -                     raise GitOutcomeUncertain("HEAD/ref changed despite Git reporting a commit failure.")
+1429 +                     raise GitOutcomeUncertain(
+1430 +                         "HEAD/ref changed despite Git reporting a commit failure."
+1431 +                     )
+1432 |                 transaction.settled = True
+--------------------------------------------------------------------------------
+1737 |         result = self._git(
+     -             ["--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=no"],
+1738 +             [
+1739 +                 "--no-optional-locks",
+1740 +                 "status",
+1741 +                 "--porcelain=v1",
+1742 +                 "-z",
+1743 +                 "--untracked-files=all",
+1744 +                 "--ignored=no",
+1745 +             ],
+1746 |             operation="read status",
+--------------------------------------------------------------------------------
+2278 |         right_prefix, right_suffix = right.split("*", 1)
+     -         return (
+     -             left_prefix.startswith(right_prefix) or right_prefix.startswith(left_prefix)
+     -         ) and (
+2279 +         return (left_prefix.startswith(right_prefix) or right_prefix.startswith(left_prefix)) and (
+2280 |             left_suffix.endswith(right_suffix) or right_suffix.endswith(left_suffix)
+--------------------------------------------------------------------------------
+2361 |             raise GitError("Git ref storage is not a safe directory.")
+2362 +
+2363 |         def unreadable(error: OSError) -> None:
+--------------------------------------------------------------------------------
+2513 |                 for prior_remote, prior_destination in destinations:
+     -                     if (
+     -                         prior_remote != scope.remote
+     -                         and self._fetch_patterns_overlap(prior_destination, refspec.destination)
+2514 +                     if prior_remote != scope.remote and self._fetch_patterns_overlap(
+2515 +                         prior_destination, refspec.destination
+2516 |                     ):
+     |
+
+unformatted: File would be reformatted
+    --> src/rhizome/operations.py:88:48
+     |
+87   | _LOCKS_GUARD = threading.Lock()
+     - _REPOSITORY_LOCKS: weakref.WeakValueDictionary[
+     -     tuple[int, int], threading.RLock
+     - ] = weakref.WeakValueDictionary()
+88   + _REPOSITORY_LOCKS: weakref.WeakValueDictionary[tuple[int, int], threading.RLock] = (
+89   +     weakref.WeakValueDictionary()
+90   + )
+91   |
+--------------------------------------------------------------------------------
+154  |     cleaned = "".join(
+     -         character if character in "\n\t" or ord(character) >= 32 else "�"
+     -         for character in redacted
+155  +         character if character in "\n\t" or ord(character) >= 32 else "�" for character in redacted
+156  |     ).strip()
+--------------------------------------------------------------------------------
+307  |                     if self.journal is None:  # Defensive even if availability changes later.
+     -                         raise GitError(
+     -                             "This operation requires a durable recovery checkpoint."
+     -                         )
+308  +                         raise GitError("This operation requires a durable recovery checkpoint.")
+309  |                     checkpoint = self._prepare_checkpoint(plan.action)
+--------------------------------------------------------------------------------
+332  |                     elif plan.action.operation == "commit":
+333  +
+334  |                         def validate_commit() -> None:
+--------------------------------------------------------------------------------
+343  |                         outcome = (
+     -                             "uncertain"
+     -                             if self._remote_outcome_uncertain(plan.action)
+     -                             else "failed"
+344  +                             "uncertain" if self._remote_outcome_uncertain(plan.action) else "failed"
+345  |                         )
+--------------------------------------------------------------------------------
+381  |             uncertain = (
+     -                 checkpoint_outcome_uncertain or remote_uncertain
+382  +                 checkpoint_outcome_uncertain
+383  +                 or remote_uncertain
+384  |                 or isinstance(error, GitOutcomeUncertain)
+--------------------------------------------------------------------------------
+438  |         if not any(
+     -             selection[0] <= line.id <= selection[1]
+     -             and line.kind in {"add", "delete"}
+439  +             selection[0] <= line.id <= selection[1] and line.kind in {"add", "delete"}
+440  |             for line in patch.lines
+--------------------------------------------------------------------------------
+570  |         if operation in _TARGET_OPERATIONS and action.target:
+     -             target = self.repository._resolve_commit(
+     -                 action.target, label=f"{operation} target"
+     -             )
+571  +             target = self.repository._resolve_commit(action.target, label=f"{operation} target")
+572  |             state["target_oid"] = target
+--------------------------------------------------------------------------------
+617  |                 raise GitError("Create worktree requires exactly one destination path.")
+     -             destination = self.repository._external_path(
+     -                 action.paths[0], "Worktree destination"
+     -             )
+618  +             destination = self.repository._external_path(action.paths[0], "Worktree destination")
+619  |             state["destination"] = self._destination_state(destination)
+--------------------------------------------------------------------------------
+627  |             if action.name:
+     -                 name = self.repository._validate_branch(
+     -                     action.name, "New worktree branch name"
+     -                 )
+628  +                 name = self.repository._validate_branch(action.name, "New worktree branch name")
+629  |                 state["destination_ref"] = self._ref_oid(f"refs/heads/{name}")
+--------------------------------------------------------------------------------
+724  |         if action.paths:
+     -             requested = self.repository._related_status_paths(
+     -                 self.repository._paths(action.paths)
+     -             )
+725  +             requested = self.repository._related_status_paths(self.repository._paths(action.paths))
+726  |             selected = list(requested)
+--------------------------------------------------------------------------------
+736  |             selected = [
+     -                 path
+     -                 for change in status
+     -                 for path in (change.path, change.original_path)
+     -                 if path
+737  +                 path for change in status for path in (change.path, change.original_path) if path
+738  |             ]
+--------------------------------------------------------------------------------
+750  |                 digest,
+     -                 repr(status_by_path.get(name, ("", "", "", ""))).encode(
+     -                     "utf-8", "surrogateescape"
+     -                 ),
+751  +                 repr(status_by_path.get(name, ("", "", "", ""))).encode("utf-8", "surrogateescape"),
+752  |             )
+--------------------------------------------------------------------------------
+772  |             operation="review checkout target paths",
+     -         )
+     -         return tuple(
+     -             sorted(
+     -                 _decode(path)
+     -                 for path in result.stdout.split(b"\x00")
+     -                 if path
+     -             )
+773  |         )
+774  +         return tuple(sorted(_decode(path) for path in result.stdout.split(b"\x00") if path))
+775  |
+--------------------------------------------------------------------------------
+806  |             ):
+     -                 if (
+     -                     attribute in conversion_attributes
+     -                     and value not in {b"unset", b"unspecified"}
+     -                 ):
+807  +                 if attribute in conversion_attributes and value not in {b"unset", b"unspecified"}:
+808  |                     raise GitError(
+--------------------------------------------------------------------------------
+868  |                     opened = os.fstat(stream.fileno())
+     -                     if (
+     -                         not stat.S_ISREG(opened.st_mode)
+     -                         or self._file_identity(opened) != self._file_identity(metadata)
+     -                     ):
+     -                         raise GitError(
+     -                             "A worktree path changed while its operation was reviewed."
+     -                         )
+869  +                     if not stat.S_ISREG(opened.st_mode) or self._file_identity(
+870  +                         opened
+871  +                     ) != self._file_identity(metadata):
+872  +                         raise GitError("A worktree path changed while its operation was reviewed.")
+873  |                     file_digest = hashlib.sha256()
+--------------------------------------------------------------------------------
+877  |                 if self._file_identity(after) != self._file_identity(opened):
+     -                     raise GitError(
+     -                         "A worktree path changed while its operation was reviewed."
+     -                     )
+878  +                     raise GitError("A worktree path changed while its operation was reviewed.")
+879  |                 self._include_digest(digest, file_digest.digest())
+--------------------------------------------------------------------------------
+886  |         else:
+     -             raise GitError(
+     -                 "Directory and special-file changes require an external Git review."
+     -             )
+887  +             raise GitError("Directory and special-file changes require an external Git review.")
+888  |
+--------------------------------------------------------------------------------
+966  |                 state["kind"] = "directory"
+     -                 state["entries"] = sorted(os.fsencode(item.name).hex() for item in destination.iterdir())
+967  +                 state["entries"] = sorted(
+968  +                     os.fsencode(item.name).hex() for item in destination.iterdir()
+969  +                 )
+970  |             except OSError as error:
+--------------------------------------------------------------------------------
+1129 |                     checkpoint_id=(
+     -                         current.checkpoint_id
+     -                         if checkpoint_id is None
+     -                         else checkpoint_id
+1130 +                         current.checkpoint_id if checkpoint_id is None else checkpoint_id
+1131 |                     ),
+     |
+
+unformatted: File would be reformatted
+   --> src/rhizome/patches.py:104:12
+    |
+103 |             raise GitError("Staged must be true or false.")
+    -         if (
+    -             not isinstance(context, int)
+    -             or isinstance(context, bool)
+    -             or not 0 <= context <= 10_000
+    -         ):
+104 +         if not isinstance(context, int) or isinstance(context, bool) or not 0 <= context <= 10_000:
+105 |             raise GitError("Diff context must be an integer between 0 and 10000.")
+--------------------------------------------------------------------------------
+138 |         all_changes = {
+    -             item.line.id
+    -             for item in document._items
+    -             if item.line.kind in {"add", "delete"}
+139 +             item.line.id for item in document._items if item.line.kind in {"add", "delete"}
+140 |         }
+--------------------------------------------------------------------------------
+159 |         if exists:
+    -             blob = self.repo._git(
+    -                 ["hash-object", "-w", "--stdin"],
+    -                 input_bytes=data,
+    -                 operation="store selected patch result",
+    -             ).stdout.decode("ascii").strip()
+160 +             blob = (
+161 +                 self.repo._git(
+162 +                     ["hash-object", "-w", "--stdin"],
+163 +                     input_bytes=data,
+164 +                     operation="store selected patch result",
+165 +                 )
+166 +                 .stdout.decode("ascii")
+167 +                 .strip()
+168 +             )
+169 |             index_record = f"{mode} {blob}\t".encode("ascii") + os.fsencode(document.path) + b"\x00"
+--------------------------------------------------------------------------------
+177 |             index_record = (
+    -                 b"0 "
+    -                 + (b"0" * oid_length)
+    -                 + b"\t"
+    -                 + os.fsencode(document.path)
+    -                 + b"\x00"
+178 +                 b"0 " + (b"0" * oid_length) + b"\t" + os.fsencode(document.path) + b"\x00"
+179 |             )
+--------------------------------------------------------------------------------
+198 |         statuses = self.repo._status()
+    -         related = [
+    -             change
+    -             for change in statuses
+    -             if path in {change.path, change.original_path}
+    -         ]
+199 +         related = [change for change in statuses if path in {change.path, change.original_path}]
+200 |         reason = ""
+--------------------------------------------------------------------------------
+211 |         elif self._has_unsupported_attributes(path):
+    -             reason = "Custom filters, encodings, or binary diff attributes require a whole-file action."
+212 +             reason = (
+213 +                 "Custom filters, encodings, or binary diff attributes require a whole-file action."
+214 +             )
+215 |
+--------------------------------------------------------------------------------
+225 |         new_exists = bool(new_oid) if staged else work_kind == "regular"
+    -         eligible_untracked = any(
+    -             change.path == path and change.index == "?" for change in related
+    -         )
+226 +         eligible_untracked = any(change.path == path and change.index == "?" for change in related)
+227 |         if (
+--------------------------------------------------------------------------------
+242 |             if len(raw) > _MAX_PATCH_BYTES:
+    -                 reason = "This patch exceeds the 2 MiB line-selection limit; use a whole-file action."
+243 +                 reason = (
+244 +                     "This patch exceeds the 2 MiB line-selection limit; use a whole-file action."
+245 +                 )
+246 |                 raw = raw[: _MAX_PATCH_BYTES + 1]
+--------------------------------------------------------------------------------
+268 |                     hunks,
+    -                     {
+    -                         item.line.id
+    -                         for item in items
+    -                         if item.line.kind in {"add", "delete"}
+    -                     },
+269 +                     {item.line.id for item in items if item.line.kind in {"add", "delete"}},
+270 |                 )
+--------------------------------------------------------------------------------
+317 |     def _index_fingerprint(self) -> str:
+    -         data = self.repo._git(
+    -             ["ls-files", "--stage", "-z"], operation="fingerprint index"
+    -         ).stdout
+318 +         data = self.repo._git(["ls-files", "--stage", "-z"], operation="fingerprint index").stdout
+319 |         return hashlib.sha256(data).hexdigest()
+--------------------------------------------------------------------------------
+504 |                 )
+    -                 items.append(
+    -                     _PatchItem(PatchLine(line_id, "hunk", display, hunk=hunk_number))
+    -                 )
+505 +                 items.append(_PatchItem(PatchLine(line_id, "hunk", display, hunk=hunk_number)))
+506 |                 continue
+507 |             if hunk_number is not None and record.startswith(b"\\ No newline at end of file"):
+508 |                 if items and items[-1].line.kind in {"context", "add", "delete"}:
+509 |                     items[-1] = replace(items[-1], content=items[-1].content.removesuffix(b"\n"))
+    -                 items.append(
+    -                     _PatchItem(PatchLine(line_id, "meta", display, hunk=hunk_number))
+    -                 )
+510 +                 items.append(_PatchItem(PatchLine(line_id, "meta", display, hunk=hunk_number)))
+511 |                 continue
+    |
+
+unformatted: File would be reformatted
+   --> src/rhizome/recovery.py:62:12
+    |
+61  | def _canonical_json(value: object) -> bytes:
+    -     return json.dumps(
+    -         value,
+    -         ensure_ascii=True,
+    -         allow_nan=False,
+    -         sort_keys=True,
+    -         separators=(",", ":"),
+    -     ).encode("utf-8") + b"\n"
+62  +     return (
+63  +         json.dumps(
+64  +             value,
+65  +             ensure_ascii=True,
+66  +             allow_nan=False,
+67  +             sort_keys=True,
+68  +             separators=(",", ":"),
+69  +         ).encode("utf-8")
+70  +         + b"\n"
+71  +     )
+72  |
+--------------------------------------------------------------------------------
+188 |             raise RecoveryError("Recovery content budget must be a positive byte count.")
+    -         if (
+    -             not isinstance(max_age_days, int)
+    -             or isinstance(max_age_days, bool)
+    -             or max_age_days < 0
+    -         ):
+189 +         if not isinstance(max_age_days, int) or isinstance(max_age_days, bool) or max_age_days < 0:
+190 |             raise RecoveryError("Recovery maximum age must be a nonnegative day count.")
+--------------------------------------------------------------------------------
+247 |         protected_usage = sum(
+    -             int(body["size_bytes"])
+    -             for body in bodies
+    -             if body["active"] or body["pinned"]
+248 +             int(body["size_bytes"]) for body in bodies if body["active"] or body["pinned"]
+249 |         )
+--------------------------------------------------------------------------------
+280 |                 if preflight_bytes >= available:
+    -                     raise RecoveryError("Requested file preimages exceed the recovery content budget.")
+281 +                     raise RecoveryError(
+282 +                         "Requested file preimages exceed the recovery content budget."
+283 +                     )
+284 |
+--------------------------------------------------------------------------------
+379 |                 raise
+    -             raise RecoveryError(f"Could not prepare the required recovery checkpoint: {error}") from error
+380 +             raise RecoveryError(
+381 +                 f"Could not prepare the required recovery checkpoint: {error}"
+382 +             ) from error
+383 |
+--------------------------------------------------------------------------------
+479 |         else:
+    -             summary = "Recovered aside: " + "; ".join(recovered) + ". Current checkout was not changed."
+480 +             summary = (
+481 +                 "Recovered aside: " + "; ".join(recovered) + ". Current checkout was not changed."
+482 +             )
+483 |         return RecoveryResult(branch=branch, directory=files_directory, summary=summary)
+--------------------------------------------------------------------------------
+527 |             if path == requested:
+    -                 records.append(
+    -                     {"mode": fields[0], "oid": fields[1].lower(), "stage": fields[2]}
+    -                 )
+528 +                 records.append({"mode": fields[0], "oid": fields[1].lower(), "stage": fields[2]})
+529 |         return records
+530 |
+    -     def _index_state(
+    -         self, repo: Repository, path: str, head: str
+    -     ) -> tuple[dict[str, Any], bool]:
+531 +     def _index_state(self, repo: Repository, path: str, head: str) -> tuple[dict[str, Any], bool]:
+532 |         result = repo._git(
+--------------------------------------------------------------------------------
+605 |         if stat.S_ISLNK(info.st_mode):
+    -             raise RecoveryError(f"Tracked symlink worktree representation is unsupported: {path!r}.")
+606 +             raise RecoveryError(
+607 +                 f"Tracked symlink worktree representation is unsupported: {path!r}."
+608 +             )
+609 |         if not stat.S_ISREG(info.st_mode):
+    -             raise RecoveryError(f"Only regular tracked worktree files can be checkpointed: {path!r}.")
+610 +             raise RecoveryError(
+611 +                 f"Only regular tracked worktree files can be checkpointed: {path!r}."
+612 +             )
+613 |         mode = "100755" if info.st_mode & 0o111 else "100644"
+--------------------------------------------------------------------------------
+674 |         if not hasattr(os, "O_NOFOLLOW"):
+    -             raise RecoveryError("This platform cannot safely checkpoint worktree files without following symlinks.")
+675 +             raise RecoveryError(
+676 +                 "This platform cannot safely checkpoint worktree files without following symlinks."
+677 +             )
+678 |         try:
+--------------------------------------------------------------------------------
+690 |         except OSError as error:
+    -             raise RecoveryError(f"Cannot read worktree preimage {pure.as_posix()!r}: {error}") from error
+691 +             raise RecoveryError(
+692 +                 f"Cannot read worktree preimage {pure.as_posix()!r}: {error}"
+693 +             ) from error
+694 |         identity = [
+--------------------------------------------------------------------------------
+734 |         except OSError as error:
+    -             raise RecoveryError(f"Cannot preflight free space for history recovery: {error}") from error
+735 +             raise RecoveryError(
+736 +                 f"Cannot preflight free space for history recovery: {error}"
+737 +             ) from error
+738 |         if estimate > free:
+--------------------------------------------------------------------------------
+746 |                 if entry.is_symlink() or not entry.is_dir():
+    -                     raise RecoveryError("Unsafe unpublished recovery state requires manual inspection.")
+747 +                     raise RecoveryError(
+748 +                         "Unsafe unpublished recovery state requires manual inspection."
+749 +                     )
+750 |                 shutil.rmtree(entry)
+    |
+
+unformatted: File would be reformatted
+   --> tests/test_commit_faults.py:2:1
+    |
+1   | """Public Repository.execute real-Git commit fault proofs."""
+2   +
+3   | from __future__ import annotations
+--------------------------------------------------------------------------------
+27  |
+    - def test_definite_commit_launch_failure_cleans_owned_transaction(
+    -     git_repo, git_run, monkeypatch
+    - ):
+28  + def test_definite_commit_launch_failure_cleans_owned_transaction(git_repo, git_run, monkeypatch):
+29  |     path = git_repo / "example.txt"
+--------------------------------------------------------------------------------
+145 |
+    - def test_unprovable_group_liveness_retains_the_unpublished_index(
+    -     git_repo, git_run, monkeypatch
+    - ):
+146 + def test_unprovable_group_liveness_retains_the_unpublished_index(git_repo, git_run, monkeypatch):
+147 |     path = git_repo / "example.txt"
+--------------------------------------------------------------------------------
+176 |
+    - def test_negative_direct_signal_retains_owned_lock_and_candidate(
+    -     git_repo, git_run, monkeypatch
+    - ):
+177 + def test_negative_direct_signal_retains_owned_lock_and_candidate(git_repo, git_run, monkeypatch):
+178 |     path = git_repo / "example.txt"
+--------------------------------------------------------------------------------
+191 |     hook.write_text(
+    -         "#!/bin/sh\n"
+    -         f"trap ': > {shlex.quote(str(hook_finished))}' EXIT\n"
+    -         "kill -TERM \"$PPID\"\n"
+192 +         f"#!/bin/sh\ntrap ': > {shlex.quote(str(hook_finished))}' EXIT\nkill -TERM \"$PPID\"\n"
+193 |     )
+--------------------------------------------------------------------------------
+238 |     assert retained_candidate
+    -     assert subprocess.run(
+    -         ["git", "ls-files", "--stage", "-z"],
+    -         cwd=git_repo,
+    -         env={**os.environ, "GIT_INDEX_FILE": str(candidate)},
+    -         check=True,
+    -         capture_output=True,
+    -     ).stdout == before_entries.encode()
+239 +     assert (
+240 +         subprocess.run(
+241 +             ["git", "ls-files", "--stage", "-z"],
+242 +             cwd=git_repo,
+243 +             env={**os.environ, "GIT_INDEX_FILE": str(candidate)},
+244 +             check=True,
+245 +             capture_output=True,
+246 +         ).stdout
+247 +         == before_entries.encode()
+248 +     )
+249 |     assert lock.is_file()
+--------------------------------------------------------------------------------
+295 |         f": > {shlex.quote(str(child_finished))}\n"
+    -         "exit \"$status\"\n"
+296 +         'exit "$status"\n'
+297 |     )
+298 |     child.chmod(0o700)
+299 |     hook = (
+300 |         git_repo / ".git" / "hooks" / "post-commit"
+    -         if launcher == "post-commit" else git_repo.parent / "fixture-signer"
+301 +         if launcher == "post-commit"
+302 +         else git_repo.parent / "fixture-signer"
+303 |     )
+--------------------------------------------------------------------------------
+358 |         deadline = time.monotonic() + 10
+    -         while not child_ready.exists() and not execute_finished.is_set() and time.monotonic() < deadline:
+359 +         while (
+360 +             not child_ready.exists()
+361 +             and not execute_finished.is_set()
+362 +             and time.monotonic() < deadline
+363 +         ):
+364 |             time.sleep(0.01)
+--------------------------------------------------------------------------------
+397 |                 time.sleep(0.02)
+    -             assert child_finished.exists(), "foreground child did not complete after its gate was released"
+398 +             assert child_finished.exists(), (
+399 +                 "foreground child did not complete after its gate was released"
+400 +             )
+401 |         worker.join(timeout=15)
+--------------------------------------------------------------------------------
+417 |         assert _head_state(git_repo, git_run) == before_head
+    -     assert active_candidate_exists, "Rhizome deleted or moved the candidate while its writer was active"
+418 +     assert active_candidate_exists, (
+419 +         "Rhizome deleted or moved the candidate while its writer was active"
+420 +     )
+421 |     assert active_index_identity == before_index_identity
+--------------------------------------------------------------------------------
+437 |         assert "phase: native-group-still-present" in context
+    -         assert subprocess.run(
+    -             ["git", "show", ":late-hook.txt"],
+    -             cwd=git_repo,
+    -             env={**os.environ, "GIT_INDEX_FILE": candidate},
+    -             check=True,
+    -             capture_output=True,
+    -             text=True,
+    -         ).stdout == "late hook content\n"
+438 +         assert (
+439 +             subprocess.run(
+440 +                 ["git", "show", ":late-hook.txt"],
+441 +                 cwd=git_repo,
+442 +                 env={**os.environ, "GIT_INDEX_FILE": candidate},
+443 +                 check=True,
+444 +                 capture_output=True,
+445 +                 text=True,
+446 +             ).stdout
+447 +             == "late hook content\n"
+448 +         )
+449 |     else:
+--------------------------------------------------------------------------------
+482 |         "for argument do\n"
+    -         "  test \"$argument\" = commit && is_commit=yes\n"
+483 +         '  test "$argument" = commit && is_commit=yes\n'
+484 |         "done\n"
+    -         f"{shlex.quote(real_git)} \"$@\"\n"
+485 +         f'{shlex.quote(real_git)} "$@"\n'
+486 |         "status=$?\n"
+    -         "if test \"$status\" -eq 0 && test \"$is_commit\" = yes; then\n"
+    -         f"  ln \"$GIT_INDEX_FILE\" {shlex.quote(str(candidate_at_return))} || exit 97\n"
+487 +         'if test "$status" -eq 0 && test "$is_commit" = yes; then\n'
+488 +         f'  ln "$GIT_INDEX_FILE" {shlex.quote(str(candidate_at_return))} || exit 97\n'
+489 |         "  dd if=/dev/zero bs=70000 count=1 2>/dev/null | tr '\\000' x\n"
+490 |         f"  printf '\\n[fixture {before_head[0]}] duplicate native-shaped header\\n'\n"
+491 |         "fi\n"
+    -         "exit \"$status\"\n"
+492 +         'exit "$status"\n'
+493 |     )
+--------------------------------------------------------------------------------
+545 |
+    - def test_native_nonzero_after_ref_move_records_observed_state_and_publication(
+    -     git_repo, git_run
+    - ):
+546 + def test_native_nonzero_after_ref_move_records_observed_state_and_publication(git_repo, git_run):
+547 |     path = git_repo / "example.txt"
+--------------------------------------------------------------------------------
+571 |         f"printf '%s' \"$source\" > {shlex.quote(str(tree_source_file))}\n"
+    -         f"mv \"$source\" {shlex.quote(str(moved_tree))}\n"
+572 +         f'mv "$source" {shlex.quote(str(moved_tree))}\n'
+573 |     )
+    |
+
+unformatted: File would be reformatted
+ --> tests/test_commit_processes.py:2:1
+  |
+1 | """Public native-commit process boundaries; no coordinator/UI bypass proof."""
+2 +
+3 | from __future__ import annotations
+  |
+
+unformatted: File would be reformatted
+   --> tests/test_commit_publication.py:2:1
+    |
+1   | """Public Repository.execute commit-publication fault proofs."""
+2   +
+3   | from __future__ import annotations
+--------------------------------------------------------------------------------
+31  | @pytest.mark.parametrize(
+    -     "fault", ("candidate-fsync", "candidate-move", "index-replace", "directory-fsync"),
+32  +     "fault",
+33  +     ("candidate-fsync", "candidate-move", "index-replace", "directory-fsync"),
+34  | )
+--------------------------------------------------------------------------------
+69  |                 observation.update(
+    -                     candidate=candidate, identity=_identity(candidate),
+    -                     data=candidate.read_bytes(), entries=_index_entries(git_repo, candidate),
+70  +                     candidate=candidate,
+71  +                     identity=_identity(candidate),
+72  +                     data=candidate.read_bytes(),
+73  +                     entries=_index_entries(git_repo, candidate),
+74  |                 )
+--------------------------------------------------------------------------------
+170 |         if (
+    -             replacement == "fifo" and path == observation.get("context")
+    -             and flags & os.O_ACCMODE != os.O_RDWR and not flags & os.O_NONBLOCK
+171 +             replacement == "fifo"
+172 +             and path == observation.get("context")
+173 +             and flags & os.O_ACCMODE != os.O_RDWR
+174 +             and not flags & os.O_NONBLOCK
+175 |         ):
+    |
+
+unformatted: File would be reformatted
+   --> tests/test_commit_representations.py:2:1
+    |
+1   | """Real-Git evidence for native commit index representation preservation."""
+2   +
+3   | from __future__ import annotations
+--------------------------------------------------------------------------------
+161 |     tags_before = git_run(native, "ls-files", "--sparse", "-t", "-z").stdout
+    -     assert expected_before == git_run(
+    -         public, "ls-files", "--sparse", "--stage", "-z"
+    -     ).stdout
+162 +     assert expected_before == git_run(public, "ls-files", "--sparse", "--stage", "-z").stdout
+163 |     assert tags_before == git_run(public, "ls-files", "--sparse", "-t", "-z").stdout
+--------------------------------------------------------------------------------
+183 |     assert int.from_bytes(native_index[8:12], "big") == 2
+    -     assert git_run(public, "rev-parse", "HEAD^{tree}").stdout == git_run(
+    -         native, "rev-parse", "HEAD^{tree}"
+    -     ).stdout
+184 +     assert (
+185 +         git_run(public, "rev-parse", "HEAD^{tree}").stdout
+186 +         == git_run(native, "rev-parse", "HEAD^{tree}").stdout
+187 +     )
+188 |     assert git_run(public, "show", "HEAD:outside/a.txt").stdout == "outside a\n"
+--------------------------------------------------------------------------------
+287 |     assert git_run(git_repo, "diff", "--cached", "--quiet", "--exit-code").returncode == 0
+    -     published_shared = git_run(
+    -         git_repo, "rev-parse", "--shared-index-path"
+    -     ).stdout.removesuffix("\n")
+288 +     published_shared = git_run(git_repo, "rev-parse", "--shared-index-path").stdout.removesuffix(
+289 +         "\n"
+290 +     )
+291 |     assert published_shared
+    |
+
+unformatted: File would be reformatted
+   --> tests/test_commit_terminal.py:2:1
+    |
+1   | """Real controlling-terminal coverage for the public native-commit seam."""
+2   +
+3   | from __future__ import annotations
+--------------------------------------------------------------------------------
+45  | def test_public_commit_hook_can_read_the_controlling_terminal(
+    -     git_repo, git_run, tmp_path, monkeypatch, prompt_stream,
+46  +     git_repo,
+47  +     git_run,
+48  +     tmp_path,
+49  +     monkeypatch,
+50  +     prompt_stream,
+51  | ):
+--------------------------------------------------------------------------------
+82  |             "printf 'RHIZOME_TTY_PROMPT\\n' "
+    -             + ("> /dev/tty\n" if prompt_stream == "terminal" else ">&2\n") +
+    -             "IFS= read -r reply < /dev/tty\n"
+    -             "test \"$reply\" = approve\n"
+83  +             + ("> /dev/tty\n" if prompt_stream == "terminal" else ">&2\n")
+84  +             + "IFS= read -r reply < /dev/tty\n"
+85  +             'test "$reply" = approve\n'
+86  |             f"printf '%s\\n' \"$reply\" > {shlex.quote(str(answer))}\n"
+--------------------------------------------------------------------------------
+101 |             [signer, "-q", "-t", "ed25519", "-N", "fixture-passphrase", "-f", str(key)],
+    -             check=True, stdin=subprocess.DEVNULL, capture_output=True,
+102 +             check=True,
+103 +             stdin=subprocess.DEVNULL,
+104 +             capture_output=True,
+105 |         )
+--------------------------------------------------------------------------------
+178 |                 try:
+    -                     result = Repository(git_repo).execute(
+    -                         Action("commit", message="terminal hook")
+    -                     )
+179 +                     result = Repository(git_repo).execute(Action("commit", message="terminal hook"))
+180 |                     product_outcome_path.write_text(
+--------------------------------------------------------------------------------
+196 |                                 "message": str(error),
+    -                                 "native_returncode": (
+    -                                     spawned[0].returncode if spawned else None
+    -                                 ),
+197 +                                 "native_returncode": (spawned[0].returncode if spawned else None),
+198 |                             }
+--------------------------------------------------------------------------------
+216 |                     git_pid = int(product_pid_path.read_text())
+    -                 if git_pid is not None and (product_entered.exists() or prompt_stream == "ssh-signing"):
+217 +                 if git_pid is not None and (
+218 +                     product_entered.exists() or prompt_stream == "ssh-signing"
+219 +                 ):
+220 |                     states = _process_group_states(git_pid)
+--------------------------------------------------------------------------------
+357 |         for repository in (native_repo, git_repo):
+    -             assert "gpgsig -----BEGIN SSH SIGNATURE-----" in git_run(
+    -                 repository, "cat-file", "commit", "HEAD"
+    -             ).stdout
+358 +             assert (
+359 +                 "gpgsig -----BEGIN SSH SIGNATURE-----"
+360 +                 in git_run(repository, "cat-file", "commit", "HEAD").stdout
+361 +             )
+362 |             git_run(repository, "verify-commit", "HEAD")
+--------------------------------------------------------------------------------
+374 |     # logical index, staged content, and worktree content.
+    -     assert git_run(git_repo, "rev-parse", "HEAD").stdout == git_run(
+    -         native_repo, "rev-parse", "HEAD"
+    -     ).stdout
+    -     assert git_run(git_repo, "ls-files", "--stage", "-z").stdout == git_run(
+    -         native_repo, "ls-files", "--stage", "-z"
+    -     ).stdout
+375 +     assert (
+376 +         git_run(git_repo, "rev-parse", "HEAD").stdout
+377 +         == git_run(native_repo, "rev-parse", "HEAD").stdout
+378 +     )
+379 +     assert (
+380 +         git_run(git_repo, "ls-files", "--stage", "-z").stdout
+381 +         == git_run(native_repo, "ls-files", "--stage", "-z").stdout
+382 +     )
+383 |     assert git_run(git_repo, "show", ":example.txt").stdout == "reviewed\n"
+    |
+
+unformatted: File would be reformatted
+   --> tests/test_commit_transactions.py:2:1
+    |
+1   | """Native commit behavior through Repository; UI stays gated until integration proof."""
+2   +
+3   | from __future__ import annotations
+--------------------------------------------------------------------------------
+32  |
+    - def test_native_commit_keeps_competing_index_writer_out(git_repo, git_run, monkeypatch, staged_change):
+33  + def test_native_commit_keeps_competing_index_writer_out(
+34  +     git_repo, git_run, monkeypatch, staged_change
+35  + ):
+36  |     path = staged_change
+--------------------------------------------------------------------------------
+43  |             path.write_text("changed after review\n")
+    -             competing.append(run(
+    -                 ["git", "-C", str(git_repo), "add", "example.txt"],
+    -                 capture_output=True,
+    -             ))
+44  +             competing.append(
+45  +                 run(
+46  +                     ["git", "-C", str(git_repo), "add", "example.txt"],
+47  +                     capture_output=True,
+48  +                 )
+49  +             )
+50  |         return popen(command, *args, **kwargs)
+--------------------------------------------------------------------------------
+131 |             "printf 'Fixture signing rejection\\n' >&2\nexit 1\n"
+    -             if exit_code else
+    -             "printf '%s\\n' '-----BEGIN PGP SIGNATURE-----' 'Zml4dHVyZQ==' "
+132 +             if exit_code
+133 +             else "printf '%s\\n' '-----BEGIN PGP SIGNATURE-----' 'Zml4dHVyZQ==' "
+134 |             "'-----END PGP SIGNATURE-----'\n"
+--------------------------------------------------------------------------------
+216 |     sibling = git_run(
+    -         git_repo, "commit-tree", "HEAD^{tree}", "-p", head, "-m", "Concurrent sibling",
+217 +         git_repo,
+218 +         "commit-tree",
+219 +         "HEAD^{tree}",
+220 +         "-p",
+221 +         head,
+222 +         "-m",
+223 +         "Concurrent sibling",
+224 |     ).stdout.strip()
+    |
+
+unformatted: File would be reformatted
+   --> tests/test_fetch_safety.py:59:22
+    |
+58  |     _set_fetch(git_run, git_repo, f"+refs/heads/main:{destination}")
+    -     before = git_run(
+    -         git_repo, "for-each-ref", "--format=%(refname) %(objectname)"
+    -     ).stdout
+59  +     before = git_run(git_repo, "for-each-ref", "--format=%(refname) %(objectname)").stdout
+60  |
+--------------------------------------------------------------------------------
+64  |     assert _oid(git_run, git_repo) == local
+    -     assert git_run(
+    -         git_repo, "for-each-ref", "--format=%(refname) %(objectname)"
+    -     ).stdout == before
+65  +     assert git_run(git_repo, "for-each-ref", "--format=%(refname) %(objectname)").stdout == before
+66  |
+--------------------------------------------------------------------------------
+150 |
+    - def test_fetch_detects_aliases_of_an_indirect_cache_destination(
+    -     git_repo, tmp_path, git_run
+    - ):
+151 + def test_fetch_detects_aliases_of_an_indirect_cache_destination(git_repo, tmp_path, git_run):
+152 |     local = _commit(git_run, git_repo, "local.txt", "local\n")
+--------------------------------------------------------------------------------
+219 |     _add_remote(git_run, git_repo, remote)
+    -     git_run(
+    -         git_repo, "symbolic-ref", "refs/remotes/origin/main", "refs/heads/not-yet-local"
+    -     )
+220 +     git_run(git_repo, "symbolic-ref", "refs/remotes/origin/main", "refs/heads/not-yet-local")
+221 |     tracking = git_repo / ".git" / "refs" / "remotes"
+--------------------------------------------------------------------------------
+232 |     assert _oid(git_run, git_repo) == local
+    -     assert git_run(
+    -         git_repo, "show-ref", "--verify", "--quiet", "refs/heads/not-yet-local", check=False
+    -     ).returncode != 0
+233 +     assert (
+234 +         git_run(
+235 +             git_repo, "show-ref", "--verify", "--quiet", "refs/heads/not-yet-local", check=False
+236 +         ).returncode
+237 +         != 0
+238 +     )
+239 |
+--------------------------------------------------------------------------------
+284 |     inherited.write_text(
+    -         "[remote \"origin\"]\n"
+    -         "\tfetch = +refs/heads/main:refs/heads/inherited-victim\n"
+285 +         '[remote "origin"]\n\tfetch = +refs/heads/main:refs/heads/inherited-victim\n'
+286 |     )
+--------------------------------------------------------------------------------
+503 |     assert _oid(git_run, git_repo) == local
+    -     assert git_run(
+    -         git_repo, "show-ref", "--verify", "--quiet", "refs/tags/remote-only", check=False
+    -     ).returncode != 0
+504 +     assert (
+505 +         git_run(
+506 +             git_repo, "show-ref", "--verify", "--quiet", "refs/tags/remote-only", check=False
+507 +         ).returncode
+508 +         != 0
+509 +     )
+510 |     assert git_run(git_repo, "config", "remote.origin.tagOpt").stdout.strip() == "--no-tags"
+511 |
+512 |
+    - def test_fetch_rejects_nondefault_tag_mode(
+    -     git_repo: Path, tmp_path: Path, git_run
+    - ) -> None:
+513 + def test_fetch_rejects_nondefault_tag_mode(git_repo: Path, tmp_path: Path, git_run) -> None:
+514 |     _commit(git_run, git_repo, "local.txt", "local\n")
+--------------------------------------------------------------------------------
+542 |
+    - def test_fetch_rejects_ambiguous_cache_mappings(
+    -     git_repo: Path, tmp_path: Path, git_run
+    - ) -> None:
+543 + def test_fetch_rejects_ambiguous_cache_mappings(git_repo: Path, tmp_path: Path, git_run) -> None:
+544 |     _commit(git_run, git_repo, "local.txt", "local\n")
+    |
+
+unformatted: File would be reformatted
+    --> tests/test_install.py:71:9
+     |
+70   |         '"${GIT_CURL_VERBOSE:-unset}" "${GIT_TRACE_REDACT:-unset}" >> "$test_root/bootstrap.log"\n'
+     -         'output=\n'
+     -         'url=\n'
+71   +         "output=\n"
+72   +         "url=\n"
+73   |         'while [ "$#" -gt 0 ]; do\n'
+74   |         '  if [ "$1" = "--output" ]; then shift; output=$1\n'
+75   |         '  elif [ "${1#https://}" != "$1" ]; then url=$1; fi\n'
+     -         '  shift\n'
+     -         'done\n'
+76   +         "  shift\n"
+77   +         "done\n"
+78   |         'case "$url" in\n'
+79   |         '  */install-runtime-constraints.txt) cp "$test_root/repository/scripts/install-runtime-constraints.txt" "$output" ;;\n'
+80   |         '  */install-build-constraints.txt) cp "$test_root/repository/scripts/install-build-constraints.txt" "$output" ;;\n'
+81   |         '  *) cp "$test_root/downloaded archive" "$output" ;;\n'
+     -         'esac\n',
+82   +         "esac\n",
+83   |     )
+--------------------------------------------------------------------------------
+87   |         'if [ -e "$test_root/control/bad-checksum" ]; then '
+     -         'digest=0000000000000000000000000000000000000000000000000000000000000000; '
+     -         f'else digest={UV_DARWIN_ARM64_SHA256}; fi\n'
+88   +         "digest=0000000000000000000000000000000000000000000000000000000000000000; "
+89   +         f"else digest={UV_DARWIN_ARM64_SHA256}; fi\n"
+90   |         'printf "%s  archive\\n" "$digest"\n'
+--------------------------------------------------------------------------------
+97   |         'printf "EXTRACT\\n" >> "$test_root/bootstrap.log"\n'
+     -         'destination=\n'
+98   +         "destination=\n"
+99   |         'while [ "$#" -gt 0 ]; do\n'
+100  |         '  if [ "$1" = "-C" ]; then shift; destination=$1; fi\n'
+     -         '  shift\n'
+     -         'done\n'
+101  +         "  shift\n"
+102  +         "done\n"
+103  |         'mkdir -p "$destination/uv-aarch64-apple-darwin"\n'
+104  |         'printf "#!/bin/sh\\nset -eu\\nTEST_ROOT=\'%s\'\\n" "$test_root" > "$destination/uv-aarch64-apple-darwin/uv"\n'
+     -         'cat >> "$destination/uv-aarch64-apple-darwin/uv" <<\'UV\'\n'
+105  +         "cat >> \"$destination/uv-aarch64-apple-darwin/uv\" <<'UV'\n"
+106  |         'printf "UV %s | %s | %s | %s | %s | %s | proxy=%s ca=%s prompt=%s home=%s gitdir=%s header=%s global=%s netrc=%s clientcert=%s pythonpath=%s pythonhome=%s data=%s config=%s template=%s tls=%s trace2=%s trace2event=%s curlverbose=%s redact=%s\\n" '
+--------------------------------------------------------------------------------
+120  |         '    mkdir -p "$UV_PYTHON_INSTALL_DIR" "$UV_PYTHON_BIN_DIR" "$UV_CACHE_DIR"\n'
+     -         '    ;;\n'
+121  +         "    ;;\n"
+122  |         '  *" tool install "*)\n'
+--------------------------------------------------------------------------------
+126  |         '"$UV_TOOL_DIR/intermediate-work" </dev/null >/dev/null 2>&1\n'
+     -         '    fi\n'
+127  +         "    fi\n"
+128  |         '    if [ -e "$TEST_ROOT/control/signal-wrapper" ]; then\n'
+--------------------------------------------------------------------------------
+132  |         '      while [ -e "$TEST_ROOT/control/signal-wrapper" ]; do sleep 0.05; done\n'
+     -         '    fi\n'
+133  +         "    fi\n"
+134  |         '    if [ -e "$TEST_ROOT/control/hold" ]; then\n'
+135  |         '      : > "$TEST_ROOT/control/ready"\n'
+136  |         '      while [ -e "$TEST_ROOT/control/hold" ]; do sleep 0.05; done\n'
+     -         '    fi\n'
+137  +         "    fi\n"
+138  |         '    if [ -e "$TEST_ROOT/control/foreground-hold" ]; then\n'
+139  |         '      sh "$TEST_ROOT/control/foreground-child" "$UV_TOOL_DIR/foreground-work"\n'
+     -         '    fi\n'
+140  +         "    fi\n"
+141  |         '    [ ! -e "$TEST_ROOT/control/fail-tool" ] || exit 73\n'
+142  |         '    mkdir -p "$UV_TOOL_DIR" "$UV_TOOL_BIN_DIR"\n'
+     -         '    cat > "$UV_TOOL_BIN_DIR/rhizome" <<\'APP\'\n'
+     -         '#!/bin/sh\n'
+     -         'set -eu\n'
+     -         'if env | grep \'^UV_\' >/dev/null; then\n'
+143  +         "    cat > \"$UV_TOOL_BIN_DIR/rhizome\" <<'APP'\n"
+144  +         "#!/bin/sh\n"
+145  +         "set -eu\n"
+146  +         "if env | grep '^UV_' >/dev/null; then\n"
+147  |         '  echo "installer UV variables leaked" >&2\n'
+     -         '  exit 90\n'
+     -         'fi\n'
+148  +         "  exit 90\n"
+149  +         "fi\n"
+150  |         'echo "fake rhizome"\n'
+     -         'APP\n'
+151  +         "APP\n"
+152  |         '    chmod 700 "$UV_TOOL_BIN_DIR/rhizome"\n'
+     -         '    ;;\n'
+     -         'esac\n'
+     -         'UV\n'
+153  +         "    ;;\n"
+154  +         "esac\n"
+155  +         "UV\n"
+156  |         'chmod 700 "$destination/uv-aarch64-apple-darwin/uv"\n',
+157  |     )
+158  |     _executable(
+159  |         control / "foreground-child",
+     -         'work=$1\n'
+160  +         "work=$1\n"
+161  |         'test_root=$(CDPATH= cd "$(dirname "$0")/.." && pwd)\n'
+--------------------------------------------------------------------------------
+166  |         '  printf "child owns this work\\n" > "$work/sentinel"\n'
+     -         '  sleep 0.05\n'
+     -         'done\n',
+167  +         "  sleep 0.05\n"
+168  +         "done\n",
+169  |     )
+170  |     _executable(
+171  |         control / "delayed-foreground-child",
+     -         'work=$1\n'
+172  +         "work=$1\n"
+173  |         'test_root=$(CDPATH= cd "$(dirname "$0")/.." && pwd)\n'
+--------------------------------------------------------------------------------
+238  |         '"${GIT_CURL_VERBOSE:-unset}" "${GIT_TRACE_REDACT:-unset}" >> "$test_root/bootstrap.log"\n'
+     -         'output=\n'
+     -         'url=\n'
+239  +         "output=\n"
+240  +         "url=\n"
+241  |         'while [ "$#" -gt 0 ]; do\n'
+242  |         '  if [ "$1" = "-O" ]; then shift; output=$1\n'
+243  |         '  elif [ "${1#https://}" != "$1" ]; then url=$1; fi\n'
+     -         '  shift\n'
+     -         'done\n'
+244  +         "  shift\n"
+245  +         "done\n"
+246  |         'case "$url" in\n'
+247  |         '  */install-runtime-constraints.txt) cp "$test_root/repository/scripts/install-runtime-constraints.txt" "$output" ;;\n'
+248  |         '  */install-build-constraints.txt) cp "$test_root/repository/scripts/install-build-constraints.txt" "$output" ;;\n'
+249  |         '  *) cp "$test_root/downloaded archive" "$output" ;;\n'
+     -         'esac\n',
+250  +         "esac\n",
+251  |     )
+--------------------------------------------------------------------------------
+260  |         '  kill -KILL "$PPID"\n'
+     -         '  exit 99\n'
+     -         'fi\n'
+261  +         "  exit 99\n"
+262  +         "fi\n"
+263  |         'exec /bin/mv "$@"\n',
+--------------------------------------------------------------------------------
+273  |         commands / "rm",
+     -         f'match={shlex.quote(str(match))}\n'
+     -         f'test_root={shlex.quote(str(test_root))}\n'
+274  +         f"match={shlex.quote(str(match))}\n"
+275  +         f"test_root={shlex.quote(str(test_root))}\n"
+276  |         'if [ "${1:-}" = -rf ] && [ "${2:-}" = "$match" ] && '
+--------------------------------------------------------------------------------
+280  |         '  while [ -e "$test_root/control/uninstall-hold" ]; do sleep 0.05; done\n'
+     -         '  exit 74\n'
+     -         'fi\n'
+281  +         "  exit 74\n"
+282  +         "fi\n"
+283  |         'exec /bin/rm "$@"\n',
+--------------------------------------------------------------------------------
+1040 |     journal = root / "transactions" / "rollback"
+     -     journal.write_text(
+     -         f"rhizome-rollback-v1\nrevisions/{REVISION_A}\nrevisions/{REVISION_B}\n"
+     -     )
+1041 +     journal.write_text(f"rhizome-rollback-v1\nrevisions/{REVISION_A}\nrevisions/{REVISION_B}\n")
+1042 |     (root / "current").write_text(f"revisions/{REVISION_A}\n")
+--------------------------------------------------------------------------------
+1054 | @pytest.mark.parametrize("kind", ["directory", "symlink", "foreign-file"])
+     - def test_uninstall_refuses_foreign_reserved_pointer_entries(
+     -     bootstrap_environment, pointer, kind
+     - ):
+1055 + def test_uninstall_refuses_foreign_reserved_pointer_entries(bootstrap_environment, pointer, kind):
+1056 |     environment, root, _ = bootstrap_environment
+     |
+
+unformatted: File would be reformatted
+   --> tests/test_operations.py:26:42
+    |
+25  |         for line in document.lines
+    -         if line.kind in {"add", "delete"}
+    -         and any(needle in line.text for needle in needles)
+26  +         if line.kind in {"add", "delete"} and any(needle in line.text for needle in needles)
+27  |     ]
+--------------------------------------------------------------------------------
+77  |             path.write_text("changed after review\n")
+    -             competing.append(run(
+    -                 ["git", "-C", str(git_repo), "add", "example.txt"],
+    -                 capture_output=True,
+    -             ))
+78  +             competing.append(
+79  +                 run(
+80  +                     ["git", "-C", str(git_repo), "add", "example.txt"],
+81  +                     capture_output=True,
+82  +                 )
+83  +             )
+84  |         return popen(command, *args, **kwargs)
+--------------------------------------------------------------------------------
+174 |
+    - def test_precision_stage_and_unstage_use_coordinator_with_exact_index_effects(
+    -     git_repo, git_run
+    - ):
+175 + def test_precision_stage_and_unstage_use_coordinator_with_exact_index_effects(git_repo, git_run):
+176 |     file = git_repo / "example.txt"
+--------------------------------------------------------------------------------
+224 |         Action("stage", paths=("example.txt",)),
+    -         patch=document, selection=_change_range(document, "old", "reviewed"),
+225 +         patch=document,
+226 +         selection=_change_range(document, "old", "reviewed"),
+227 |     )
+--------------------------------------------------------------------------------
+288 |     with pytest.raises(GitError, match="staged patch"):
+    -         operations.plan(Action("unstage", paths=("example.txt",)), patch=document, selection=selection)
+289 +         operations.plan(
+290 +             Action("unstage", paths=("example.txt",)), patch=document, selection=selection
+291 +         )
+292 |     with pytest.raises(GitError, match="only valid"):
+--------------------------------------------------------------------------------
+373 |
+    - def test_stage_plan_refuses_new_conversion_attributes_for_expanded_paths(
+    -     git_repo, git_run
+    - ):
+374 + def test_stage_plan_refuses_new_conversion_attributes_for_expanded_paths(git_repo, git_run):
+375 |     directory = git_repo / "nested"
+--------------------------------------------------------------------------------
+460 |
+    - def test_discard_stops_when_checkpoint_cannot_cover_tracked_symlink(
+    -     git_repo, git_run, tmp_path
+    - ):
+461 + def test_discard_stops_when_checkpoint_cannot_cover_tracked_symlink(git_repo, git_run, tmp_path):
+462 |     target = git_repo / "target.txt"
+--------------------------------------------------------------------------------
+519 |     operations.submit(upstream_plan)
+    -     assert git_run(git_repo, "rev-parse", "--abbrev-ref", "@{upstream}").stdout.strip() == "origin/main"
+520 +     assert (
+521 +         git_run(git_repo, "rev-parse", "--abbrev-ref", "@{upstream}").stdout.strip()
+522 +         == "origin/main"
+523 +     )
+524 |
+--------------------------------------------------------------------------------
+535 |     operations.submit(operations.plan(Action("fetch", remote="origin")))
+    -     assert git_run(git_repo, "rev-parse", "refs/remotes/origin/main").stdout.strip() == remote_commit
+536 +     assert (
+537 +         git_run(git_repo, "rev-parse", "refs/remotes/origin/main").stdout.strip() == remote_commit
+538 +     )
+539 |
+--------------------------------------------------------------------------------
+565 |     assert operations.activity()[0].state == "failed"
+    -     assert git_run(bare_remote, "show-ref", "--verify", "refs/heads/main", check=False).returncode != 0
+    -     assert git_run(replacement, "show-ref", "--verify", "refs/heads/main", check=False).returncode != 0
+566 +     assert (
+567 +         git_run(bare_remote, "show-ref", "--verify", "refs/heads/main", check=False).returncode != 0
+568 +     )
+569 +     assert (
+570 +         git_run(replacement, "show-ref", "--verify", "refs/heads/main", check=False).returncode != 0
+571 +     )
+572 |
+--------------------------------------------------------------------------------
+579 |     ssh = tmp_path / "slow-ssh"
+    -     ssh.write_text(
+    -         "#!/bin/sh\n"
+    -         f"echo attempt >> {shlex.quote(str(attempts))}\n"
+    -         "sleep 2\n"
+    -         "exit 1\n"
+    -     )
+580 +     ssh.write_text(f"#!/bin/sh\necho attempt >> {shlex.quote(str(attempts))}\nsleep 2\nexit 1\n")
+581 |     ssh.chmod(0o700)
+--------------------------------------------------------------------------------
+602 |
+    - def test_checkout_branch_tag_and_worktree_creation_have_exact_targets(
+    -     git_repo, git_run, tmp_path
+    - ):
+603 + def test_checkout_branch_tag_and_worktree_creation_have_exact_targets(git_repo, git_run, tmp_path):
+604 |     file = git_repo / "example.txt"
+--------------------------------------------------------------------------------
+616 |
+    -     operations.submit(
+    -         operations.plan(Action("create-branch", name="reviewed", target="HEAD"))
+    -     )
+617 +     operations.submit(operations.plan(Action("create-branch", name="reviewed", target="HEAD")))
+618 |     assert git_run(git_repo, "branch", "--show-current").stdout.strip() == "reviewed"
+--------------------------------------------------------------------------------
+637 |     operations = OperationCoordinator(Repository(git_repo))
+    -     plan = operations.plan(
+    -         Action("tag", name="reviewed-tag", target="refs/heads/topic")
+    -     )
+638 +     plan = operations.plan(Action("tag", name="reviewed-tag", target="refs/heads/topic"))
+639 |
+--------------------------------------------------------------------------------
+683 |
+    - def test_checkout_plan_refuses_changed_external_target_attributes(
+    -     git_repo, git_run, tmp_path
+    - ):
+684 + def test_checkout_plan_refuses_changed_external_target_attributes(git_repo, git_run, tmp_path):
+685 |     file = git_repo / "example.txt"
+--------------------------------------------------------------------------------
+717 |     included.write_text(
+    -         "[remote \"origin\"]\n"
+    -         "\tfetch = +refs/heads/main:refs/remotes/reviewed/main\n"
+718 +         '[remote "origin"]\n\tfetch = +refs/heads/main:refs/remotes/reviewed/main\n'
+719 |     )
+--------------------------------------------------------------------------------
+724 |
+    -     included.write_text(
+    -         "[remote \"origin\"]\n"
+    -         "\tfetch = +refs/heads/main:refs/remotes/changed/main\n"
+    -     )
+725 +     included.write_text('[remote "origin"]\n\tfetch = +refs/heads/main:refs/remotes/changed/main\n')
+726 |     with pytest.raises(GitError, match="changed"):
+--------------------------------------------------------------------------------
+740 |
+    - def test_create_worktree_plan_refuses_destination_created_after_review(
+    -     git_repo, git_run, tmp_path
+    - ):
+741 + def test_create_worktree_plan_refuses_destination_created_after_review(git_repo, git_run, tmp_path):
+742 |     git_run(git_repo, "commit", "--allow-empty", "-m", "initial")
+743 |     destination = tmp_path / "new-worktree"
+744 |     operations = OperationCoordinator(Repository(git_repo))
+    -     plan = operations.plan(
+    -         Action("create-worktree", target="HEAD", paths=(str(destination),))
+    -     )
+745 +     plan = operations.plan(Action("create-worktree", target="HEAD", paths=(str(destination),)))
+746 |
+--------------------------------------------------------------------------------
+792 |     assert "protected" in configured_delete.reason
+    -     topic_rename = operations.plan(
+    -         Action("rename-branch", target="topic", name="renamed-topic")
+    -     )
+793 +     topic_rename = operations.plan(Action("rename-branch", target="topic", name="renamed-topic"))
+794 |     assert topic_rename.available is False
+--------------------------------------------------------------------------------
+809 |
+    - def test_detected_remote_default_source_ref_is_protected(
+    -     git_repo, git_run, tmp_path
+    - ):
+810 + def test_detected_remote_default_source_ref_is_protected(git_repo, git_run, tmp_path):
+811 |     git_run(git_repo, "commit", "--allow-empty", "-m", "initial")
+--------------------------------------------------------------------------------
+883 |     assert second.activity()[0].state == "queued"
+    -     assert git_run(other, "show-ref", "--verify", "refs/tags/queued-tag", check=False).returncode != 0
+884 +     assert (
+885 +         git_run(other, "show-ref", "--verify", "refs/tags/queued-tag", check=False).returncode != 0
+886 +     )
+887 |
+--------------------------------------------------------------------------------
+893 |     assert errors == []
+    -     assert git_run(other, "rev-parse", "queued-tag^{}").stdout.strip() == git_run(
+    -         other, "rev-parse", "HEAD"
+    -     ).stdout.strip()
+894 +     assert (
+895 +         git_run(other, "rev-parse", "queued-tag^{}").stdout.strip()
+896 +         == git_run(other, "rev-parse", "HEAD").stdout.strip()
+897 +     )
+898 |
+899 |
+    - def test_activity_is_bounded_to_the_most_recent_twenty_real_operations(
+    -     git_repo, git_run
+    - ):
+900 + def test_activity_is_bounded_to_the_most_recent_twenty_real_operations(git_repo, git_run):
+901 |     git_run(git_repo, "commit", "--allow-empty", "-m", "initial")
+902 |     operations = OperationCoordinator(Repository(git_repo))
+903 |
+904 |     for number in range(22):
+    -         operations.submit(
+    -             operations.plan(Action("tag", name=f"activity-{number}", target="HEAD"))
+    -         )
+905 +         operations.submit(operations.plan(Action("tag", name=f"activity-{number}", target="HEAD")))
+906 |
+--------------------------------------------------------------------------------
+916 |     git_run(git_repo, "branch", "topic")
+    -     later = git_run(git_repo, "commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", "later").stdout.strip()
+917 +     later = git_run(
+918 +         git_repo, "commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", "later"
+919 +     ).stdout.strip()
+920 |     operations = OperationCoordinator(Repository(git_repo))
+    |
+
+unformatted: File would be reformatted
+   --> tests/test_patches.py:74:28
+    |
+73  |         if "update-index" in command and kwargs.get("env", {}).get("GIT_INDEX_FILE"):
+    -             readers.append(run(
+    -                 ["git", "ls-files", "--stage", "-z"], cwd=git_repo, capture_output=True,
+    -             ))
+74  +             readers.append(
+75  +                 run(
+76  +                     ["git", "ls-files", "--stage", "-z"],
+77  +                     cwd=git_repo,
+78  +                     capture_output=True,
+79  +                 )
+80  +             )
+81  |         return result
+--------------------------------------------------------------------------------
+96  |
+    - def test_stage_selected_replacement_preserves_other_worktree_edit(
+    -     git_repo: Path, git_run
+    - ) -> None:
+97  + def test_stage_selected_replacement_preserves_other_worktree_edit(git_repo: Path, git_run) -> None:
+98  |     _commit_file(git_repo, git_run, "notes.txt", b"one\ntwo\nthree\nfour\n")
+--------------------------------------------------------------------------------
+251 | @pytest.mark.parametrize("changed", ["worktree", "index", "head"])
+    - def test_apply_rejects_stale_repository_state(
+    -     git_repo: Path, git_run, changed: str
+    - ) -> None:
+252 + def test_apply_rejects_stale_repository_state(git_repo: Path, git_run, changed: str) -> None:
+253 |     _commit_file(git_repo, git_run, "stale.txt", b"old\n")
+    |
+
+unformatted: File would be reformatted
+   --> tests/test_precision_workspace.py:127:85
+    |
+126 |
+    -         assert git_run(git_repo, "show", ":example.txt").stdout == original.replace("line 2\n", "FIRST CHANGE\n")
+127 +         assert git_run(git_repo, "show", ":example.txt").stdout == original.replace(
+128 +             "line 2\n", "FIRST CHANGE\n"
+129 +         )
+130 |         assert path.read_text() == edited
+    |
+
+unformatted: File would be reformatted
+   --> tests/test_recovery.py:27:29
+    |
+26  |     return sum(
+    -         item.lstat().st_size
+    -         for item in path.rglob("*")
+    -         if item.is_file() and not item.is_symlink()
+27  +         item.lstat().st_size for item in path.rglob("*") if item.is_file() and not item.is_symlink()
+28  |     )
+--------------------------------------------------------------------------------
+42  |     journal = RecoveryJournal(tmp_path / "private")
+    -     checkpoint = journal.prepare(
+    -         Repository(git_repo), operation="reset-hard", paths=("script.sh",)
+    -     )
+43  +     checkpoint = journal.prepare(Repository(git_repo), operation="reset-hard", paths=("script.sh",))
+44  |
+--------------------------------------------------------------------------------
+128 |     with pytest.raises(RecoveryError, match="symlink ancestor"):
+    -         journal.prepare(
+    -             Repository(git_repo), operation="unsafe", paths=("folder/tracked.txt",)
+    -         )
+129 +         journal.prepare(Repository(git_repo), operation="unsafe", paths=("folder/tracked.txt",))
+130 |     assert len(journal.list()) == 1
+--------------------------------------------------------------------------------
+177 |
+    -     future = int(completed.created_at.timestamp() * 1_000_000_000) + 2 * 24 * 60 * 60 * 1_000_000_000
+178 +     future = (
+179 +         int(completed.created_at.timestamp() * 1_000_000_000) + 2 * 24 * 60 * 60 * 1_000_000_000
+180 +     )
+181 |     monkeypatch.setattr(recovery.time, "time_ns", lambda: future)
+--------------------------------------------------------------------------------
+189 |     journal = RecoveryJournal(tmp_path / "private")
+    -     checkpoint = journal.prepare(
+    -         Repository(git_repo), operation="protect", paths=("tracked.txt",)
+    -     )
+190 +     checkpoint = journal.prepare(Repository(git_repo), operation="protect", paths=("tracked.txt",))
+191 |     payload = (
+    -         tmp_path
+    -         / "private"
+    -         / "checkpoints"
+    -         / checkpoint.id
+    -         / "files"
+    -         / "worktree"
+    -         / "tracked.txt"
+192 +         tmp_path / "private" / "checkpoints" / checkpoint.id / "files" / "worktree" / "tracked.txt"
+193 |     )
+--------------------------------------------------------------------------------
+217 |     with pytest.raises(RecoveryError, match="required recovery checkpoint"):
+    -         journal.prepare(
+    -             Repository(git_repo), operation="protect", paths=("tracked.txt",)
+    -         )
+218 +         journal.prepare(Repository(git_repo), operation="protect", paths=("tracked.txt",))
+219 |
+    |
+
+unformatted: File would be reformatted
+   --> tests/test_refresh_workspace.py:98:21
+    |
+97  |                 changed = True
+    -                 run(["git", "-C", str(git_repo), "remote", "set-url", "origin", transient], check=True)
+98  +                 run(
+99  +                     ["git", "-C", str(git_repo), "remote", "set-url", "origin", transient],
+100 +                     check=True,
+101 +                 )
+102 |             if command[0] == "gh":
+103 |                 api_calls.append(command)
+    -                 run(["git", "-C", str(git_repo), "remote", "set-url", "origin", original], check=True)
+    -                 payload = [{
+    -                     "number": 7, "title": "From the transient repository",
+    -                     "head": {"ref": "feature"}, "base": {"ref": "main"},
+    -                     "user": {"login": "reviewer"}, "draft": False,
+    -                 }]
+104 +                 run(
+105 +                     ["git", "-C", str(git_repo), "remote", "set-url", "origin", original],
+106 +                     check=True,
+107 +                 )
+108 +                 payload = [
+109 +                     {
+110 +                         "number": 7,
+111 +                         "title": "From the transient repository",
+112 +                         "head": {"ref": "feature"},
+113 +                         "base": {"ref": "main"},
+114 +                         "user": {"login": "reviewer"},
+115 +                         "draft": False,
+116 +                     }
+117 +                 ]
+118 |                 return subprocess.CompletedProcess(command, 0, json.dumps(payload).encode(), b"")
+--------------------------------------------------------------------------------
+263 |             lines = app.query_one("#precision-lines", DataTable)
+    -             assert any("reviewed locally" in str(lines.get_row_at(row)[0]) for row in range(lines.row_count))
+264 +             assert any(
+265 +                 "reviewed locally" in str(lines.get_row_at(row)[0])
+266 +                 for row in range(lines.row_count)
+267 +             )
+268 |             assert not release.exists()
+    |
+
+unformatted: File would be reformatted
+  --> tests/test_responsive_workspace.py:30:36
+   |
+29 |         primary = [
+   -             app.query_one(selector) for selector in ("#refs-panel", "#inspector-panel")
+30 +             app.query_one(selector)
+31 +             for selector in ("#refs-panel", "#inspector-panel")
+32 |             if app.query_one(selector).display
+   |
+
+unformatted: File would be reformatted
+   --> tests/test_workspace_state.py:14:67
+    |
+13  |
+    - async def test_offline_preference_prevents_automatic_remote_fetch(git_repo, bare_remote, git_run, monkeypatch):
+14  + async def test_offline_preference_prevents_automatic_remote_fetch(
+15  +     git_repo, bare_remote, git_run, monkeypatch
+16  + ):
+17  |     git_run(git_repo, "remote", "add", "origin", str(bare_remote))
+--------------------------------------------------------------------------------
+138 |             assert reopened.screen.query_one("#pr-title", Input).value == title
+    -             assert reopened.screen.query_one("#pr-description", TextArea).text == f"Only for {target}."
+139 +             assert (
+140 +                 reopened.screen.query_one("#pr-description", TextArea).text == f"Only for {target}."
+141 +             )
+142 |             await pilot.press("escape")
+--------------------------------------------------------------------------------
+193 |         await pilot.press("f3")
+    -         reopened.query_one("#commit-message", TextArea).load_text("Do not overwrite unknown saved content")
+194 +         reopened.query_one("#commit-message", TextArea).load_text(
+195 +             "Do not overwrite unknown saved content"
+196 +         )
+197 |         await pilot.pause()
+    |
+
+21 files would be reformatted, 70 files already formatted

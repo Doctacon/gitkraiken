@@ -90,15 +90,17 @@ suppressed in the workspace.
 5. Choose **Commit / F3** and write a summary and optional body. The composer shows
    staged-file scope. Choose **Commit** to run native Git against the reviewed index.
    The workspace temporarily hands over the terminal so hooks/signing can prompt,
-   then resumes. A rejected commit retains your exact draft; success clears it.
+   then resumes. A rejected commit retains your exact draft; success clears the
+   submitted draft and prepares the next composition.
 
 When a repository opens without a nonempty saved draft, the composer loads its
 configured `commit.template`. Saved drafts always win, including comments or
 whitespace. An untouched template is not saved as a draft and must be edited before
 submission. Missing, unreadable, nonregular, oversized (over 1 MiB), undecodable,
 or unsupported-line-ending templates show an error; write your own message or fix
-the template and reopen. After a successful commit the composer stays cleared;
-reopening can seed the next template.
+the template and reopen. After a successful commit, Rhizome reads the current
+template again for the next composition (or leaves the editor empty when no
+template is configured). Newer text entered since submission is preserved.
 
 Accepted text is passed without app-side trimming through stdin, using Git's
 **editor-mode** cleanup (`--edit --no-status --no-verbose -F -`). With default cleanup,
@@ -131,7 +133,10 @@ new result. Refreshing summary data is not permission to retarget a selection.
 Commit drafts are private, worktree-specific state outside the checkout. Linked
 worktrees do not share a draft. Reopening restores text; completing a commit or
 explicitly clearing the editor clears it. A failed write is reported as **not
-saved**, rather than claiming durability.
+saved**, rather than claiming durability. Quit and workspace switching ask before
+leaving unsaved commit text. If another instance updates the same saved state,
+Rhizome keeps both the newer disk state and your unsaved editor text; it does not
+silently overwrite the other instance.
 
 PR title/body drafts are additionally keyed by hosted provider/repository and
 source/target branch intent. Closing the composer retains them; another target
@@ -139,10 +144,41 @@ gets its own draft. A moving source commit does not erase the draft. Successful
 creation clears that intent's saved text; a cleanup failure does not report the
 already-created PR as a failed creation.
 
+### Workspace controls — F4
+
+Choose **Workspace / F4** (also in **Actions**) for the small M1 controls panel:
+
+- Apply offline mode, automatic remote refresh/cadence, plain UI glyphs and local
+  diagnostics preferences to this workspace or to global defaults.
+- **Global offline is a master stop**; a workspace cannot turn networking back on.
+  Changing preferences does not kill or retry a running Git process. Global
+  preferences apply immediately in this app; restart other running instances to
+  load their updated defaults.
+- Reset workspace overrides, the saved view, or global core preferences. Global
+  reset preserves protected-branch configuration, exclusion choices and unrelated settings.
+- Clear commit/PR drafts, or forget this worktree's saved drafts, view and overrides.
+  Confirmations explain what is removed; Git files are never cleared by these controls.
+- **Exclude workspace** removes its saved state and stops further workspace saves
+  and diagnostic recording. Current text remains session-only, with an explicit
+  label. Only an opaque exclusion marker is retained. Re-enabling saves the current
+  session, never an old discarded draft. Removal failures are reported explicitly.
+
+Graph/ref filters, loaded history limit, selected history row, pane sizes/visibility
+and current task/tab can resume. Git actions and captured patch selections are not
+replayed. Plain-glyph mode changes UI symbols, not literal Unicode repository content.
+All controls are keyboard-accessible in the scrollable 80×24 dialog.
+
+**Local diagnostics** previews a bounded, redacted local record of supported events,
+not source text, draft text or telemetry. Export writes exactly the captured preview
+to a new file and refuses an existing destination; later records do not change the
+previewed export. Clear removes the local diagnostic journal, not drafts or Git data.
+Review the preview before sharing it yourself. Rhizome never uploads it.
+
 The state location and installation are [separate](installation.md#locations-and-ownership).
 `settings.json` is a versioned editable file in that state location. Existing core
 preferences include `graph_style`, `offline`, `remote_refresh_enabled`,
-`remote_refresh_interval`, and `protected_branches`. For example:
+`remote_refresh_interval`, `plain_glyphs`, `diagnostics_enabled`, and
+`protected_branches`. For example:
 
 ```json
 {
@@ -158,9 +194,9 @@ preferences include `graph_style`, `offline`, `remote_refresh_enabled`,
 ```
 
 Restart after manual edits. Invalid settings surface an error and pause automatic
-network activity rather than silently enabling defaults. Full settings/keymap UI,
-adaptive themes and the broader persistence controls remain M2 work; the storage
-schema alone is not evidence that every preference is wired into the app.
+network activity rather than silently enabling defaults. The full settings/keymap
+framework and adaptive themes remain M2 work; F4 is deliberately limited to these
+core controls.
 
 ## Safety during the implementation transition
 
@@ -228,6 +264,7 @@ read status is separate. Keyboard arrows or mouse selection inspect a record.
 | `/` or `f`; Enter / Next | Search loaded history; next match |
 | `g` | Smooth / Compact graph |
 | `F2`; `F3` | Files; Commit composer |
+| `F4` / Workspace | Core preferences, saved state and local diagnostics |
 | `v`, arrows, `s` / `u` in precision diff | Select range; stage / unstage |
 | `Esc` / Back | Return from review; clear selection/search; dismiss a dialog |
 | `Ctrl+P` / `x` | Context actions |

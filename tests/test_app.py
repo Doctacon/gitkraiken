@@ -503,9 +503,9 @@ async def test_mixed_index_worktree_file_has_two_diff_choices(demo_repo):
         assert "@@" in preview
 
 
-async def test_empty_repository_and_narrow_screen(tmp_path):
-    subprocess.run(["git", "init", "-b", "main", str(tmp_path)], check=True, capture_output=True)
-    app = RhizomeApp(tmp_path)
+async def test_empty_repository_and_narrow_screen(git_repo):
+    # Keep isolated XDG/application state outside the repository being inspected.
+    app = RhizomeApp(git_repo)
     async with app.run_test(size=(100, 32)) as pilot:
         await settle(app, pilot)
         assert app.snapshot_data is not None
@@ -1207,9 +1207,7 @@ async def test_compact_commit_header_gives_space_to_file_tree(git_repo, git_run,
 
 
 @pytest.mark.parametrize("operation", ["fetch", "pull", "push"])
-async def test_network_toolbar_actions_obey_m1_gates(
-    branch_repo, bare_remote, git_run, operation
-):
+async def test_network_toolbar_actions_obey_m1_gates(branch_repo, bare_remote, git_run, operation):
     remote_before = git(bare_remote, "rev-parse", "refs/heads/main")
     operation_tip = ""
     if operation == "push":
@@ -1243,7 +1241,9 @@ async def test_network_toolbar_actions_obey_m1_gates(
         assert (branch_repo / "base.txt").read_bytes() == before_content
         if operation == "pull":
             assert "pull is unavailable until its M3 guarded plan" in app._last_error
-            assert git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)") == before_refs
+            assert (
+                git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)") == before_refs
+            )
             assert git(branch_repo, "rev-parse", "refs/remotes/origin/main") == remote_before
             assert git(bare_remote, "rev-parse", "refs/heads/main") == operation_tip
         elif operation == "fetch":
@@ -1271,9 +1271,7 @@ def rebase_repo(branch_repo, git_run):
 
 
 @pytest.mark.parametrize("target", ["refs/heads/test", "refs/remotes/origin/test"])
-async def test_right_click_rebase_is_gated_without_mutating_selected_context(
-    rebase_repo, target
-):
+async def test_right_click_rebase_is_gated_without_mutating_selected_context(rebase_repo, target):
     before_head = git(rebase_repo, "rev-parse", "HEAD")
     before_index = git(rebase_repo, "ls-files", "--stage")
     before_status = git(rebase_repo, "status", "--porcelain=v1")
@@ -1580,9 +1578,7 @@ async def test_graph_badge_context_resolves_exact_branch(branch_repo):
 
 
 @pytest.mark.parametrize("mode", ["reset-soft", "reset-mixed", "reset-hard"])
-async def test_graph_reset_picker_refuses_gated_modes_without_mutation(
-    branch_repo, git_run, mode
-):
+async def test_graph_reset_picker_refuses_gated_modes_without_mutation(branch_repo, git_run, mode):
     git_run(branch_repo, "switch", "test")
     app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
@@ -1724,9 +1720,7 @@ async def test_context_remote_delete_picker_is_explicit_but_m1_refuses_deletion(
     app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
-        before_local_refs = git(
-            branch_repo, "for-each-ref", "--format=%(refname) %(objectname)"
-        )
+        before_local_refs = git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)")
         await click_reference(app, pilot, "refs/remotes/origin/test", button=3)
         await choose_option(app, pilot, "delete-remote-branch")
         await settle(app, pilot)
@@ -1734,7 +1728,10 @@ async def test_context_remote_delete_picker_is_explicit_but_m1_refuses_deletion(
         label = app.screen.query_one(OptionList).get_option("delete").prompt.plain
         assert "Delete test on origin" in label and str(bare_remote) in label
         await pilot.press("escape")
-        assert git(bare_remote, "for-each-ref", "--format=%(refname) %(objectname)") == before_remote_refs
+        assert (
+            git(bare_remote, "for-each-ref", "--format=%(refname) %(objectname)")
+            == before_remote_refs
+        )
 
         await click_reference(app, pilot, "refs/remotes/origin/test", button=3)
         await choose_option(app, pilot, "delete-remote-branch")
@@ -1743,8 +1740,14 @@ async def test_context_remote_delete_picker_is_explicit_but_m1_refuses_deletion(
         await settle(app, pilot)
         assert "unavailable until exact target-ref restoration is proven" in app._last_error
         assert git(branch_repo, "rev-parse", "HEAD") == before_head
-        assert git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)") == before_local_refs
-        assert git(bare_remote, "for-each-ref", "--format=%(refname) %(objectname)") == before_remote_refs
+        assert (
+            git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)")
+            == before_local_refs
+        )
+        assert (
+            git(bare_remote, "for-each-ref", "--format=%(refname) %(objectname)")
+            == before_remote_refs
+        )
         assert (branch_repo / "base.txt").read_bytes() == before_content
         assert app.snapshot_data.branch == "main"
 
@@ -1770,18 +1773,20 @@ async def test_context_remote_delete_mapping_change_remains_fail_closed(
             "remote.origin.fetch",
             "+refs/heads/other:refs/remotes/origin/test",
         )
-        before_local_refs = git(
-            branch_repo, "for-each-ref", "--format=%(refname) %(objectname)"
-        )
-        before_remote_refs = git(
-            bare_remote, "for-each-ref", "--format=%(refname) %(objectname)"
-        )
+        before_local_refs = git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)")
+        before_remote_refs = git(bare_remote, "for-each-ref", "--format=%(refname) %(objectname)")
         await choose_option(app, pilot, "delete")
         await settle(app, pilot)
         assert "unavailable until exact target-ref restoration is proven" in app._last_error
         assert git(branch_repo, "rev-parse", "HEAD") == before_head
-        assert git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)") == before_local_refs
-        assert git(bare_remote, "for-each-ref", "--format=%(refname) %(objectname)") == before_remote_refs
+        assert (
+            git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)")
+            == before_local_refs
+        )
+        assert (
+            git(bare_remote, "for-each-ref", "--format=%(refname) %(objectname)")
+            == before_remote_refs
+        )
         assert git(branch_repo, "config", "remote.origin.fetch") == (
             "+refs/heads/other:refs/remotes/origin/test"
         )

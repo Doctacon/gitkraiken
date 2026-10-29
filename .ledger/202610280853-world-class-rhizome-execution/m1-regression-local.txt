@@ -1,0 +1,28 @@
+....F..........F....................F...
+=================================== FAILURES ===================================
+______ test_graph_timeline_stays_newest_first_across_styles_and_load_more ______
+tests/test_app.py:265: in test_graph_timeline_stays_newest_first_across_styles_and_load_more
+    assert app.snapshot_data.has_more
+E   AssertionError: assert False
+E    +  where False = Snapshot(root=PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1581/test_g...rrent=True, bare=False, detached=False, locked=False, lock_reason='', prunable=False, prune_reason='', primary=True),)).has_more
+E    +    where Snapshot(root=PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1581/test_g...rrent=True, bare=False, detached=False, locked=False, lock_reason='', prunable=False, prune_reason='', primary=True),)) = RhizomeApp(title='Rhizome', classes={'-light-mode'}, pseudo_classes={'focus', 'light'}).snapshot_data
+___________________ test_empty_repository_and_narrow_screen ____________________
+tests/test_app.py:513: in test_empty_repository_and_narrow_screen
+    assert app.query_one("#graph-table", DataTable).row_count == 0
+E   AssertionError: assert 1 == 0
+E    +  where 1 = HistoryTable(id='graph-table').row_count
+E    +    where HistoryTable(id='graph-table') = query_one('#graph-table', DataTable)
+E    +      where query_one = RhizomeApp(title='Rhizome', classes={'-light-mode'}, pseudo_classes={'focus', 'light'}).query_one
+_ test_out_of_window_tip_does_not_filter_or_autoload_but_explicit_load_reveals_it _
+tests/test_app.py:940: in test_out_of_window_tip_does_not_filter_or_autoload_but_explicit_load_reveals_it
+    assert main not in app._commits and topic in app._commits
+E   AssertionError: assert ('40954f68947cfd8ae4b881e4d36c1222fab19fee' not in {'797699d35eabf99c5577c1724890d66afadf02e3': Commit(oid='797699d35eabf99c5577c1724890d66afadf02e3', parents=('40954f68... email='test@example.invalid', date='2026-10-29T09:05:10-07:00', subject='Base', refs=('main', 'origin/main', 'HEAD'))})
+E    +  where {'797699d35eabf99c5577c1724890d66afadf02e3': Commit(oid='797699d35eabf99c5577c1724890d66afadf02e3', parents=('40954f68... email='test@example.invalid', date='2026-10-29T09:05:10-07:00', subject='Base', refs=('main', 'origin/main', 'HEAD'))} = RhizomeApp(title='Rhizome', classes={'-light-mode'}, pseudo_classes={'focus', 'light'})._commits
+=========================== short test summary info ============================
+FAILED tests/test_app.py::test_graph_timeline_stays_newest_first_across_styles_and_load_more
+FAILED tests/test_app.py::test_empty_repository_and_narrow_screen - Assertion...
+FAILED tests/test_app.py::test_out_of_window_tip_does_not_filter_or_autoload_but_explicit_load_reveals_it
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! KeyboardInterrupt !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+/Users/crlough/.local/share/uv/python/cpython-3.13.0-macos-aarch64-none/lib/python3.13/asyncio/runners.py:123: KeyboardInterrupt
+(to show a full traceback on KeyboardInterrupt use --full-trace)
+3 failed, 37 passed in 178.21s (0:02:58)

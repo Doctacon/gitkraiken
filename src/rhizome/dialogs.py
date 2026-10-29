@@ -275,6 +275,8 @@ class HelpDialog(ModalScreen[None]):
             with VerticalScroll():
                 yield Static(
                     Text(
+                        "DAILY FLOW: inspect a changed file, choose exact lines or a hunk, stage, then write a commit.\n"
+                        "This is optional guidance—your existing Git message style still works.\n\n"
                         "↑ ↓ / j k     Navigate history and file lists\n"
                         "Enter / click Inspect commit/file; select branch context\n"
                         "/ or f        Search message, author, SHA, or ref\n"
@@ -284,6 +286,7 @@ class HelpDialog(ModalScreen[None]):
                         "Ctrl+P / x    Actions for the selected item\n"
                         "Ctrl+L        Activity (closing never cancels Git)\n"
                         "F2 / F3       Files / commit composer\n"
+                        "F4            Workspace controls and local diagnostics\n"
                         "Ctrl+O        Open another local repository\n"
                         "Ctrl+R / r    Refresh local state\n"
                         "Ctrl+B        Create a branch\n"
@@ -310,7 +313,11 @@ class HelpDialog(ModalScreen[None]):
                         "Drag pane dividers to resize the sidebar or inspector.\n"
                         "Drag a column header's right-edge │ to resize it.\n"
                         "Sizes are remembered for this running session.\n"
-                        "Small panes show one primary task: Files, Commit, Refs or Back.\n\n"
+                        "Small panes show one primary task: Files, Commit, Refs or Back.\n"
+                        "F4 settings apply to this workspace or all workspaces. Global offline\n"
+                        "is the master stop for network work; a workspace cannot bypass it.\n"
+                        "Excluding a workspace keeps drafts, view and preferences session-only.\n"
+                        "Reopen restores saved draft and view context when it is still valid.\n\n"
                         "Smooth graph: rounded bends and spaced, colored lanes.\n"
                         "Broken horizontal lines pass behind vertical lanes;\n"
                         "crossings are not joins. Dotted tails mean more history.\n"

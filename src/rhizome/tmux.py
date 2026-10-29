@@ -76,10 +76,10 @@ def hotkey(*, socket: str, client: str, pane: str) -> None:
         "-p",
         "-t",
         pane,
-        "#{@rhizome_popup}\t#{@rhizome_origin}",
+        "#{@rhizome_popup}|#{@rhizome_origin}",
         socket=socket,
     ).stdout.removesuffix("\n")
-    popup, _, origin = markers.partition("\t")
+    popup, _, origin = markers.partition("|")
     if origin:
         with _pane_lock(origin, socket=socket):
             _run("swap-pane", "-d", "-Z", "-s", origin, "-t", pane, socket=socket)
@@ -145,8 +145,10 @@ def launch_pane(root: Path, *, pane: str, socket: str) -> None:
         app = _pane_value(f"={session}:", "#{@rhizome_app}", socket=socket, check=False)
         reused = bool(app)
         if not app:
-            size = _pane_value(pane, "#{pane_width}\t#{pane_height}", socket=socket)
-            width, height = size.split("\t")
+            # tmux replaces control separators with '_' in a C locale. These
+            # numeric/owned-ID fields use a printable separator instead.
+            size = _pane_value(pane, "#{pane_width}|#{pane_height}", socket=socket)
+            width, height = size.split("|")
             # Bootstrap with a harmless process. Install the death hook before
             # starting the app, so even an immediate startup failure is restored.
             created = _run(
@@ -154,7 +156,7 @@ def launch_pane(root: Path, *, pane: str, socket: str) -> None:
                 "-d",
                 "-P",
                 "-F",
-                "#{session_id}\t#{pane_id}",
+                "#{session_id}|#{pane_id}",
                 "-s",
                 session,
                 "-x",
@@ -166,7 +168,7 @@ def launch_pane(root: Path, *, pane: str, socket: str) -> None:
                 "sleep 86400",
                 socket=socket,
             ).stdout.strip()
-            parking, app = created.split("\t")
+            parking, app = created.split("|")
             try:
                 _run("set-option", "-t", parking, "destroy-unattached", "off", socket=socket)
                 _run("set-option", "-t", parking, "status", "off", socket=socket)
@@ -331,9 +333,9 @@ def launch(root: Path, *, popup: bool = False, client: str = "", socket: str = "
                 "Could not open tmux popup. tmux >= 3.2 and an attached client are required."
             )
     elif inside:
-        windows = run("list-windows", "-F", "#{window_id}\t#{@rhizome_id}").stdout
+        windows = run("list-windows", "-F", "#{window_id}|#{@rhizome_id}").stdout
         for line in windows.splitlines():
-            window, _, marker = line.partition("\t")
+            window, _, marker = line.partition("|")
             if marker == key:
                 run("select-window", "-t", window)
                 _notify_focus(window, socket=socket)

@@ -5,7 +5,47 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  quality-current:
+    name: ${{ matrix.name }} · current Git · non-installer checks
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-latest
+          - name: macOS
+            os: macos-14
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Show and check current tool versions
+        run: |
+          uname -a
+          git --version
+          uv --version
+          uv run python --version
+          uv run python - <<'PY'
+          import re, subprocess
+          text = subprocess.check_output(["git", "--version"], text=True)
+          found = tuple(map(int, re.search(r"(\d+)\.(\d+)", text).groups()))
+          assert found >= (2, 36), text
+          PY
+      - name: Ruff lint
+        run: uv run ruff check .
+      - name: Ruff format
+        run: uv run ruff format --check .
+      - name: Non-installer test suite
+        run: uv run pytest --ignore=tests/test_install.py
+      - name: Build distributions
+        run: uv build
+
+  full-suite:
+    name: Linux · complete suite (includes deferred installer regression)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,20 +54,135 @@ jobs:
           python-version: '3.13'
           enable-cache: true
       - run: uv sync --locked
-      - name: Show tool versions
+      # This is deliberately a normal, required run: the known installer
+      # crash/retry lifecycle defect remains visible as a red result.
+      - name: Complete test suite
+        run: uv run pytest
+
+  tmux-current:
+    name: ${{ matrix.name }} · current Git/tmux integration
+    env:
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-latest
+            provision: sudo apt-get update && sudo apt-get install -y tmux
+          - name: macOS
+            os: macos-14
+            provision: HOMEBREW_NO_AUTO_UPDATE=1 brew install tmux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Provision hosted-runner tmux
+        run: ${{ matrix.provision }}
+      - name: Show and check Git/tmux floors
         run: |
+          uname -a
           git --version
-          uv --version
-          uv run python --version
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
-      - run: uv run pytest
-      - name: Install tmux for Linux integration checks
-        run: sudo apt-get update && sudo apt-get install -y tmux
-      - name: Test tmux windows, popups, and pane-local prefix+g
+          tmux -V
+          uv run python - <<'PY'
+          import re, subprocess
+          for command, floor in [(["git", "--version"], (2, 36)), (["tmux", "-V"], (3, 2))]:
+              text = subprocess.check_output(command, text=True)
+              found = tuple(map(int, re.search(r"(\d+)\.(\d+)", text).groups()))
+              assert found >= floor, text
+          PY
+      - name: Test isolated tmux windows, explicit popups, and pane journeys
         run: |
           uv run python scripts/tmux_smoke.py
           uv run python scripts/popup_smoke.py
           uv run python scripts/popup_smoke.py --hotkey
           uv run python scripts/pane_smoke.py
-      - run: uv build
+
+  minimum-tools:
+    name: Linux · Git 2.36.0 · tmux 3.2
+    runs-on: ubuntu-latest
+    env:
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+      GIT_SOURCE_SHA256: af5ebfc1658464f5d0d45a2bfd884c935fb607a10cc021d95bc80778861cc1d3
+      TMUX_SOURCE_SHA256: 664d345338c11cbe429d7ff939b92a5191e231a7c1ef42f381cebacb1e08a399
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Provision source-build dependencies on the hosted runner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libssl-dev \
+            libcurl4-openssl-dev libexpat1-dev zlib1g-dev libevent-dev libncurses-dev
+      - name: Build verified minimum Git and tmux in runner-temporary paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          sources="$RUNNER_TEMP/minimum-sources"
+          git_prefix="$RUNNER_TEMP/git-2.36.0"
+          tmux_prefix="$RUNNER_TEMP/tmux-3.2"
+          mkdir -p "$sources"
+
+          curl --fail --silent --show-error --location \
+            https://www.kernel.org/pub/software/scm/git/git-2.36.0.tar.xz \
+            --output "$sources/git-2.36.0.tar.xz"
+          echo "$GIT_SOURCE_SHA256  $sources/git-2.36.0.tar.xz" | sha256sum --check -
+          tar -C "$sources" -xf "$sources/git-2.36.0.tar.xz"
+          make -C "$sources/git-2.36.0" -j2 prefix="$git_prefix" \
+            NO_GETTEXT=YesPlease NO_TCLTK=YesPlease all
+          make -C "$sources/git-2.36.0" prefix="$git_prefix" \
+            NO_GETTEXT=YesPlease NO_TCLTK=YesPlease install
+
+          curl --fail --silent --show-error --location \
+            https://github.com/tmux/tmux/releases/download/3.2/tmux-3.2.tar.gz \
+            --output "$sources/tmux-3.2.tar.gz"
+          echo "$TMUX_SOURCE_SHA256  $sources/tmux-3.2.tar.gz" | sha256sum --check -
+          tar -C "$sources" -xf "$sources/tmux-3.2.tar.gz"
+          (cd "$sources/tmux-3.2" && ./configure --prefix="$tmux_prefix")
+          make -C "$sources/tmux-3.2" -j2
+          make -C "$sources/tmux-3.2" install
+
+          echo "$git_prefix/bin" >> "$GITHUB_PATH"
+          echo "$tmux_prefix/bin" >> "$GITHUB_PATH"
+      - name: Verify exact minimum versions
+        run: |
+          test "$(git --version)" = "git version 2.36.0"
+          test "$(tmux -V)" = "tmux 3.2"
+          git --exec-path
+      - name: Non-installer suite on minimum Git
+        run: uv run pytest --ignore=tests/test_install.py
+      - name: Isolated tmux journeys on minimum tools
+        run: |
+          uv run python scripts/tmux_smoke.py
+          uv run python scripts/popup_smoke.py
+          uv run python scripts/popup_smoke.py --hotkey
+          uv run python scripts/pane_smoke.py
+
+  performance-smoke:
+    name: Linux · benchmark tooling smoke (not reference acceptance)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Run disposable reduced benchmark profile
+        run: |
+          uv run python scripts/benchmark_m1.py \
+            --smoke --samples 2 --warm-runs 1 \
+            --output "$RUNNER_TEMP/m1-performance-smoke.json" >/dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m1-performance-smoke-${{ github.run_id }}
+          path: ${{ runner.temp }}/m1-performance-smoke.json

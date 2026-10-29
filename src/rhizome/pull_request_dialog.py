@@ -61,12 +61,14 @@ class PullRequestDialog(ModalScreen[str | None]):
         *,
         draft: tuple[str, str] = ("", ""),
         save_draft: Callable[[str, str], None] | None = None,
+        session_only: bool = False,
     ) -> None:
         super().__init__()
         self.plan = plan
         self._create = create
         self._draft = draft
         self._save_draft = save_draft
+        self._session_only = session_only
         self._submitting = False
         self._copying = False
         self.created_url = ""
@@ -122,7 +124,11 @@ class PullRequestDialog(ModalScreen[str | None]):
         except Exception as error:
             status.update(Text("Draft not saved: " + str(error)))
         else:
-            status.update("Draft saved locally" if title or description else "Draft is empty")
+            status.update(
+                "Session-only draft · saving excluded"
+                if self._session_only
+                else ("Draft saved locally" if title or description else "Draft is empty")
+            )
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "pr-title":

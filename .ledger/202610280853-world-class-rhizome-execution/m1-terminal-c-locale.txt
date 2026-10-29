@@ -1,0 +1,1 @@
+PASS: real public launch_pane creates and swaps the correct app pane under LC_ALL=C.

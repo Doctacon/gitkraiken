@@ -130,8 +130,37 @@ class _DiagnosticJournal:
             self._atomic_write(self._path, b"".join(_line_bytes(entry) for entry in retained))
         return copy.deepcopy(retained)
 
-    def export(self, destination: Path) -> Path:
-        diagnostics = self.preview()
+    def clear(self) -> None:
+        # Explicit deletion also permits discarding a corrupt journal, but never
+        # follows a link or removes anything other than this owned regular file.
+        _reject_symlink_components(self._path)
+        try:
+            if not self._path.exists():
+                return
+            if not stat.S_ISREG(self._path.lstat().st_mode):
+                raise StateSecurityError("Private diagnostics must be a regular file.")
+            self._path.unlink()
+            directory = os.open(self._path.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+        except OSError:
+            raise StateIOError("Unable to clear local diagnostics safely.") from None
+
+    @staticmethod
+    def export_preview(records: list[dict[str, Any]]) -> str:
+        """Render the complete export document, shared by preview and publication."""
+        diagnostics = copy.deepcopy(records)
+        try:
+            if type(diagnostics) is not list:
+                raise ValueError
+            for entry in diagnostics:
+                _DiagnosticJournal._validate_entry(entry)
+            if sum(len(_line_bytes(entry)) for entry in diagnostics) > DIAGNOSTIC_MAX_BYTES:
+                raise ValueError
+        except (ValueError, TypeError, KeyError):
+            raise StateValidationError("The diagnostic preview is invalid or too large.") from None
         document = {
             "schema_version": SCHEMA_VERSION,
             "policy": {
@@ -142,9 +171,17 @@ class _DiagnosticJournal:
             },
             "diagnostics": diagnostics,
         }
-        content = (
-            json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-        ).encode("utf-8")
+        return json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+
+    def export(
+        self,
+        destination: Path,
+        *,
+        records: list[dict[str, Any]] | None = None,
+    ) -> Path:
+        content = self.export_preview(self.preview() if records is None else records).encode(
+            "utf-8"
+        )
         target = _absolute(destination)
         self._atomic_export(target, content)
         return target
@@ -254,7 +291,10 @@ class _DiagnosticJournal:
                 os.fsync(descriptor)
             os.close(descriptor)
             descriptor = None
-            os.replace(temporary, target)
+            # Atomic no-clobber publication: a user-selected destination may
+            # exist or appear after the preview. Never replace that content.
+            os.link(temporary, target)
+            temporary.unlink()
             directory = os.open(target.parent, os.O_RDONLY)
             try:
                 os.fsync(directory)

@@ -29,6 +29,30 @@ def listings():
     )
 
 
+async def test_manual_refresh_does_not_immediately_rescan_the_same_repository(
+    git_repo, monkeypatch
+):
+    from rhizome.persistence import WorkspaceStateStore
+
+    WorkspaceStateStore().save("global", {"offline": True})
+    snapshots = []
+    snapshot = Repository.snapshot
+
+    def observe(repo, limit=300):
+        snapshots.append(repo.root)
+        return snapshot(repo, limit)
+
+    monkeypatch.setattr(Repository, "snapshot", observe)
+    app = RhizomeApp(git_repo)
+    app.LOCAL_REFRESH_INTERVAL = 3600  # Separate requested work from the periodic poll.
+    async with app.run_test(size=(120, 40)) as pilot:
+        await settle(app, pilot)
+        snapshots.clear()
+        await pilot.press("ctrl+r")
+        await settle(app, pilot)
+        assert snapshots == [git_repo]
+
+
 async def test_local_poll_keeps_controls_and_unchanged_graph_stable(git_repo):
     app = RhizomeApp(git_repo)
     async with app.run_test(size=(120, 40)) as pilot:
@@ -64,12 +88,17 @@ async def test_open_fetches_remote_commits_without_pulling(
     peer = tmp_path / "peer"
     git_run(tmp_path, "clone", str(bare_remote), str(peer))
     git_run(peer, "commit", "--allow-empty", "-m", "Remote update")
+    remote_head = git_run(peer, "rev-parse", "HEAD").stdout.strip()
     git_run(peer, "push")
     app = RhizomeApp(git_repo)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         assert app.snapshot_data.behind == 1
         assert app.snapshot_data.head == head
+        remote = app.query_one(ReferenceSidebar).get_selection("remote:refs/remotes/origin/main")
+        assert remote is not None and remote.oid == remote_head
+        row = app.query_one(HistoryTable).get_row(remote_head)
+        assert "Remote update" in " ".join(str(cell) for cell in row)
         assert git_run(git_repo, "status", "--porcelain").stdout == ""
 
 
@@ -91,7 +120,9 @@ def hosted_transport(remote_workspace, git_run, monkeypatch):
     def local_fetch(command, *args, **kwargs):
         if command[0] == "git" and "fetch" in command:
             command = [
-                command[0], "-c", f"url.{destination}.insteadOf=https://github.com/org/repo",
+                command[0],
+                "-c",
+                f"url.{destination}.insteadOf=https://github.com/org/repo",
                 *command[1:],
             ]
         return run(command, *args, **kwargs)

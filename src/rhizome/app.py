@@ -60,6 +60,15 @@ from .ref_badges import RefBadges, build_ref_badges
 from .resizable_table import ResizableDataTable
 from .sidebar import ReferenceSidebar, SidebarSelection
 from .theme import MUTED, TEAL, TEXT
+from .workspace_controls import DiagnosticsDialog, WorkspaceControlRequest, WorkspaceControlsDialog
+
+_CORE_SETTINGS = (
+    "offline",
+    "remote_refresh_enabled",
+    "remote_refresh_interval",
+    "plain_glyphs",
+    "diagnostics_enabled",
+)
 
 
 def patch_text(patch: str) -> Text:
@@ -192,6 +201,7 @@ class RhizomeApp(App[None]):
         Binding("ctrl+right", "toggle_inspector", "Inspector", show=False),
         Binding("f2", "show_files", "Files", show=False),
         Binding("f3", "show_composer", "Commit", show=False),
+        Binding("f4", "workspace_settings", "Workspace", show=False),
         Binding("escape", "clear_filter", "Clear selection", show=False),
     ]
 
@@ -248,7 +258,16 @@ class RhizomeApp(App[None]):
         self._restoring_draft = False
         self._state_error = ""
         self._settings = dict(DEFAULT_SETTINGS)
+        self._global_settings = dict(DEFAULT_SETTINGS)
         self._settings_error = ""
+        self._workspace_identity_key = ""
+        self._state_excluded = False
+        self._diagnostic_error = ""
+        self._pending_view: dict = {}
+        self._restoring_view = False
+        self._view_error = ""
+        self._preferences_error = ""
+        self._task_view = "primary"
 
     @property
     def _selected_ref(self) -> str:
@@ -280,6 +299,7 @@ class RhizomeApp(App[None]):
             yield Button("Refs", id="show-refs")
             yield Button("Back [Esc]", id="show-primary")
             yield Button("Activity", id="activity")
+            yield Button("Workspace [F4]", id="workspace-settings")
         with Horizontal(id="operation-banner"):
             yield Static(id="operation-text")
             yield Button("Continue", id="continue", classes="operation-button")
@@ -347,8 +367,11 @@ class RhizomeApp(App[None]):
                             yield ResizableDataTable(id="wip-table", cursor_type="row")
                             yield Static("Working directory is clean.", id="wip-empty")
                         yield Static("No staged changes", id="staged-summary")
-                        yield Label("COMMIT MESSAGE · summary, then optional body", classes="composer-label")
+                        yield Label(
+                            "COMMIT MESSAGE · summary, then optional body", classes="composer-label"
+                        )
                         yield TextArea(id="commit-message", theme="github_light")
+                        yield Static("Summary, blank line, optional body", id="composer-guidance")
                         yield Static("Draft is empty", id="draft-status")
                         yield Button("Commit", id="commit", variant="primary")
         yield Static("Ready", id="status-line")
@@ -370,6 +393,7 @@ class RhizomeApp(App[None]):
                 self._draft_error(str(error))
             else:
                 self.notify(escape("Settings: " + str(error)), severity="error", timeout=12)
+        self._global_settings = dict(self._settings)
         self.REMOTE_REFRESH_INTERVAL = self._settings["remote_refresh_interval"]
         self.graph_style = self._settings["graph_style"]
         self.query_one("#graph-style", Button).label = Text(f"{self.graph_style.title()} [g]")
@@ -387,6 +411,7 @@ class RhizomeApp(App[None]):
             f"Remote refresh interval: {self.REMOTE_REFRESH_INTERVAL}s; settings can pause network access."
         )
         self.set_interval(self.LOCAL_REFRESH_INTERVAL, self.poll_repository)
+        self.set_interval(1.0, self._save_navigation_context)
         self.request_refresh()
         self.query_one("#graph-table").focus()
 
@@ -406,24 +431,55 @@ class RhizomeApp(App[None]):
         editor.read_only = True
         self._restoring_draft = True
         self._workspace_key = ""
+        self._workspace_identity_key = ""
         self._workspace_state = {}
         self._saved_draft = ""
         self._commit_template_seed = None
+        self._pending_view = {}
+        self._state_excluded = False
+        self._settings = dict(self._global_settings)
+        self._reset_workspace_view()
         editor.clear()
         try:
             # Keep destructive actions unavailable until the workspace has a
             # usable recovery review; ordinary commits keep their existing guard.
             self._operations = await asyncio.to_thread(
-                OperationCoordinator, repo,
+                OperationCoordinator,
+                repo,
                 protected_branches=tuple(self._settings["protected_branches"]),
             )
             if self._state_store is None:
                 return
             key = await asyncio.to_thread(self._state_identity, repo)
-            state = await asyncio.to_thread(self._state_store.load, key)
+            self._workspace_identity_key = key
+            self._state_excluded = key in self._global_settings["excluded_workspaces"]
+            state = (
+                {} if self._state_excluded else await asyncio.to_thread(self._state_store.load, key)
+            )
+            self._preferences_error = self._view_error = ""
+            try:
+                overrides = self._validated_core_settings(state.get("preferences", {}))
+                self._settings.update(overrides)
+            except StateValidationError as error:
+                self._preferences_error = str(error)
+                self._settings["offline"] = True
+                self.notify(escape(str(error)), severity="warning")
+            self._apply_core_settings()
+            try:
+                self._pending_view = (
+                    self._validated_view(state["view"]) if state.get("view") else {}
+                )
+            except StateValidationError as error:
+                self._view_error = str(error)
+                self._pending_view = {}
+                self.notify(escape(str(error)), severity="warning")
+            self.limit = self._pending_view.get("history_limit", self.limit)
+            self._history_key = self._pending_view.get("history_key", "wip")
             draft = state.get("draft", "")
             if not isinstance(draft, str):
-                raise StateValidationError("The saved commit draft is invalid; it was not replaced.")
+                raise StateValidationError(
+                    "The saved commit draft is invalid; it was not replaced."
+                )
             editor.load_text(draft)
             if editor.text != draft:
                 editor.clear()
@@ -436,8 +492,11 @@ class RhizomeApp(App[None]):
             self._workspace_key = key
             self._state_error = ""
             self.query_one("#draft-status", Static).update(
-                "Draft restored locally" if draft else "Draft is empty"
+                "Session only · saving excluded"
+                if self._state_excluded
+                else ("Draft restored locally" if draft else "Draft is empty")
             )
+            self._record_diagnostic("workspace.opened", {"offline": self._settings["offline"]})
             # Any nonempty saved text is authoritative, including whitespace or
             # comments. Never even read a configured template over a user draft.
             if not draft:
@@ -447,6 +506,7 @@ class RhizomeApp(App[None]):
         finally:
             self._restoring_draft = False
             editor.read_only = False
+            self._update_composer_guidance()
 
     async def _seed_commit_template(self, repo: Repository, editor: TextArea) -> None:
         try:
@@ -459,18 +519,23 @@ class RhizomeApp(App[None]):
                 # TextArea normalizes mixed line endings. Do not present altered
                 # template text or persist it as though it were the user's draft.
                 editor.load_text(previous)
-                raise GitError("The commit template's line endings cannot be preserved by the composer.")
+                raise GitError(
+                    "The commit template's line endings cannot be preserved by the composer."
+                )
             self._commit_template_seed = template
             # Suppress the initial Changed event without saving the seed. An
             # untouched template must not become an authoritative restored draft.
             self._saved_draft = template
-            self.query_one("#draft-status", Static).update("Template loaded · edit before committing")
+            self.query_one("#draft-status", Static).update(
+                "Template loaded · edit before committing"
+            )
         except (GitError, OSError) as error:
             message = "Template not loaded: " + str(error)
             self.query_one("#draft-status", Static).update(Text(message))
             self.notify(
                 escape(message + " Write your own message or fix the template and reopen."),
-                severity="warning", timeout=12,
+                severity="warning",
+                timeout=12,
             )
 
     def _draft_error(self, message: str) -> None:
@@ -482,49 +547,493 @@ class RhizomeApp(App[None]):
         self._state_error = message
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
-        if (
-            event.text_area.id != "commit-message"
-            or not self._workspace_key or self._restoring_draft
-        ):
+        if event.text_area.id != "commit-message":
+            return
+        self._update_composer_guidance()
+        if not self._workspace_key or self._restoring_draft:
             return
         draft = event.text_area.text
-        if draft == self._saved_draft or self._state_store is None:
-            return
+        if draft != self._saved_draft:
+            self._save_commit_draft(draft)
+
+    def _save_commit_draft(self, draft: str) -> bool:
         try:
             state = {**self._workspace_state, "draft": draft}
-            # Small atomic local writes complete before reporting the draft saved;
-            # there is no cancellable background writer that can replay older text.
-            self._state_store.save(self._workspace_key, state)
+            if not self._state_excluded:
+                if self._state_store is None or not self._workspace_key:
+                    raise StateValidationError("Workspace storage is unavailable.")
+                self._state_store.save(self._workspace_key, state, expected=self._workspace_state)
             self._workspace_state = state
             self._saved_draft = draft
             self._state_error = ""
-            self.query_one("#draft-status", Static).update(
-                "Draft saved locally" if draft else "Draft cleared"
+            self.screen_stack[0].query_one("#draft-status", Static).update(
+                "Session only · saving excluded"
+                if self._state_excluded
+                else ("Draft saved locally" if draft else "Draft cleared")
             )
+            return True
         except PersistenceError as error:
             self._draft_error(str(error))
+            return False
+
+    def _update_composer_guidance(self) -> None:
+        workspace = self.screen_stack[0]
+        text = workspace.query_one("#commit-message", TextArea).text
+        lines = text.splitlines()
+        summary = lines[0] if lines else ""
+        hint = f"First line: {len(summary)} characters"
+        if len(summary) > 72:
+            hint += " · consider a shorter summary (optional)"
+        elif len(lines) > 1 and lines[1].strip():
+            hint += " · a blank line can separate the body"
+        else:
+            hint += " · blank line, then optional body"
+        workspace.query_one("#composer-guidance", Static).update(Text(hint))
+
+    @staticmethod
+    def _validated_core_settings(value: object) -> dict:
+        if not isinstance(value, dict) or value.keys() - set(_CORE_SETTINGS):
+            raise StateValidationError(
+                "Saved workspace preferences are invalid; reset them in Workspace."
+            )
+        for key, item in value.items():
+            if key == "remote_refresh_interval":
+                valid = type(item) is int and item >= 1
+            else:
+                valid = type(item) is bool
+            if not valid:
+                raise StateValidationError(
+                    "Saved workspace preferences are invalid; reset them in Workspace."
+                )
+        return dict(value)
+
+    @staticmethod
+    def _validated_view(value: object) -> dict:
+        if not isinstance(value, dict):
+            raise StateValidationError("Saved navigation is invalid; reset the view in Workspace.")
+        view = {}
+        for key in ("history_key", "graph_filter", "ref_filter"):
+            item = value.get(key, "")
+            if not isinstance(item, str) or len(item) > 1024:
+                raise StateValidationError(
+                    "Saved navigation is invalid; reset the view in Workspace."
+                )
+            view[key] = item
+        for key, allowed, default in (
+            ("task", {"primary", "files", "composer", "refs"}, "primary"),
+            ("tab", {"wip-tab", "details-tab"}, "wip-tab"),
+        ):
+            view[key] = value.get(key, default)
+            if not isinstance(view[key], str) or view[key] not in allowed:
+                raise StateValidationError(
+                    "Saved navigation is invalid; reset the view in Workspace."
+                )
+        for key in ("refs_collapsed", "inspector_collapsed"):
+            view[key] = value.get(key, False)
+            if type(view[key]) is not bool:
+                raise StateValidationError(
+                    "Saved navigation is invalid; reset the view in Workspace."
+                )
+        for key in ("refs_width", "inspector_width", "history_limit"):
+            item = value.get(key, 300 if key == "history_limit" else None)
+            if (key == "history_limit" and item is None) or (
+                item is not None and (type(item) is not int or not 1 <= item <= 5000)
+            ):
+                raise StateValidationError(
+                    "Saved navigation is invalid; reset the view in Workspace."
+                )
+            view[key] = item
+        return view
+
+    def _apply_core_settings(self) -> None:
+        # Global offline is a master stop; a repository cannot opt out of it.
+        self._settings["offline"] = self._global_settings["offline"] or self._settings["offline"]
+        self.REMOTE_REFRESH_INTERVAL = self._settings["remote_refresh_interval"]
+        self.graph_style = self._settings["graph_style"]
+        workspace = self.screen_stack[0]
+        plain = self._settings["plain_glyphs"]
+        workspace.query_one(ReferenceSidebar).set_plain_glyphs(plain)
+        workspace.query_one(CommitFileTree).set_plain_glyphs(plain)
+        workspace.query_one(PrecisionDiff).set_plain_glyphs(plain)
+        workspace.query_one("#graph-style", Button).label = Text(f"{self.graph_style.title()} [g]")
+        for ident, normal, fallback in (
+            ("pull", "↓ Pull", "Pull"),
+            ("push", "↑ Push", "Push"),
+            ("branch", "⑂ Branch", "Branch"),
+            ("refresh", "↻", "Refresh"),
+            ("actions", "Actions ▾", "Actions"),
+        ):
+            button = workspace.query_one(f"#{ident}", Button)
+            button.label = fallback if plain else normal
+            # Textual 1.0 label changes repaint but don't invalidate auto width.
+            button.refresh(layout=True)
+        self._graph_cache_key = None
+        self._next_remote_refresh = 0.0
+
+    def _record_diagnostic(self, event: str, metadata: dict) -> None:
+        if (
+            self._state_store is None
+            or self._state_excluded
+            or not self._settings["diagnostics_enabled"]
+        ):
+            return
+        try:
+            self._state_store.record_diagnostic(event, metadata)
+            self._diagnostic_error = ""
+        except PersistenceError as error:
+            # Diagnostics never turn a successful Git operation into a failure.
+            message = str(error)
+            if message != self._diagnostic_error:
+                self.notify(
+                    "Local diagnostics unavailable; Git work is unaffected.", severity="warning"
+                )
+            self._diagnostic_error = message
+
+    def _save_navigation_context(self) -> None:
+        if (
+            not self.is_running
+            or not self.is_mounted
+            or not self.snapshot_data
+            or not self._workspace_key
+            or self._restoring_draft
+            or self._restoring_view
+            or self._pending_view
+            or self.busy
+            or len(self.screen_stack) > 1
+            or self._state_error
+            or self._view_error
+        ):
+            return
+        workspace = self.screen_stack[0]
+        view = {
+            "history_key": self._history_key,
+            "history_limit": self.limit,
+            "graph_filter": workspace.query_one("#graph-filter", Input).value[:1024],
+            "ref_filter": workspace.query_one("#ref-filter", Input).value[:1024],
+            "task": self._task_view,
+            "tab": workspace.query_one("#inspector-tabs", TabbedContent).active,
+            "refs_collapsed": workspace.query_one("#refs-panel").has_class("collapsed"),
+            "inspector_collapsed": workspace.query_one("#inspector-panel").has_class("collapsed"),
+            "refs_width": workspace.query_one("#refs-splitter", PaneSplitter).preferred_size,
+            "inspector_width": workspace.query_one(
+                "#inspector-splitter", PaneSplitter
+            ).preferred_size,
+        }
+        if view == self._workspace_state.get("view"):
+            return
+        try:
+            self._persist_workspace({**self._workspace_state, "view": view})
+        except PersistenceError as error:
+            self._draft_error(str(error))
+
+    def _restore_navigation_context(self) -> None:
+        if not self._pending_view or len(self.screen_stack) > 1:
+            return
+        view, self._pending_view = self._pending_view, {}
+        self._restoring_view = True
+        try:
+            workspace = self.screen_stack[0]
+            search = workspace.query_one("#graph-filter", Input)
+            with search.prevent(Input.Changed):
+                search.value = view.get("graph_filter", "")
+            self.update_search(jump=False)
+            workspace.query_one("#ref-filter", Input).value = view.get("ref_filter", "")
+            workspace.query_one("#inspector-tabs", TabbedContent).active = view.get(
+                "tab", "wip-tab"
+            )
+            for pane in ("refs", "inspector"):
+                splitter = workspace.query_one(f"#{pane}-splitter", PaneSplitter)
+                splitter.preferred_size = view.get(f"{pane}_width")
+            task = view.get("task", "primary")
+            if task != "primary":
+                getattr(self, f"action_show_{task}")()
+            else:
+                self.action_show_primary()
+            for pane in ("refs", "inspector"):
+                collapsed = view.get(f"{pane}_collapsed", False)
+                workspace.query_one(f"#{pane}-panel").set_class(collapsed, "collapsed")
+                workspace.query_one(f"#{pane}-splitter").set_class(collapsed, "collapsed")
+            self.call_after_refresh(self._fit_panes)
+            saved_key = view.get("history_key")
+            if saved_key and saved_key != "wip" and saved_key not in self._commits:
+                self.notify("Saved history selection is no longer loaded; showing current context.")
+        finally:
+            self._restoring_view = False
+
+    def _persist_workspace(self, state: dict) -> None:
+        if not self._state_excluded:
+            if self._state_store is None or not self._workspace_key:
+                raise StateValidationError(
+                    "Workspace storage is unavailable; use Forget saved state to reset it."
+                )
+            self._state_store.save(self._workspace_key, state, expected=self._workspace_state)
+        self._workspace_state = state
+
+    def action_workspace_settings(self) -> None:
+        if self.busy or len(self.screen_stack) > 1:
+            return
+        self._save_navigation_context()
+        self.push_screen(
+            WorkspaceControlsDialog(
+                global_settings=self._global_settings,
+                overrides=self._workspace_state.get("preferences", {}),
+                excluded=self._state_excluded,
+                state_error=self._state_error
+                or self._settings_error
+                or self._preferences_error
+                or self._view_error,
+            ),
+            self._workspace_control,
+        )
+
+    def _workspace_control(self, request: WorkspaceControlRequest | None) -> None:
+        if request is None:
+            return
+        if request.action == "diagnostics":
+            self.action_diagnostics()
+            return
+        if request.action in {"settings", "reset-overrides"}:
+            self._apply_workspace_control(request)
+            return
+        descriptions = {
+            "clear-drafts": "Clear this worktree's commit and PR drafts? Git files are unchanged.",
+            "reset-view": "Reset this workspace's navigation and layout? Drafts are kept.",
+            "forget-workspace": "Forget this worktree's saved drafts, view and overrides? Git files are unchanged.",
+            "toggle-exclusion": (
+                "Resume saving this worktree's current session? Old saved state will not be restored."
+                if self._state_excluded
+                else "Stop saving this worktree and remove its saved drafts, view and overrides? Current text stays session-only."
+            ),
+            "reset-global": "Reset global preferences to defaults? Exclusion choices are kept.",
+        }
+        if request.action not in descriptions:
+            return
+        self.push_screen(
+            ActionPicker(
+                descriptions[request.action],
+                [("confirm", "Confirm"), ("cancel", "Keep current state")],
+            ),
+            lambda choice: self._apply_workspace_control(request) if choice == "confirm" else None,
+        )
+
+    def _apply_workspace_control(self, request: WorkspaceControlRequest) -> None:
+        try:
+            store = self._state_store
+            if store is None:
+                raise StateValidationError("Private state storage is unavailable.")
+            action = request.action
+            if action == "settings":
+                values = self._validated_core_settings(request.settings)
+                if request.scope == "global":
+                    current = store.load("global")
+                    settings = {**current, **values}
+                    store.save("global", settings, expected=current)
+                    self._global_settings = settings
+                else:
+                    self._persist_workspace({**self._workspace_state, "preferences": values})
+            elif action == "reset-global":
+                current = store.load("global")
+                # Only reset this M1 dialog's preferences; never erase protected
+                # branches, future keymaps, or explicit exclusion policies.
+                settings = {
+                    **current,
+                    **{name: DEFAULT_SETTINGS[name] for name in (*_CORE_SETTINGS, "graph_style")},
+                }
+                store.save("global", settings, expected=current)
+                self._global_settings = settings
+            elif action == "reset-overrides":
+                self._persist_workspace({**self._workspace_state, "preferences": {}})
+            elif action == "toggle-exclusion":
+                key = self._workspace_identity_key
+                if not key:
+                    raise StateValidationError(
+                        "Reopen the workspace before changing its saving policy."
+                    )
+                current = store.load("global")
+                excluded = set(current["excluded_workspaces"])
+                if self._state_excluded:
+                    # Discard old retained bytes before lifting exclusion; never
+                    # resurrect an earlier draft after an incomplete purge.
+                    store.clear(key)
+                    excluded.discard(key)
+                else:
+                    excluded.add(key)
+                settings = {**current, "excluded_workspaces": sorted(excluded)}
+                store.save("global", settings, expected=current)
+                self._global_settings = settings
+                self._state_excluded = key in excluded
+                self._workspace_key = key
+                if self._state_excluded:
+                    try:
+                        store.clear(key)
+                    except PersistenceError as error:
+                        raise StateValidationError(
+                            "Saving is excluded, but old saved data could not be purged. Use Forget saved state to retry removal."
+                        ) from error
+                else:
+                    store.save(key, self._workspace_state, expected={})
+            elif action == "forget-workspace":
+                store.clear(self._workspace_identity_key)
+                self._workspace_key = self._workspace_identity_key
+                self._workspace_state = {}
+                self._clear_visible_drafts()
+                self._reset_workspace_view()
+            elif action == "clear-drafts":
+                self._persist_workspace(
+                    {**self._workspace_state, "draft": "", "pull_request_drafts": {}}
+                )
+                self._clear_visible_drafts()
+            elif action == "reset-view":
+                self._persist_workspace({**self._workspace_state, "view": {}})
+                self._reset_workspace_view()
+            self._settings = {
+                **self._global_settings,
+                **self._validated_core_settings(self._workspace_state.get("preferences", {})),
+            }
+            self._apply_core_settings()
+            self._state_error = ""
+            self._preferences_error = ""
+            if action == "reset-global" or (action == "settings" and request.scope == "global"):
+                self._settings_error = ""
+            text = self.query_one("#commit-message", TextArea).text
+            if text != self._saved_draft and text != self._commit_template_seed:
+                if not self._save_commit_draft(text):
+                    return
+            self.query_one("#draft-status", Static).update(
+                "Session only · saving excluded"
+                if self._state_excluded
+                else (
+                    "Template loaded · edit before committing"
+                    if text == self._commit_template_seed
+                    else "Draft saved locally"
+                    if text
+                    else "Draft is empty"
+                )
+            )
+            self._record_diagnostic(
+                "workspace.preferences", {"operation": action, "status": "saved"}
+            )
+            if self.snapshot_data:
+                self.run_worker(
+                    self.apply_snapshot(self.snapshot_data), group="view", exit_on_error=False
+                )
+            self.status("Workspace preferences updated · running Git work is not cancelled")
+        except PersistenceError as error:
+            self._draft_error(str(error))
+
+    def _clear_visible_drafts(self) -> None:
+        self._saved_draft = ""
+        self._commit_template_seed = None
+        self.query_one("#commit-message", TextArea).clear()
+
+    def _reset_workspace_view(self) -> None:
+        self._view_error = ""
+        self._pending_view = {}
+        self._history_key = "wip"
+        self.query_one("#graph-filter", Input).value = ""
+        self.query_one("#ref-filter", Input).value = ""
+        for pane in ("refs", "inspector"):
+            splitter = self.query_one(f"#{pane}-splitter", PaneSplitter)
+            splitter.preferred_size = None
+            splitter.remove_class("collapsed")
+            panel = self.query_one(f"#{pane}-panel")
+            panel.remove_class("collapsed")
+            panel.styles.width = None
+        self.back_to_graph()
+        self.action_show_primary()
+
+    def action_diagnostics(self) -> None:
+        if len(self.screen_stack) > 1:
+            return
+        store = self._state_store
+        if store is None:
+            self.notify("Local diagnostics storage is unavailable.", severity="warning")
+            return
+        try:
+            all_records = store.diagnostics_preview()
+            records = all_records[-100:]
+            preview = store.diagnostics_export_preview(records)
+            self._diagnostic_error = ""
+            error = ""
+            summary = f"Latest {len(records)} of {len(all_records)} retained records · export uses this captured preview"
+        except PersistenceError as failure:
+            records, preview = [], "[]"
+            error, summary = (
+                str(failure),
+                "Diagnostics could not be read; explicit Clear can discard the damaged log.",
+            )
+
+        def complete(action: str | None) -> None:
+            if action == "clear":
+                self.push_screen(
+                    ActionPicker(
+                        "Clear all local diagnostics? Drafts and settings are kept.",
+                        [("confirm", "Clear diagnostics"), ("cancel", "Keep diagnostics")],
+                    ),
+                    lambda choice: self._clear_diagnostics() if choice == "confirm" else None,
+                )
+            elif action == "export" and not error:
+                default = (
+                    store.root / "exports" / f"diagnostics-{datetime.now(UTC):%Y%m%d-%H%M%S}.json"
+                )
+
+                def export(path: str | None) -> None:
+                    if not path:
+                        return
+                    try:
+                        result = store.export_diagnostics(Path(path).expanduser(), records=records)
+                        self.status(f"Exported the previewed diagnostics to {result}")
+                    except PersistenceError as failure:
+                        self.show_error(str(failure))
+
+                self.push_screen(
+                    PromptDialog(
+                        "EXPORT PREVIEWED DIAGNOSTICS · new file only", "Destination", str(default)
+                    ),
+                    export,
+                )
+
+        self.push_screen(DiagnosticsDialog(preview=preview, summary=summary, error=error), complete)
+
+    def _clear_diagnostics(self) -> None:
+        try:
+            if self._state_store is not None:
+                self._state_store.clear_diagnostics()
+                self._diagnostic_error = ""
+                self.status("Local diagnostics cleared; drafts and preferences unchanged")
+        except PersistenceError as error:
+            self.show_error(str(error))
 
     def _pull_request_draft(self, plan: PullRequestPlan) -> tuple[str, tuple[str, str]]:
         # A draft follows branch intent, not a moving commit OID. Distinct hosted
         # repositories, source branches, and targets never share composer text.
-        identity = "\0".join((
-            plan.repository.provider, plan.repository.web_url,
-            plan.source_branch, plan.target_branch,
-        ))
+        identity = "\0".join(
+            (
+                plan.repository.provider,
+                plan.repository.web_url,
+                plan.source_branch,
+                plan.target_branch,
+            )
+        )
         key = hashlib.sha256(identity.encode("utf-8", "surrogateescape")).hexdigest()
         drafts = self._workspace_state.get("pull_request_drafts", {})
         if not isinstance(drafts, dict):
             raise StateValidationError("Saved PR drafts are invalid; they were not replaced.")
         value = drafts.get(key, {"title": "", "description": ""})
         if (
-            not isinstance(value, dict) or set(value) != {"title", "description"}
+            not isinstance(value, dict)
+            or set(value) != {"title", "description"}
             or not all(isinstance(text, str) for text in value.values())
         ):
             raise StateValidationError("The saved PR draft is invalid; it was not replaced.")
         return key, (value["title"], value["description"])
 
     def _save_pull_request_draft(
-        self, workspace: str, key: str, title: str, description: str,
+        self,
+        workspace: str,
+        key: str,
+        title: str,
+        description: str,
     ) -> None:
         if not workspace or workspace != self._workspace_key or self._state_store is None:
             raise StateValidationError("This workspace's draft storage is unavailable.")
@@ -537,7 +1046,8 @@ class RhizomeApp(App[None]):
         else:
             drafts.pop(key, None)
         state = {**self._workspace_state, "pull_request_drafts": drafts}
-        self._state_store.save(workspace, state)
+        if not self._state_excluded:
+            self._state_store.save(workspace, state, expected=self._workspace_state)
         self._workspace_state = state
 
     def _configure_history_columns(self) -> None:
@@ -595,8 +1105,11 @@ class RhizomeApp(App[None]):
         workspace.set_class(constrained, "pane-constrained")
         if not constrained:
             workspace.remove_class(
-                "responsive-inspector", "responsive-history-only", "responsive-refs",
-                "task-files", "task-composer",
+                "responsive-inspector",
+                "responsive-history-only",
+                "responsive-refs",
+                "task-files",
+                "task-composer",
             )
         elif not was_constrained:
             workspace.remove_class("responsive-inspector", "responsive-refs")
@@ -637,7 +1150,9 @@ class RhizomeApp(App[None]):
 
     def _can_refresh(self, repo: Repository) -> bool:
         return (
-            self.repo is repo and not self.busy and self._terminal_active
+            self.repo is repo
+            and not self.busy
+            and self._terminal_active
             and len(self.screen_stack) == 1
         )
 
@@ -650,34 +1165,46 @@ class RhizomeApp(App[None]):
                 generation, epoch = self._generation, self._mutation_epoch
                 snapshot = await asyncio.to_thread(repo.snapshot, self.limit)
             if (
-                not self._can_refresh(repo) or generation != self._generation
+                not self._can_refresh(repo)
+                or generation != self._generation
                 or epoch != self._mutation_epoch
             ):
                 return
             await self._apply_refresh(snapshot)
-            if (
-                self._settings["offline"]
-                or not self._settings["remote_refresh_enabled"]
-                or self._remote_refreshing is repo
-                or monotonic() < self._next_remote_refresh
-            ):
-                return
-            coordinator = self._operations
-            if coordinator is None or coordinator.repository is not repo:
-                return
-            self._remote_refreshing = repo
-            self.run_worker(
-                self.refresh_remotes(repo, coordinator, snapshot),
-                group="remote-refresh", exit_on_error=False,
-            )
+            self._start_remote_refresh()
         except Exception as error:
             if self.repo is repo:
                 self._set_refresh_error(str(error))
         finally:
             self._refreshing = False
 
+    def _start_remote_refresh(self) -> None:
+        """Use the snapshot already presented; don't rescan just to schedule fetch."""
+        repo, snapshot, coordinator = self.repo, self.snapshot_data, self._operations
+        if (
+            repo is None
+            or snapshot is None
+            or not self._can_refresh(repo)
+            or self._settings["offline"]
+            or not self._settings["remote_refresh_enabled"]
+            or self._remote_refreshing is repo
+            or monotonic() < self._next_remote_refresh
+            or coordinator is None
+            or coordinator.repository is not repo
+        ):
+            return
+        self._remote_refreshing = repo
+        self.run_worker(
+            self.refresh_remotes(repo, coordinator, snapshot),
+            group="remote-refresh",
+            exit_on_error=False,
+        )
+
     async def refresh_remotes(
-        self, repo: Repository, coordinator: OperationCoordinator, requested: Snapshot,
+        self,
+        repo: Repository,
+        coordinator: OperationCoordinator,
+        requested: Snapshot,
     ) -> None:
         """Fetch is serialized with mutations, not with immutable/local inspection.
 
@@ -713,7 +1240,8 @@ class RhizomeApp(App[None]):
             if self.repo is not repo:
                 return
             if (
-                self._can_refresh(repo) and generation == self._generation
+                self._can_refresh(repo)
+                and generation == self._generation
                 and epoch == self._mutation_epoch
             ):
                 await self._apply_refresh(snapshot)
@@ -748,7 +1276,8 @@ class RhizomeApp(App[None]):
                 sidebar.set_pull_requests_loading(False)
                 self._last_remote_refresh = monotonic()
                 if (
-                    not remotes_changed and self.snapshot_data
+                    not remotes_changed
+                    and self.snapshot_data
                     and requested.remotes == self.snapshot_data.remotes
                 ):
                     self._next_remote_refresh = monotonic() + self.REMOTE_REFRESH_INTERVAL
@@ -783,8 +1312,10 @@ class RhizomeApp(App[None]):
                 await self._apply_refresh(snapshot)
             if not quiet:
                 freshness = (
-                    "offline · network paused" if self._settings["offline"]
-                    else "remote updates run automatically" if self._settings["remote_refresh_enabled"]
+                    "offline · network paused"
+                    if self._settings["offline"]
+                    else "remote updates run automatically"
+                    if self._settings["remote_refresh_enabled"]
                     else "automatic remote updates paused"
                 )
                 self.status("Local state refreshed · " + freshness)
@@ -793,7 +1324,7 @@ class RhizomeApp(App[None]):
             self.show_error(str(error))
         finally:
             self.set_busy(False)
-            self.poll_repository()
+            self._start_remote_refresh()
 
     async def apply_snapshot(self, snapshot: Snapshot) -> None:
         new_repository = self.snapshot_data is None or self.snapshot_data.root != snapshot.root
@@ -808,8 +1339,16 @@ class RhizomeApp(App[None]):
         if "DEMO" in self.title:
             header.append(" DEMO ", style="bold #9a5a00")
         header.append(f" / {snapshot.root.name}  ", style=f"bold {TEXT}")
-        header.append(f"⑂ {snapshot.branch or 'detached HEAD'}", style=TEAL)
-        header.append(f"   ↑{snapshot.ahead} ↓{snapshot.behind}", style=MUTED)
+        plain = self._settings["plain_glyphs"]
+        header.append(
+            f"{'branch' if plain else '⑂'} {snapshot.branch or 'detached HEAD'}", style=TEAL
+        )
+        header.append(
+            f"   ahead {snapshot.ahead} behind {snapshot.behind}"
+            if plain
+            else f"   ↑{snapshot.ahead} ↓{snapshot.behind}",
+            style=MUTED,
+        )
         if snapshot.upstream:
             header.append(f"   {snapshot.upstream}", style=MUTED)
         self.query_one("#repo-header", Static).update(header)
@@ -825,7 +1364,9 @@ class RhizomeApp(App[None]):
             if any(line.commit and line.commit.oid == selection.oid for line in snapshot.history):
                 self._history_key = selection.oid
                 self._reveal_ref_key = None
-        self._ref_badges = build_ref_badges(snapshot, self._selected_ref)
+        self._ref_badges = build_ref_badges(
+            snapshot, self._selected_ref, plain_glyphs=self._settings["plain_glyphs"]
+        )
         self.repaint_history()
         self.paint_wip(snapshot.files)
         banner = self.query_one("#operation-banner")
@@ -881,6 +1422,8 @@ class RhizomeApp(App[None]):
             else:
                 self.back_to_graph()
         self.update_controls()
+        if new_repository and self._pending_view:
+            self.call_after_refresh(self._restore_navigation_context)
 
     def _clear_reference_selection(self) -> None:
         self._sidebar_selection = None
@@ -892,7 +1435,9 @@ class RhizomeApp(App[None]):
         if not self.snapshot_data:
             return
         old = self._ref_badges
-        self._ref_badges = build_ref_badges(self.snapshot_data, self._selected_ref)
+        self._ref_badges = build_ref_badges(
+            self.snapshot_data, self._selected_ref, plain_glyphs=self._settings["plain_glyphs"]
+        )
         table = self.query_one("#graph-table", DataTable)
         for oid in self._commits:
             if oid in table.rows and old.get(oid) != self._ref_badges.get(oid):
@@ -927,7 +1472,11 @@ class RhizomeApp(App[None]):
             self.action_clear_filter()
             self.status("Unified graph · all local and remote branches")
         elif selection.oid in self._commits:
-            hint = " · use Checkout in Actions or the context menu" if selection.kind in {"local", "remote"} else ""
+            hint = (
+                " · use Checkout in Actions or the context menu"
+                if selection.kind in {"local", "remote"}
+                else ""
+            )
             self.status(f"Selected {selection.label}{hint} · graph position unchanged")
         else:
             self.status(f"Selected {selection.label} · tip is outside the loaded unified graph")
@@ -1024,7 +1573,8 @@ class RhizomeApp(App[None]):
             if self.repo is not repo:
                 return
             if (
-                self._can_refresh(repo) and generation == self._generation
+                self._can_refresh(repo)
+                and generation == self._generation
                 and epoch == self._mutation_epoch
             ):
                 await self._apply_refresh(snapshot)
@@ -1359,7 +1909,9 @@ class RhizomeApp(App[None]):
                     except PersistenceError as error:
                         # Creation has already happened: a cleanup error must not
                         # present a failed creation or invite duplicate publication.
-                        self._draft_error("PR created, but its saved draft was not cleared: " + str(error))
+                        self._draft_error(
+                            "PR created, but its saved draft was not cleared: " + str(error)
+                        )
                     return url
                 finally:
                     self.busy = False
@@ -1378,7 +1930,10 @@ class RhizomeApp(App[None]):
 
             self.push_screen(
                 PullRequestDialog(
-                    plan, create, draft=draft,
+                    plan,
+                    create,
+                    draft=draft,
+                    session_only=self._state_excluded,
                     save_draft=lambda title, description: self._save_pull_request_draft(
                         workspace, draft_key, title, description
                     ),
@@ -1524,9 +2079,12 @@ class RhizomeApp(App[None]):
         self._rebuilding = True
         table = self.query_one("#graph-table", DataTable)
         previous_scroll = table.scroll_offset
-        cache_key = (self.snapshot_data.history, self.graph_style)
+        plain = self._settings["plain_glyphs"]
+        cache_key = (self.snapshot_data.history, self.graph_style, plain)
         if cache_key != self._graph_cache_key:
-            self._graph_rows = render_history(self.snapshot_data.history, self.graph_style)
+            self._graph_rows = render_history(
+                self.snapshot_data.history, self.graph_style, plain_glyphs=plain
+            )
             self._graph_cache_key = cache_key
         heading = Text("COMMIT GRAPH", no_wrap=True, overflow="ellipsis")
         if any("╴" in row.graph.plain for row in self._graph_rows):
@@ -1547,7 +2105,12 @@ class RhizomeApp(App[None]):
         self._commits = {}
         if dirty:
             table.add_row(
-                Text(" ◉" if self.graph_style == "smooth" else "◉", style=TEAL),
+                Text(
+                    (" *" if self.graph_style == "smooth" else "*")
+                    if plain
+                    else (" ◉" if self.graph_style == "smooth" else "◉"),
+                    style=TEAL,
+                ),
                 Text("WIP", style=TEAL),
                 "",  # Working changes have no commit author.
                 "",  # Working changes have no commit timestamp.
@@ -1891,7 +2454,8 @@ class RhizomeApp(App[None]):
             return
         self.run_mutation(
             Action("unstage" if event.document.staged else "stage", paths=(event.document.path,)),
-            patch=event.document, selection=(event.start, event.end),
+            patch=event.document,
+            selection=(event.start, event.end),
         )
 
     def on_precision_diff_refresh_requested(self, event: PrecisionDiff.RefreshRequested) -> None:
@@ -2011,6 +2575,8 @@ class RhizomeApp(App[None]):
             self.network_action(ident)
         elif ident in {"stage", "unstage", "discard", "stage-all", "unstage-all"}:
             self.wip_action(ident)
+        elif ident == "workspace-settings":
+            self.action_workspace_settings()
         elif ident == "commit":
             self.commit_changes()
         elif ident in {"continue", "abort"}:
@@ -2082,6 +2648,8 @@ class RhizomeApp(App[None]):
             [
                 ("all", "Unified graph / clear reference selection"),
                 ("graph-style", "Switch Smooth / Compact commit graph"),
+                ("workspace-settings", "Workspace preferences, saved state and diagnostics [F4]"),
+                ("diagnostics", "Preview / export local diagnostics (no upload)"),
                 ("help", "Keyboard shortcuts and help"),
             ]
         )
@@ -2090,7 +2658,11 @@ class RhizomeApp(App[None]):
     def handle_picked_action(self, operation: str | None) -> None:
         if not operation:
             return
-        if operation == "open":
+        if operation == "workspace-settings":
+            self.action_workspace_settings()
+        elif operation == "diagnostics":
+            self.action_diagnostics()
+        elif operation == "open":
             self.action_open_repository()
         elif operation == "refresh":
             self.action_refresh()
@@ -2173,7 +2745,9 @@ class RhizomeApp(App[None]):
 
     def network_action(self, operation: str) -> None:
         if self._settings["offline"]:
-            self.status("Offline mode: network actions are unavailable until re-enabled in settings.")
+            self.status(
+                "Offline mode: network actions are unavailable until re-enabled in settings."
+            )
             return
         if not self.snapshot_data or not self.snapshot_data.remotes:
             self.notify(
@@ -2224,7 +2798,10 @@ class RhizomeApp(App[None]):
         self.run_mutation(Action("commit", message=message))
 
     def run_mutation(
-        self, action: Action, *, patch: PatchDocument | None = None,
+        self,
+        action: Action,
+        *,
+        patch: PatchDocument | None = None,
         selection: tuple[int, int] | None = None,
     ) -> None:
         if self.busy or not self.repo or len(self.screen_stack) > 1:
@@ -2236,19 +2813,26 @@ class RhizomeApp(App[None]):
         self.set_busy(True, f"Running {action.operation}…")
         self.run_worker(
             self.mutate(action, patch=patch, selection=selection),
-            group="repository", exit_on_error=False,
+            group="repository",
+            exit_on_error=False,
         )
 
     @staticmethod
     def _execute_reviewed(
-        coordinator: OperationCoordinator, action: Action, *,
-        patch: PatchDocument | None = None, selection: tuple[int, int] | None = None,
+        coordinator: OperationCoordinator,
+        action: Action,
+        *,
+        patch: PatchDocument | None = None,
+        selection: tuple[int, int] | None = None,
     ) -> str:
         plan = coordinator.plan(action, patch=patch, selection=selection)
         return coordinator.submit(plan)
 
     async def mutate(
-        self, action: Action, *, patch: PatchDocument | None = None,
+        self,
+        action: Action,
+        *,
+        patch: PatchDocument | None = None,
         selection: tuple[int, int] | None = None,
     ) -> None:
         try:
@@ -2262,7 +2846,9 @@ class RhizomeApp(App[None]):
                 failure: BaseException | None = None
                 with self.suspend():
                     try:
-                        print("Rhizome: committing staged changes; hooks/signing may request input.")
+                        print(
+                            "Rhizome: committing staged changes; hooks/signing may request input."
+                        )
                         result = self._execute_reviewed(coordinator, action)
                     except BaseException as error:
                         # Textual 1.x resumes only on normal context exit. Restore
@@ -2283,8 +2869,27 @@ class RhizomeApp(App[None]):
             # Textual toasts require markup strings, not Rich Text renderables.
             self.notify(escape(result or "Done"))
             if action.operation == "commit":
-                self._commit_template_seed = None
-                self.query_one("#commit-message", TextArea).clear()
+                editor = self.query_one("#commit-message", TextArea)
+                if editor.text == action.message:
+                    if self._save_commit_draft(""):
+                        self._clear_visible_drafts()
+                        editor.read_only = True
+                        self._restoring_draft = True
+                        try:
+                            await self._seed_commit_template(coordinator.repository, editor)
+                        finally:
+                            self._restoring_draft = False
+                            editor.read_only = False
+                            self._update_composer_guidance()
+                    else:
+                        self.status(
+                            "Commit succeeded; saved draft cleanup failed. Text retained; do not resubmit it."
+                        )
+                else:
+                    self.status("Commit succeeded; newer composer text was retained.")
+            self._record_diagnostic(
+                "operation.finished", {"operation": action.operation, "status": "succeeded"}
+            )
             if action.operation in {
                 "delete-branch",
                 "rename-branch",
@@ -2305,6 +2910,14 @@ class RhizomeApp(App[None]):
             }:
                 self._selected_file = None
         except Exception as error:
+            self._record_diagnostic(
+                "operation.finished",
+                {
+                    "operation": action.operation,
+                    "status": "failed",
+                    "error_type": type(error).__name__,
+                },
+            )
             self.show_error(str(error))
         finally:
             # Completion invalidates reads even when the resulting snapshot equals
@@ -2327,8 +2940,14 @@ class RhizomeApp(App[None]):
             if button.id and button.id.startswith("precision-"):
                 continue  # The precision view owns selection/stale applicability.
             button.disabled = self.busy and button.id not in {
-                "help", "search-next", "graph-style", "show-files", "show-composer",
-                "show-refs", "show-primary", "activity",
+                "help",
+                "search-next",
+                "graph-style",
+                "show-files",
+                "show-composer",
+                "show-refs",
+                "show-primary",
+                "activity",
             }
         workspace.query_one(PrecisionDiff).disabled = self.busy
         if self.snapshot_data:
@@ -2358,7 +2977,9 @@ class RhizomeApp(App[None]):
                 f.staged for f in files
             )
             workspace.query_one("#commit", Button).disabled = (
-                self.busy or not staged or bool(self.snapshot_data.conflicts)
+                self.busy
+                or not staged
+                or bool(self.snapshot_data.conflicts)
                 or bool(self.snapshot_data.operation)
             )
             workspace.query_one("#continue", Button).disabled = self.busy or bool(
@@ -2412,9 +3033,29 @@ class RhizomeApp(App[None]):
                 PromptDialog("OPEN LOCAL REPOSITORY", "/path/to/repository"), self.open_repository
             )
 
-    def open_repository(self, path: str | None, *, worktree: bool = False) -> None:
+    def open_repository(
+        self,
+        path: str | None,
+        *,
+        worktree: bool = False,
+        discard_unsaved: bool = False,
+    ) -> None:
         if not path or self.busy or len(self.screen_stack) > 1:
             return
+        if not discard_unsaved and self._has_unsaved_draft():
+            self.push_screen(
+                ActionPicker(
+                    "Draft is not saved. Leave this workspace anyway?",
+                    [("stay", "Stay with this draft"), ("leave", "Leave without saving")],
+                ),
+                lambda choice: (
+                    self.open_repository(path, worktree=worktree, discard_unsaved=True)
+                    if choice == "leave"
+                    else None
+                ),
+            )
+            return
+        self._save_navigation_context()
         previous_repo = self.repo
         destination = Path(path).expanduser()
         self.set_busy(True, "Opening repository…")
@@ -2450,6 +3091,8 @@ class RhizomeApp(App[None]):
                 self._graph_geometry = ()
                 self.limit = 300
                 await self._restore_workspace_state(repo)
+                if self.limit != 300:
+                    snapshot = await asyncio.to_thread(repo.snapshot, self.limit)
                 self.query_one("#graph-filter", Input).value = ""
                 await self.apply_snapshot(snapshot)
                 self.status(f"Opened {repo.root}")
@@ -2457,7 +3100,7 @@ class RhizomeApp(App[None]):
                 self.show_error(str(error))
             finally:
                 self.set_busy(False)
-                self.poll_repository()
+                self._start_remote_refresh()
 
         self.run_worker(open_path(), group="repository", exit_on_error=False)
 
@@ -2494,16 +3137,22 @@ class RhizomeApp(App[None]):
     def _display_primary_panel(self, panel: str) -> None:
         workspace = self.screen_stack[0]
         if workspace.has_class("pane-constrained"):
-            workspace.remove_class("responsive-inspector", "responsive-refs", "responsive-history-only")
-            workspace.add_class({
-                "inspector": "responsive-inspector", "refs": "responsive-refs",
-                "primary": "responsive-history-only",
-            }[panel])
+            workspace.remove_class(
+                "responsive-inspector", "responsive-refs", "responsive-history-only"
+            )
+            workspace.add_class(
+                {
+                    "inspector": "responsive-inspector",
+                    "refs": "responsive-refs",
+                    "primary": "responsive-history-only",
+                }[panel]
+            )
 
     def action_show_files(self) -> None:
         if len(self.screen_stack) > 1:
             return
         workspace = self.screen_stack[0]
+        self._task_view = "files"
         workspace.remove_class("task-composer")
         workspace.add_class("task-files")
         self.query_one("#inspector-panel").remove_class("collapsed")
@@ -2516,6 +3165,7 @@ class RhizomeApp(App[None]):
         if len(self.screen_stack) > 1:
             return
         workspace = self.screen_stack[0]
+        self._task_view = "composer"
         workspace.remove_class("task-files")
         workspace.add_class("task-composer")
         self.query_one("#inspector-panel").remove_class("collapsed")
@@ -2527,12 +3177,14 @@ class RhizomeApp(App[None]):
     def action_show_refs(self) -> None:
         if len(self.screen_stack) > 1:
             return
+        self._task_view = "refs"
         self.query_one("#refs-panel").remove_class("collapsed")
         self.query_one("#refs-splitter").remove_class("collapsed")
         self._display_primary_panel("refs")
         self.call_after_refresh(self.query_one("#ref-filter").focus)
 
     def action_show_primary(self) -> None:
+        self._task_view = "primary"
         self._display_primary_panel("primary")
         if self._active_diff and self._patch_document:
             self.call_after_refresh(self.query_one(PrecisionDiff).focus_lines)
@@ -2582,12 +3234,13 @@ class RhizomeApp(App[None]):
         self.query_one("#graph-style", Button).label = Text(f"{self.graph_style.title()} [g]")
         self.repaint_history()
         self._settings["graph_style"] = self.graph_style
-        if self._state_store is not None:
+        if self._state_store is not None and not self._state_excluded:
             try:
                 # Preserve unrelated edits made to the user-owned settings file.
-                settings = self._state_store.load("global")
-                settings["graph_style"] = self.graph_style
-                self._state_store.save("global", settings)
+                current = self._state_store.load("global")
+                settings = {**current, "graph_style": self.graph_style}
+                self._state_store.save("global", settings, expected=current)
+                self._global_settings = settings
                 self._settings_error = ""
             except PersistenceError as error:
                 self._settings_error = str(error)
@@ -2608,24 +3261,54 @@ class RhizomeApp(App[None]):
                     record.operation == operation and record.started >= started
                     for record in records
                 ):
-                    records += (OperationActivity(
-                        id="workspace-pending", operation=operation, state="queued",
-                        message="Waiting for safe planning or another repository operation; not yet submitted.",
-                        started=started, elapsed=(datetime.now(UTC) - started).total_seconds(),
-                    ),)
+                    records += (
+                        OperationActivity(
+                            id="workspace-pending",
+                            operation=operation,
+                            state="queued",
+                            message="Waiting for safe planning or another repository operation; not yet submitted.",
+                            started=started,
+                            elapsed=(datetime.now(UTC) - started).total_seconds(),
+                        ),
+                    )
             return records
 
         def context() -> tuple[str, ...]:
             return (
                 "Local polling: " + ("reading" if self._refreshing else "idle"),
-                "Hosted metadata: " + ("reading" if self._remote_reading is self.repo and self.repo else "idle"),
-                "Network: offline" if self._settings["offline"] else (
+                "Hosted metadata: "
+                + ("reading" if self._remote_reading is self.repo and self.repo else "idle"),
+                "Network: offline"
+                if self._settings["offline"]
+                else (
                     f"Automatic refresh: {self.REMOTE_REFRESH_INTERVAL}s while active"
-                    if self._settings["remote_refresh_enabled"] else "Automatic remote refresh: paused"
+                    if self._settings["remote_refresh_enabled"]
+                    else "Automatic remote refresh: paused"
                 ),
             )
 
         self.push_screen(ActivityDialog(activity, context))
+
+    def _has_unsaved_draft(self) -> bool:
+        return bool(
+            not self._state_excluded
+            and self._state_error
+            and self.screen_stack[0].query_one("#commit-message", TextArea).text
+            != self._saved_draft
+        )
+
+    def action_quit(self) -> None:
+        if self._has_unsaved_draft():
+            self.push_screen(
+                ActionPicker(
+                    "Draft is not saved. Quit anyway?",
+                    [("stay", "Stay with this draft"), ("leave", "Quit without saving")],
+                ),
+                lambda choice: self.exit() if choice == "leave" else None,
+            )
+            return
+        self._save_navigation_context()
+        self.exit()
 
     def action_help(self) -> None:
         if len(self.screen_stack) == 1:

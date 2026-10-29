@@ -7,6 +7,7 @@ workspace operations and therefore cannot replay a mutation when state is restor
 from __future__ import annotations
 
 import copy
+import fcntl
 import json
 import math
 import os
@@ -14,6 +15,7 @@ import re
 import secrets
 import stat
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +30,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "graph_style": "smooth",
     "graph_order": "topo",
     "plain_glyphs": False,
+    "diagnostics_enabled": True,
+    "excluded_workspaces": [],
     "keymap": {},
     "protected_branches": [],
 }
@@ -167,7 +171,7 @@ def _validate_settings(data: dict[str, Any]) -> None:
     if unknown:
         raise StateValidationError("Settings must contain valid JSON state values.")
 
-    bool_fields = ("remote_refresh_enabled", "offline", "plain_glyphs")
+    bool_fields = ("remote_refresh_enabled", "offline", "plain_glyphs", "diagnostics_enabled")
     if any(name in data and type(data[name]) is not bool for name in bool_fields):
         raise StateValidationError("Settings must contain valid JSON state values.")
     if "remote_refresh_interval" in data and (
@@ -182,6 +186,12 @@ def _validate_settings(data: dict[str, Any]) -> None:
     for name, allowed in choices.items():
         if name in data and (type(data[name]) is not str or data[name] not in allowed):
             raise StateValidationError("Settings must contain valid JSON state values.")
+    if "excluded_workspaces" in data:
+        excluded = data["excluded_workspaces"]
+        if type(excluded) is not list or any(
+            type(key) is not str or not re.fullmatch(r"[0-9a-f]{64}", key) for key in excluded
+        ):
+            raise StateValidationError("Excluded workspaces must be opaque workspace identities.")
     if "keymap" in data:
         keymap = data["keymap"]
         if type(keymap) is not dict or any(
@@ -245,8 +255,55 @@ class WorkspaceStateStore:
             return {**copy.deepcopy(DEFAULT_SETTINGS), **data}
         return data
 
-    def save(self, workspace_key: str, data: dict[str, Any]) -> None:
-        """Atomically save a JSON object without overwriting corrupt state."""
+    @contextmanager
+    def _locked(self, workspace_key: str):
+        self._target_for(workspace_key)  # Validate before deriving the lock name.
+        directory = self._root / "locks"
+        _ensure_private_directory(directory)
+        path = directory / f"{workspace_key}.lock"
+        _reject_symlink_components(path)
+        descriptor = None
+        try:
+            descriptor = os.open(
+                path,
+                os.O_RDWR
+                | os.O_CREAT
+                | getattr(os, "O_NOFOLLOW", 0)
+                | getattr(os, "O_NONBLOCK", 0),
+                0o600,
+            )
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise StateSecurityError("Private state lock must be a regular file.")
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            if descriptor is not None:
+                os.close(descriptor)
+            raise StateIOError("Private state is busy or unavailable.") from None
+        except BaseException:
+            if descriptor is not None:
+                os.close(descriptor)
+            raise
+        try:
+            yield
+        finally:
+            os.close(descriptor)
+
+    def save(
+        self,
+        workspace_key: str,
+        data: dict[str, Any],
+        *,
+        expected: dict[str, Any] | None = None,
+    ) -> None:
+        """Atomically save; optional expected state refuses another instance's edits."""
+        with self._locked(workspace_key):
+            if expected is not None and self.load(workspace_key) != expected:
+                raise StateValidationError(
+                    "Saved state changed in another instance. Keep your text and reopen before saving."
+                )
+            self._save_document(workspace_key, data)
+
+    def _save_document(self, workspace_key: str, data: dict[str, Any]) -> None:
         if type(data) is not dict:
             raise StateValidationError("Workspace state must be a dictionary of JSON values.")
         try:
@@ -268,6 +325,10 @@ class WorkspaceStateStore:
 
     def clear(self, workspace_key: str) -> None:
         """Explicitly discard one state document without affecting other keys."""
+        with self._locked(workspace_key):
+            self._clear_document(workspace_key)
+
+    def _clear_document(self, workspace_key: str) -> None:
         target = self._target_for(workspace_key)
         _reject_managed_install_ancestor(target)
         _reject_symlink_components(target)
@@ -288,17 +349,34 @@ class WorkspaceStateStore:
 
     def record_diagnostic(self, event: str, metadata: dict[str, Any] | None = None) -> None:
         """Record bounded, redacted operational metadata locally."""
-        self._diagnostic_journal().record(event, metadata)
+        with self._locked("diagnostics"):
+            self._diagnostic_journal().record(event, metadata)
 
     def diagnostics_preview(self) -> list[dict[str, Any]]:
         """Return the exact redacted records an explicit export would contain."""
-        return self._diagnostic_journal().preview()
+        with self._locked("diagnostics"):
+            return self._diagnostic_journal().preview()
 
-    def export_diagnostics(self, destination: Path) -> Path:
-        """Explicitly export a private, redacted diagnostic document."""
+    def diagnostics_export_preview(self, records: list[dict[str, Any]]) -> str:
+        """Render every byte an export of these captured records will contain."""
+        return self._diagnostic_journal().export_preview(records)
+
+    def export_diagnostics(
+        self,
+        destination: Path,
+        *,
+        records: list[dict[str, Any]] | None = None,
+    ) -> Path:
+        """Export the captured preview when supplied; never overwrite an existing file."""
         if not isinstance(destination, Path):
             raise StateValidationError("A diagnostic export path is required.")
-        return self._diagnostic_journal().export(destination)
+        with self._locked("diagnostics"):
+            return self._diagnostic_journal().export(destination, records=records)
+
+    def clear_diagnostics(self) -> None:
+        """Explicitly purge local diagnostics, independently of drafts and preferences."""
+        with self._locked("diagnostics"):
+            self._diagnostic_journal().clear()
 
     def _diagnostic_journal(self):
         from rhizome.diagnostics import _DiagnosticJournal

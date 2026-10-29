@@ -1,0 +1,6 @@
+lint: exit 0; All checks passed!
+format: exit 1; 21 files would be reformatted, 70 files already formatted
+HEAD baseline format: exit 1; 26 files would be reformatted, 58 files already formatted
+build: exit 0
+Wheel includes M1 controls, stylesheet and diagnostics; temporary artifacts removed.
+All 21 remaining formatter failures are byte-identical to HEAD; none is an M1-edited file.
