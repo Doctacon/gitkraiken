@@ -6,9 +6,9 @@ Rhizome is a local-first, terminal-native Git workspace. This development checko
 contains the precision-core upgrade in progress, not a certified release of the
 entire [roadmap](design/world-class-rhizome.md). Later investigation, integration,
 personalization, and captured hosted-review workflows remain incomplete.
-**Ordinary commit submission is temporarily disabled after a real-Git test exposed
-an index-writer race.** Earlier commit-flow evidence predates this gate. Inspection,
-selected staging, and durable composition remain available while it is addressed.
+Ordinary staged commits are available through a reviewed-index transaction with
+native hooks/signing and a deliberate terminal handoff. Release and cross-platform
+acceptance remain outstanding; the installer crash/retry defect is still deferred.
 
 ## Run
 
@@ -88,8 +88,30 @@ suppressed in the workspace.
 4. Search, expand context, show whitespace and inspect word emphasis as reading
    aids. These controls never reconstruct the Git patch from displayed text.
 5. Choose **Commit / F3** and write a summary and optional body. The composer shows
-   staged-file scope. **Commit submission is currently unavailable** pending a proven
-   reviewed-index transaction; do not infer readiness from older flow tests.
+   staged-file scope. Choose **Commit** to run native Git against the reviewed index.
+   The workspace temporarily hands over the terminal so hooks/signing can prompt,
+   then resumes. A rejected commit retains your exact draft; success clears it.
+
+When a repository opens without a nonempty saved draft, the composer loads its
+configured `commit.template`. Saved drafts always win, including comments or
+whitespace. An untouched template is not saved as a draft and must be edited before
+submission. Missing, unreadable, nonregular, oversized (over 1 MiB), undecodable,
+or unsupported-line-ending templates show an error; write your own message or fix
+the template and reopen. After a successful commit the composer stays cleared;
+reopening can seed the next template.
+
+Accepted text is passed without app-side trimming through stdin, using Git's
+**editor-mode** cleanup (`--edit --no-status --no-verbose -F -`). With default cleanup,
+Git removes comment lines; `commit.cleanup` and `core.commentChar` remain authoritative.
+Status/diff text is not appended behind the composer's back, and no second editor
+opens. Message hooks can rewrite or reject the text; `prepare-commit-msg` receives
+source `message`. Templates and submissions use `i18n.commitEncoding` (UTF-8 by
+default); unsupported encodings or unrepresentable characters fail visibly and
+retain the draft. Summary/body guidance is optional, not a required message schema.
+
+If Git's outcome or index publication is uncertain, inspect the reported HEAD/index
+and retained transaction files before retrying. Rhizome never automatically retries
+or kills a running commit.
 
 Selected staging/unstaging changes the index, not the working file. Unsupported
 representations, conversions, binary/oversized data and stale input fail explicitly;
@@ -142,7 +164,7 @@ schema alone is not evidence that every preference is wired into the app.
 
 ## Safety during the implementation transition
 
-Routine supported actions currently include stage/unstage, explicit
+Routine supported actions currently include stage/unstage, ordinary commits, explicit
 checkout, branch/tag/worktree creation, upstream selection, validated fetch and
 non-force push. Fetch evaluates active refspecs, pruning settings and symbolic
 aliases before transport. It refuses configured refspec destinations outside remote-tracking caches,
@@ -174,17 +196,16 @@ Push uses an explicit non-force refspec and destination; broad configured push
 defaults are not substituted. Multiple push destinations are refused. Transport
 failure can leave a remote outcome uncertain: inspect it before deciding to retry.
 No automatic mutation retry, force-push, `git clean`, or automatic stashing is added.
-Repository hooks/signing still run and can reject or time out an operation.
+Repository hooks/signing still run and can reject an operation. Ordinary commit
+handoffs have no overall timeout or automatic cancellation.
 
 ## Refresh and activity
 
-Local polling runs on a two-second cadence when the workspace permits it. Fetch
-is currently gated (see above). Optional hosted metadata uses a configurable
-**60-second** interval,
+Local polling runs on a two-second cadence when the workspace permits it. Optional
+automatic fetch and hosted metadata use a configurable **60-second** interval,
 back off after failures, and pause when the terminal is inactive or user work
 prevents a new request. Offline mode pauses automatic network activity. Automatic
-fetch must not modify user-owned local branches or delete local tags; that safety
-proof is pending, so no automatic fetch is currently submitted to Git.
+fetch uses the same destination, pruning, and alias validation as manual fetch.
 
 Slow automatic transport no longer owns the local inspection queue. Git mutations
 still serialize, so an already-running fetch can delay another mutation; it is not

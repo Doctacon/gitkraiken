@@ -1,5 +1,10 @@
 # Native commit: root safety follow-up
 
+> Historical component follow-up. `commit-restoration.md` supersedes the gate and
+> TTY status below: normal commits are now enabled with terminal handoff, unchanged
+> index/group protection, public success regressions and real-terminal proof. The
+> broader roadmap/installer remain deferred; this older report is not current status.
+
 Commit remains unavailable in the coordinator/UI. This is component evidence,
 not composer, interactive signing, full-suite, platform, or milestone acceptance.
 

@@ -1,0 +1,28 @@
+........................................................................ [ 10%]
+.....................................F.................................. [ 20%]
+........................................................................ [ 30%]
+........................................................................ [ 41%]
+........................................................................ [ 51%]
+.............................................................F.......... [ 61%]
+........................................................................ [ 72%]
+........................................................................ [ 82%]
+........................................................................ [ 92%]
+...................................................                      [100%]
+=================================== FAILURES ===================================
+_________ test_config_is_printed_without_repository_or_config_mutation _________
+/Users/crlough/Code/personal/rhizome/tests/test_cli_tmux.py:203: in test_config_is_printed_without_repository_or_config_mutation
+    assert not list(tmp_path.iterdir())
+E   AssertionError: assert not [PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1530/test_config_is_prin.../xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1530/test_config_is_printed_without0/isolated-git-home')]
+E    +  where [PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1530/test_config_is_prin.../xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1530/test_config_is_printed_without0/isolated-git-home')] = list(<map object at 0x1099a19c0>)
+E    +    where <map object at 0x1099a19c0> = iterdir()
+E    +      where iterdir = PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1530/test_config_is_printed_without0').iterdir
+_____ test_killed_intermediate_launcher_retains_activity_until_child_exits _____
+tests/test_install.py:832: in test_killed_intermediate_launcher_retains_activity_until_child_exits
+    assert retry.returncode != 0, retry.stderr
+E   AssertionError: 
+E   assert 0 != 0
+E    +  where 0 = CompletedProcess(args=['sh', '/Users/crlough/Code/personal/rhizome/scripts/install.sh', '--revision', 'ccccccccccccccc...ts/install.sh --rollback\nUninstall: /Users/crlough/Code/personal/rhizome/scripts/install.sh --uninstall\n', stderr='').returncode
+=========================== short test summary info ============================
+FAILED tests/test_cli_tmux.py::test_config_is_printed_without_repository_or_config_mutation
+FAILED tests/test_install.py::test_killed_intermediate_launcher_retains_activity_until_child_exits
+2 failed, 697 passed in 1010.28s (0:16:50)

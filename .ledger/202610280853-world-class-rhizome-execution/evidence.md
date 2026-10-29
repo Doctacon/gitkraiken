@@ -1,16 +1,35 @@
 # Execution evidence
 
-## Current safety override
+## Current scope: roadmap resumed, crash/retry deferred
 
-**Ordinary commit submission is temporarily gated in both coordinator and UI.**
-Writer exclusion, raw-index/config review, read-only inspection, native identity,
-live-descendant retention and artifact ownership now have focused fixes/proofs.
-Dedicated process groups require absence before publication; live/unprovable
-writers and ambiguous spawn outcomes retain artifacts without killing/retrying.
-Interactive signing/TTY compatibility, composition, remaining publication faults
-and coordinator/UI success proof remain blockers. See `commit-root-followup.md`.
-Earlier stage→commit flows are not current candidate acceptance; their success
-contracts remain intact.
+The operator resumed roadmap execution while keeping crash/retry deferred. The
+current bounded increment is M1 composer templates/encoding and native message
+cleanup. The operator selected **existing checks only**, so no new tests or smoke
+scripts were added. New-feature coverage gaps remain explicit in
+`composer-progress.md`; prior full-suite evidence below is not a changed-candidate
+acceptance claim. Installer crash/retry code and its known failure stay untouched.
+
+## Prior normal-commit restoration
+
+The prior scope reset was **restoring the normal commit workflow**. Ordinary commit
+was enabled through the
+reviewed coordinator transaction, after fixing terminal foreground access and
+adding deliberate Textual suspension. Existing index/group protections remain.
+Real PTY hooks/stderr prompts, real disposable-key SSH signing, unchanged writer/
+coordinator/draft/core success contracts, and an automated real-terminal 80×24
+review→partial-stage→interactive rejection→commit flow pass. Current and actual
+Git 2.36 smoke evidence is in `commit-restoration.md`; the minimum-Git batch passed
+89 tests, with 3 PTY cases additionally passing. Fresh full discovery (`task-28`):
+**697 passed, 2 failed in 1010.28 s**. One failure was an old CLI fixture's empty-
+directory assumption, corrected and verified; the other is the known deferred
+installer defect. Final targeted configuration/PTY rerun: **5 passed**. No fully
+green changed full-suite or release acceptance is claimed. At that point template
+enhancements were deferred rather than blocking normal staged text commits; the
+current composer increment resumes those enhancements without re-gating commits.
+
+The chronological sections below retain historical gates and failures. They are
+not current availability statements; `commit-restoration.md` supersedes
+`commit-root-followup.md` on ordinary commit availability and TTY evidence.
 
 Fetch was separately protected and restored after scoped current/minimum-Git and
 coordinator/Pilot/automatic-refresh proof; see `fetch-root-evidence.md`. Installer
@@ -100,4 +119,4 @@ remains blocked. No changed full suite or milestone acceptance is claimed.
 
 ## Current limits
 
-The candidate is in progress and no changed full suite has passed. Earlier obsolete destructive/browsing expectations were migrated, but the new commit failures are real and must be fixed, not reclassified. No milestone is complete or releasable. No human pilot, other OS/architecture/minimum-version matrix, live private-provider validation, publication, release, or project commit has been performed.
+The candidate is in progress and no changed full suite has passed. Ordinary commit failures were repaired with bounded evidence, not reclassified; the installer crash/retry failure remains real and explicitly deferred. Composer extensions have existing-checks-only validation, not dedicated new-feature coverage. No milestone is complete or releasable. No human pilot, other OS/architecture/minimum-version matrix, live private-provider validation, publication, release, or project commit has been performed.

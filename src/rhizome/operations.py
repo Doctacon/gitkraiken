@@ -447,12 +447,6 @@ class OperationCoordinator:
 
     def _availability(self, action: Action) -> tuple[bool, str, bool]:
         operation = action.operation
-        if operation == "commit":
-            return (
-                False,
-                "commit is unavailable until the reviewed-index transaction is proven.",
-                False,
-            )
         if operation in _ROUTINE_OPERATIONS:
             return True, "", False
         if operation == "discard":

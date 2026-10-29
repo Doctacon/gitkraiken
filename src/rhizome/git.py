@@ -6,16 +6,23 @@ passed as an argv sequence; callers cannot supply command-line fragments.
 
 from __future__ import annotations
 
+import codecs
+import errno
 import hashlib
 import heapq
 import os
 import re
 import shlex
 import shutil
+import signal
 import stat
 import subprocess
+import sys
 import tempfile
+import termios
+import threading
 from collections.abc import Callable
+from contextlib import contextmanager
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path, PurePosixPath
@@ -49,6 +56,7 @@ _MAX_DIFF_BYTES = 2 * 1024 * 1024
 _MAX_ERROR_BYTES = 64 * 1024
 _MAX_HISTORY = 5_000
 _MAX_PATCH_BYTES = 16 * 1024 * 1024
+_MAX_COMMIT_TEMPLATE_BYTES = 1024 * 1024
 _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
 _REPOSITORY_ENVIRONMENT = {
     "GIT_ALTERNATE_OBJECT_DIRECTORIES",
@@ -99,6 +107,13 @@ class GitError(RuntimeError):
 
 class GitOutcomeUncertain(GitError):
     """A mutation may have completed; inspect current state before another attempt."""
+
+
+@dataclass(frozen=True)
+class _CommitEncoding:
+    configured: str
+    codec: codecs.CodecInfo
+    label: str
 
 
 def _redact_url(url: str) -> str:
@@ -375,6 +390,60 @@ def _friendly_output(result: subprocess.CompletedProcess[bytes], fallback: str) 
     return _redact(output) if output else fallback
 
 
+_COMMIT_TERMINAL_LOCK = threading.Lock()
+# A child-side handoff must happen before Git can run a terminal-reading hook.
+# A fresh isolated interpreter avoids unsafe preexec_fn calls in the threaded UI.
+# exec preserves the PID/process group that the index transaction supervises.
+_COMMIT_TERMINAL_EXEC = """
+import os, signal, sys
+fd = int(sys.argv[1])
+previous = signal.signal(signal.SIGTTOU, signal.SIG_IGN)
+try:
+    os.tcsetpgrp(fd, os.getpgrp())
+finally:
+    signal.signal(signal.SIGTTOU, previous)
+os.close(fd)
+os.execvpe(sys.argv[2], sys.argv[2:], os.environ)
+"""
+
+
+@contextmanager
+def _commit_terminal(argv: list[str]):
+    """Lease the caller's foreground terminal, or keep headless Git headless.
+
+    The UI must suspend its input/rendering around this operation. Serialize
+    in-process terminal leases, never steal a terminal from a background caller,
+    and restore ownership/modes even on a failed or uncertain native outcome.
+    """
+    with _COMMIT_TERMINAL_LOCK:
+        try:
+            terminal = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY)
+        except OSError as error:
+            if error.errno not in (errno.ENXIO, errno.ENODEV, errno.ENOENT):
+                raise GitError(f"Cannot open the commit terminal: {error}") from error
+            yield argv, ()
+            return
+        try:
+            foreground = os.tcgetpgrp(terminal)
+            if foreground != os.getpgrp():
+                raise GitError("Bring Rhizome to the foreground before committing.")
+            attributes = termios.tcgetattr(terminal)
+            try:
+                yield [sys.executable, "-I", "-S", "-c", _COMMIT_TERMINAL_EXEC,
+                       str(terminal), *argv], (terminal,)
+            finally:
+                # tcsetpgrp/tcsetattr must work while Git still owns the foreground.
+                # Blocking SIGTTOU is thread-local; don't change the UI's handlers.
+                mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTTOU})
+                try:
+                    os.tcsetpgrp(terminal, foreground)
+                    termios.tcsetattr(terminal, termios.TCSANOW, attributes)
+                finally:
+                    signal.pthread_sigmask(signal.SIG_SETMASK, mask)
+        finally:
+            os.close(terminal)
+
+
 class _CommitIndexTransaction:
     """Own a real index lock while native Git and hooks use a private candidate.
 
@@ -511,7 +580,9 @@ class _CommitIndexTransaction:
         os.fsync(self.directory_fd)
         self.verify()
 
-    def run(self, args: list[str]) -> tuple[subprocess.CompletedProcess[bytes], str]:
+    def run(
+        self, args: list[str], *, input_bytes: bytes,
+    ) -> tuple[subprocess.CompletedProcess[bytes], str]:
         """Wait for native Git without a deadline or an exceptional-path kill.
 
         Regular temporary files avoid pipe deadlocks and unbounded Python
@@ -528,15 +599,25 @@ class _CommitIndexTransaction:
         )
         if shutil.which("git", path=search_path) is None:
             raise GitError("Could not start Git commit: Git executable is unavailable.")
-        with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
+        with (
+            _commit_terminal(argv) as (command, terminal_fds),
+            tempfile.TemporaryFile() as stdin,
+            tempfile.TemporaryFile() as stdout,
+            tempfile.TemporaryFile() as stderr,
+        ):
+            if not stat.S_ISREG(os.fstat(stdin.fileno()).st_mode):
+                raise GitError("Could not prepare regular commit-message input.")
+            stdin.write(input_bytes)
+            stdin.flush()
+            stdin.seek(0)
             self._append_context("phase: native-spawn-pending\n")
             # Once construction is attempted, even OSError may follow a live
             # child. Only preparation failures before this point are settled.
             self.started = True
             process = subprocess.Popen(
-                argv, cwd=self.repository.root, env=env,
-                stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr,
-                process_group=0,
+                command, cwd=self.repository.root, env=env,
+                stdin=stdin, stdout=stdout, stderr=stderr,
+                process_group=0, pass_fds=terminal_fds,
             )
             self.git_pid = self.git_pgid = process.pid
             self._append_context(
@@ -544,7 +625,39 @@ class _CommitIndexTransaction:
             )
             # No Popen context manager: an exceptional exit must not implicitly
             # wait for unfinished Git. __exit__ retains the transaction instead.
-            returncode = process.wait()
+            if terminal_fds:
+                offset = 0
+
+                def show_diagnostics() -> None:
+                    nonlocal offset
+                    # Tail the regular spool, not a pipe whose closure could
+                    # interrupt a surviving hook. Prompts on stderr stay visible.
+                    end = os.fstat(stderr.fileno()).st_size
+                    mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTTOU})
+                    try:
+                        while offset < end:
+                            chunk = os.pread(stderr.fileno(), min(_MAX_ERROR_BYTES, end - offset), offset)
+                            if not chunk:
+                                break
+                            offset += len(chunk)
+                            remaining = memoryview(chunk)
+                            while remaining:
+                                remaining = remaining[os.write(terminal_fds[0], remaining):]
+                    finally:
+                        signal.pthread_sigmask(signal.SIG_SETMASK, mask)
+
+                while True:
+                    try:
+                        returncode = process.wait(timeout=0.05)
+                    except subprocess.TimeoutExpired:
+                        # Poll only to display output: no overall deadline,
+                        # cancellation, termination, or automatic retry.
+                        show_diagnostics()
+                    else:
+                        show_diagnostics()
+                        break
+            else:
+                returncode = process.wait()
             self._append_context(f"native-returncode: {returncode}\nphase: native-returned\n")
             if returncode >= 0:
                 self._verify_group_quiescence()
@@ -981,6 +1094,137 @@ class Repository:
             if directory_fd is not None:
                 os.close(directory_fd)
 
+    def _commit_encoding(self) -> _CommitEncoding:
+        """Resolve and validate the encoding Git will record for a commit."""
+        try:
+            result = self._git(
+                ["config", "--includes", "--null", "--get", "i18n.commitEncoding"],
+                ok_codes=(0, 1), operation="read commit encoding configuration",
+            )
+        except GitError as error:
+            raise GitError("Could not read the commit encoding configuration.") from error
+        raw = b"UTF-8\0" if result.returncode == 1 else result.stdout
+        if (
+            len(raw) > 129 or not raw.endswith(b"\0")
+            or b"\0" in raw[:-1] or len(raw) == 1
+        ):
+            raise GitError("The commit encoding configuration is malformed.")
+        try:
+            configured = raw[:-1].decode("ascii", "strict")
+            # Python normalizes punctuation/whitespace in codec aliases; Git
+            # writes this exact value into a commit header. Accept a name, not
+            # an alias containing controls or header-delimiting whitespace.
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]*", configured):
+                raise GitError("The commit encoding configuration is malformed.")
+            codec = codecs.lookup(configured)
+        except (LookupError, UnicodeDecodeError) as error:
+            raise GitError("The configured commit encoding is unsupported by Rhizome.") from error
+
+        # Git commit objects and their headers require an ASCII-compatible text
+        # encoding. This also rejects Python's binary and text-transform codecs.
+        probe_bytes = bytes(range(128))
+        probe_text = probe_bytes.decode("ascii")
+        try:
+            if (
+                probe_text.encode(codec.name, "strict") != probe_bytes
+                or probe_bytes.decode(codec.name, "strict") != probe_text
+            ):
+                raise ValueError
+        except (LookupError, UnicodeError, TypeError, ValueError) as error:
+            raise GitError(
+                "The configured commit encoding is not an ASCII-compatible text encoding."
+            ) from error
+        label = codec.name.upper().replace("_", "-")
+        return _CommitEncoding(configured, codec, label)
+
+    def _read_commit_template(self) -> str | None:
+        """Read the effective configured commit template without blocking on special files."""
+        try:
+            result = self._git(
+                ["config", "--includes", "--null", "--path", "--get", "commit.template"],
+                ok_codes=(0, 1), operation="read commit template configuration",
+            )
+        except GitError as error:
+            raise GitError("Could not read the commit template configuration.") from error
+        if result.returncode == 1:
+            return None
+        raw_path = result.stdout
+        if (
+            len(raw_path) > 16 * 1024 or not raw_path.endswith(b"\0")
+            or b"\0" in raw_path[:-1] or len(raw_path) == 1
+        ):
+            raise GitError("The commit template configuration is malformed.")
+        path = Path(os.fsdecode(raw_path[:-1]))
+        if not path.is_absolute():
+            path = self.root / path
+
+        try:
+            descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
+        except FileNotFoundError as error:
+            raise GitError("The commit template file is missing.") from error
+        except PermissionError as error:
+            raise GitError("The commit template file is unreadable.") from error
+        except OSError as error:
+            raise GitError("The commit template file could not be opened.") from error
+        try:
+            before = os.fstat(descriptor)
+            if not stat.S_ISREG(before.st_mode):
+                raise GitError("The commit template must be a regular file.")
+            if before.st_size > _MAX_COMMIT_TEMPLATE_BYTES:
+                raise GitError("The commit template exceeds Rhizome's 1 MiB limit.")
+            chunks: list[bytes] = []
+            remaining = _MAX_COMMIT_TEMPLATE_BYTES + 1
+            while remaining:
+                chunk = os.read(descriptor, min(64 * 1024, remaining))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                remaining -= len(chunk)
+            after = os.fstat(descriptor)
+        except GitError:
+            raise
+        except OSError as error:
+            raise GitError("The commit template file could not be read.") from error
+        finally:
+            os.close(descriptor)
+
+        stable_fields = (
+            "st_dev", "st_ino", "st_mode", "st_nlink", "st_uid", "st_gid",
+            "st_size", "st_mtime_ns", "st_ctime_ns",
+        )
+        if any(getattr(before, field) != getattr(after, field) for field in stable_fields):
+            raise GitError("The commit template changed while it was being read.")
+        content = b"".join(chunks)
+        if len(content) > _MAX_COMMIT_TEMPLATE_BYTES:
+            raise GitError("The commit template exceeds Rhizome's 1 MiB limit.")
+        if b"\0" in content:
+            raise GitError("The commit template contains unsupported NUL bytes.")
+
+        encoding = self._commit_encoding()
+        try:
+            decoded = content.decode(encoding.codec.name, "strict")
+        except (LookupError, UnicodeError, TypeError) as error:
+            raise GitError(
+                f"The commit template is not valid {encoding.label} text."
+            ) from error
+        if "\0" in decoded:
+            raise GitError("The commit template contains unsupported NUL characters.")
+        return decoded
+
+    def _encode_commit_message(
+        self, message: str, encoding: _CommitEncoding | None = None,
+    ) -> bytes:
+        """Strictly encode an accepted message without altering its text."""
+        encoding = encoding or self._commit_encoding()
+        if "\0" in message:
+            raise GitError("The commit message contains unsupported NUL characters.")
+        try:
+            return message.encode(encoding.codec.name, "strict")
+        except (LookupError, UnicodeError, TypeError) as error:
+            raise GitError(
+                f"The commit message cannot be encoded as {encoding.label}."
+            ) from error
+
     def _commit_index_fingerprint(self) -> bytes:
         """Bind flags/extensions as well as entries, without normalizing the index."""
         try:
@@ -1006,6 +1250,8 @@ class Repository:
         )
         if staged.returncode == 0:
             raise GitError("There are no staged changes to commit.")
+        commit_encoding = self._commit_encoding()
+        message_bytes = self._encode_commit_message(action.message, commit_encoding)
 
         def head_state() -> tuple[str, str]:
             symbolic = self._git(
@@ -1034,7 +1280,10 @@ class Repository:
                 transaction.record(*before)
                 result, created_oid = transaction.run(
                     ["-c", "core.abbrev=no", "-c", "color.ui=false", "-c", "color.diff=false",
-                     "-c", "splitIndex.sharedIndexExpire=never", "commit", "-m", action.message],
+                     "-c", "splitIndex.sharedIndexExpire=never",
+                     "-c", f"i18n.commitEncoding={commit_encoding.configured}",
+                     "commit", "--edit", "--no-status", "--no-verbose", "-F", "-"],
+                    input_bytes=message_bytes,
                 )
                 if result.returncode < 0:
                     raise GitOutcomeUncertain("Git was interrupted by a signal; hook quiescence is unknown.")

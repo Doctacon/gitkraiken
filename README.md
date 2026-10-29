@@ -12,10 +12,10 @@ authentication.
 This checkout is implementing the [approved roadmap](docs/design/world-class-rhizome.md).
 It is **not a published or release-certified upgrade**. Precision-core integration
 is in progress; later investigation, integration, and hosted-review milestones are
-not yet complete. **Ordinary commit submission is temporarily unavailable** while
-a newly reproduced reviewed-index race is being fixed. Inspection, precise staging
-and durable composition remain available; earlier commit-flow tests are not proof
-of the current gated candidate. The screenshot above predates the precision workspace.
+not yet complete. Ordinary staged commits use a reviewed-index transaction and
+native Git hooks/signing. The workspace temporarily hands the terminal to Git
+and returns afterward; failures retain the draft. This does not establish release
+or cross-platform acceptance. The screenshot above predates the precision workspace.
 
 Run an inspected development checkout with Python 3.13+, Git 2.36+, and
 [uv](https://docs.astral.sh/uv/):
@@ -38,8 +38,11 @@ must not be inferred from the local headless tests.
 2. Press **v**, extend a contiguous range with arrows, then **s** to stage or **u**
    to unstage. Mouse/Shift-click ranges and hunk controls are also available.
 3. Search, expand context, or show whitespace without changing the canonical patch.
-4. **Commit / F3** opens the durable composer. Submission is currently disabled
-   pending reviewed-index protection. **Back / Esc** restores the prior view.
+4. **Commit / F3** opens the durable composer. On repository open, saved drafts take
+   priority over configured Git templates. Edit the message and choose **Commit**
+   to commit staged content with Git-owned cleanup and encoding. Hooks/signing can
+   request input while the workspace is suspended. **Back / Esc** restores the prior
+   review view.
 
 Browsing and double-clicking never check out a branch. Use an explicit **Checkout**
 action. If a reviewed file changes externally, the captured review remains visible

@@ -189,6 +189,10 @@ def test_popup_focus_notification_failure_does_not_report_open_failure(tmp_path,
 
 
 def test_config_is_printed_without_repository_or_config_mutation(tmp_path, monkeypatch, capsys):
+    # Autouse isolation prepares private HOME/config directories before the CLI
+    # runs. They must remain empty and unchanged, not be mistaken for CLI writes.
+    before = sorted(tmp_path.rglob("*"))
+    assert all(path.is_dir() for path in before)
     monkeypatch.chdir(tmp_path)
     with patch("rhizome.git.Repository", side_effect=AssertionError("should not open repo")):
         main(["--tmux-config"])
@@ -200,7 +204,8 @@ def test_config_is_printed_without_repository_or_config_mutation(tmp_path, monke
     assert "#{q:client_name}" in output
     assert "#{q:socket_path}" in output
     assert "pane_current_path" not in output  # no filesystem data in shell source
-    assert not list(tmp_path.iterdir())
+    assert sorted(tmp_path.rglob("*")) == before
+    assert all(path.is_dir() for path in before)
 
 
 def test_config_quotes_tmux_parser_and_literal_hashes(monkeypatch):

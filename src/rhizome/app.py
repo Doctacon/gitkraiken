@@ -244,6 +244,8 @@ class RhizomeApp(App[None]):
         self._workspace_key = ""
         self._workspace_state: dict = {}
         self._saved_draft = ""
+        self._commit_template_seed: str | None = None
+        self._restoring_draft = False
         self._state_error = ""
         self._settings = dict(DEFAULT_SETTINGS)
         self._settings_error = ""
@@ -348,7 +350,7 @@ class RhizomeApp(App[None]):
                         yield Label("COMMIT MESSAGE · summary, then optional body", classes="composer-label")
                         yield TextArea(id="commit-message", theme="github_light")
                         yield Static("Draft is empty", id="draft-status")
-                        yield Button("Commit unavailable", id="commit", variant="primary")
+                        yield Button("Commit", id="commit", variant="primary")
         yield Static("Ready", id="status-line")
         yield Static(
             "Ctrl+P actions   / search   g graph   Ctrl+R refresh   ? help   Ctrl+Q quit",
@@ -398,34 +400,78 @@ class RhizomeApp(App[None]):
         return hashlib.sha256(raw.encode("utf-8", "surrogateescape")).hexdigest()
 
     async def _restore_workspace_state(self, repo: Repository) -> None:
-        # Keep destructive actions unavailable until the workspace has a usable,
-        # tested recovery review. Never silently inject an unreviewed confirmation.
-        self._operations = await asyncio.to_thread(
-            OperationCoordinator, repo, protected_branches=tuple(self._settings["protected_branches"])
-        )
+        editor = self.query_one("#commit-message", TextArea)
+        # Do not overwrite typing that arrived while state/template I/O was in
+        # flight. Browsing stays available; the composer unlocks after restoration.
+        editor.read_only = True
+        self._restoring_draft = True
         self._workspace_key = ""
         self._workspace_state = {}
         self._saved_draft = ""
-        editor = self.query_one("#commit-message", TextArea)
+        self._commit_template_seed = None
         editor.clear()
-        if self._state_store is None:
-            return
         try:
+            # Keep destructive actions unavailable until the workspace has a
+            # usable recovery review; ordinary commits keep their existing guard.
+            self._operations = await asyncio.to_thread(
+                OperationCoordinator, repo,
+                protected_branches=tuple(self._settings["protected_branches"]),
+            )
+            if self._state_store is None:
+                return
             key = await asyncio.to_thread(self._state_identity, repo)
             state = await asyncio.to_thread(self._state_store.load, key)
             draft = state.get("draft", "")
             if not isinstance(draft, str):
                 raise StateValidationError("The saved commit draft is invalid; it was not replaced.")
+            editor.load_text(draft)
+            if editor.text != draft:
+                editor.clear()
+                raise StateValidationError(
+                    "The saved draft's line endings cannot be preserved by the composer; "
+                    "the original remains on disk."
+                )
             self._workspace_state = state
             self._saved_draft = draft
-            editor.load_text(draft)
             self._workspace_key = key
             self._state_error = ""
             self.query_one("#draft-status", Static).update(
                 "Draft restored locally" if draft else "Draft is empty"
             )
+            # Any nonempty saved text is authoritative, including whitespace or
+            # comments. Never even read a configured template over a user draft.
+            if not draft:
+                await self._seed_commit_template(repo, editor)
         except (PersistenceError, GitError, OSError) as error:
             self._draft_error(str(error))
+        finally:
+            self._restoring_draft = False
+            editor.read_only = False
+
+    async def _seed_commit_template(self, repo: Repository, editor: TextArea) -> None:
+        try:
+            template = await asyncio.to_thread(repo._read_commit_template)
+            if template is None:
+                return
+            previous = editor.text
+            editor.load_text(template)
+            if editor.text != template:
+                # TextArea normalizes mixed line endings. Do not present altered
+                # template text or persist it as though it were the user's draft.
+                editor.load_text(previous)
+                raise GitError("The commit template's line endings cannot be preserved by the composer.")
+            self._commit_template_seed = template
+            # Suppress the initial Changed event without saving the seed. An
+            # untouched template must not become an authoritative restored draft.
+            self._saved_draft = template
+            self.query_one("#draft-status", Static).update("Template loaded · edit before committing")
+        except (GitError, OSError) as error:
+            message = "Template not loaded: " + str(error)
+            self.query_one("#draft-status", Static).update(Text(message))
+            self.notify(
+                escape(message + " Write your own message or fix the template and reopen."),
+                severity="warning", timeout=12,
+            )
 
     def _draft_error(self, message: str) -> None:
         self.screen_stack[0].query_one("#draft-status", Static).update(
@@ -436,7 +482,10 @@ class RhizomeApp(App[None]):
         self._state_error = message
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
-        if event.text_area.id != "commit-message" or not self._workspace_key:
+        if (
+            event.text_area.id != "commit-message"
+            or not self._workspace_key or self._restoring_draft
+        ):
             return
         draft = event.text_area.text
         if draft == self._saved_draft or self._state_store is None:
@@ -2165,9 +2214,12 @@ class RhizomeApp(App[None]):
         self.run_mutation(Action(operation, paths=paths))
 
     def commit_changes(self) -> None:
-        message = self.query_one("#commit-message", TextArea).text.strip()
-        if not message:
+        message = self.query_one("#commit-message", TextArea).text
+        if not message.strip():
             self.notify("Write a commit message first.", severity="warning")
+            return
+        if message == self._commit_template_seed:
+            self.notify("Edit the commit template before committing.", severity="warning")
             return
         self.run_mutation(Action("commit", message=message))
 
@@ -2203,9 +2255,25 @@ class RhizomeApp(App[None]):
             coordinator = self._operations
             if coordinator is None or coordinator.repository is not self.repo:
                 raise GitError("No current operation coordinator; reopen the repository.")
-            result = await asyncio.to_thread(
-                self._execute_reviewed, coordinator, action, patch=patch, selection=selection
-            )
+            if action.operation == "commit" and not self.is_headless:
+                # A deliberate native-terminal handoff: no UI reader or repaint
+                # may compete with hooks/signing. Run synchronously while suspended
+                # so cancelling a UI waiter cannot resume over a live mutation.
+                failure: BaseException | None = None
+                with self.suspend():
+                    try:
+                        print("Rhizome: committing staged changes; hooks/signing may request input.")
+                        result = self._execute_reviewed(coordinator, action)
+                    except BaseException as error:
+                        # Textual 1.x resumes only on normal context exit. Restore
+                        # the terminal/UI first, then report the native failure.
+                        failure = error
+                if failure is not None:
+                    raise failure
+            else:
+                result = await asyncio.to_thread(
+                    self._execute_reviewed, coordinator, action, patch=patch, selection=selection
+                )
             # Successful app actions may deliberately show their resulting patch.
             # Failed/uncertain actions retain the old review and mark it stale.
             self._patch_document = None
@@ -2215,6 +2283,7 @@ class RhizomeApp(App[None]):
             # Textual toasts require markup strings, not Rich Text renderables.
             self.notify(escape(result or "Done"))
             if action.operation == "commit":
+                self._commit_template_seed = None
                 self.query_one("#commit-message", TextArea).clear()
             if action.operation in {
                 "delete-branch",
@@ -2288,9 +2357,10 @@ class RhizomeApp(App[None]):
             workspace.query_one("#unstage-all", Button).disabled = self.busy or not any(
                 f.staged for f in files
             )
-            # Keep the visible control aligned with the coordinator's temporary
-            # commit gate until the reviewed-index transaction is proven.
-            workspace.query_one("#commit", Button).disabled = True
+            workspace.query_one("#commit", Button).disabled = (
+                self.busy or not staged or bool(self.snapshot_data.conflicts)
+                or bool(self.snapshot_data.operation)
+            )
             workspace.query_one("#continue", Button).disabled = self.busy or bool(
                 self.snapshot_data.conflicts
             )

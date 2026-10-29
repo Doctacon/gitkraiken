@@ -38,7 +38,14 @@ hosted PR browsing/creation uses authenticated GitHub/Azure CLIs; see [pull requ
     `GitError` on failure. Explicitly selected actions run without a second confirmation. stage and
     unstage with empty paths mean all; discard REQUIRES explicit tracked file paths,
     only worktree edits (never deletes untracked files or resets the index). Commit
-    only staged changes. reset-soft preserves index/worktree; reset-mixed preserves
+    only staged changes, using the reviewed-index transaction and native hooks/signing.
+    Composer text reaches `commit --edit --no-status --no-verbose -F -` via anonymous
+    regular-file stdin, not argv. Strict `i18n.commitEncoding` conversion precedes
+    transaction admission; Git owns cleanup and hook rewriting. Private template
+    loading uses Git's effective path configuration and a bounded regular-file read.
+    These composer additions currently have existing-regression checks only, not
+    dedicated template/encoding acceptance coverage.
+    reset-soft preserves index/worktree; reset-mixed preserves
     working files and resets the index; reset-hard explicitly discards changes.
     Reset refuses unfinished operations/conflicts. edit-message amends HEAD only,
     using --only so staged content stays out of the commit. create-worktree uses
@@ -150,8 +157,12 @@ hosted PR browsing/creation uses authenticated GitHub/Azure CLIs; see [pull requ
   chains, basename/status leaves, and typed FileSelected messages. Same-commit
   refresh preserves folds and selection.
 - `app.py`, `dialogs.py`, `app.tcss`: Textual UI. `RhizomeApp(path: str | Path)`.
-  Synchronous Git calls run via `asyncio.to_thread`, not on the UI loop; serialize
-  mutation/refresh work and ignore stale selection detail results. No UI-to-shell
+  Synchronous Git calls normally run via `asyncio.to_thread`; ordinary interactive
+  commits deliberately suspend Textual and hand the foreground terminal to native
+  Git synchronously, then resume after settlement. Draft restoration temporarily
+  makes the editor read-only, restores nonempty drafts before templates, and rejects
+  silently normalized line endings. Untouched template seeds are not persisted.
+  Serialize mutations and ignore stale selection detail results. No UI-to-shell
   calls. Refresh after success AND failure (conflicts can change repository state).
   Local polling runs every 2s. A single-flight background worker fetches remotes
   and lists PRs on opening/resuming and every 30s after completion. It shares the

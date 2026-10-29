@@ -1,3 +1,8 @@
+> Historical planning artifact. Roadmap execution has resumed in
+> `composer-progress.md`; ordinary commits remain enabled. The old gating
+> instructions below are superseded, and proposed test additions were not
+> authorized for this increment (operator selected existing checks only).
+
 ## Resolved implementation shape
 
 Use the existing `Action.message: str`, app draft store, coordinator gate, and reviewed-index transaction. Add only private seams; do not change `Action`, persistence schema, provider code, or any public interface.
