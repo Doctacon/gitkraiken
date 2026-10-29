@@ -1,4 +1,5 @@
 """Real-Git evidence for native commit index representation preservation."""
+
 from __future__ import annotations
 
 import shlex
@@ -158,9 +159,7 @@ def test_sparse_index_commit_matches_native_collapsed_and_skip_worktree_state(tm
 
     expected_before = git_run(native, "ls-files", "--sparse", "--stage", "-z").stdout
     tags_before = git_run(native, "ls-files", "--sparse", "-t", "-z").stdout
-    assert expected_before == git_run(
-        public, "ls-files", "--sparse", "--stage", "-z"
-    ).stdout
+    assert expected_before == git_run(public, "ls-files", "--sparse", "--stage", "-z").stdout
     assert tags_before == git_run(public, "ls-files", "--sparse", "-t", "-z").stdout
     assert "040000 " in expected_before and "\toutside/\0" in expected_before
     assert tags_before.split("\0")[:2] == ["S outside/", "H visible/file.txt"]
@@ -182,9 +181,10 @@ def test_sparse_index_commit_matches_native_collapsed_and_skip_worktree_state(tm
     assert public_tags.split("\0")[:2] == ["S outside/", "H visible/file.txt"]
     assert int.from_bytes(public_index[8:12], "big") == 2
     assert int.from_bytes(native_index[8:12], "big") == 2
-    assert git_run(public, "rev-parse", "HEAD^{tree}").stdout == git_run(
-        native, "rev-parse", "HEAD^{tree}"
-    ).stdout
+    assert (
+        git_run(public, "rev-parse", "HEAD^{tree}").stdout
+        == git_run(native, "rev-parse", "HEAD^{tree}").stdout
+    )
     assert git_run(public, "show", "HEAD:outside/a.txt").stdout == "outside a\n"
     assert git_run(public, "show", "HEAD:outside/b.txt").stdout == "outside b\n"
     assert git_run(public, "show", "HEAD:visible/file.txt").stdout == "visible reviewed\n"
@@ -285,9 +285,9 @@ def test_split_index_expiration_does_not_remove_storage_used_by_locked_real_inde
         raise outcome[0]
     assert git_run(git_repo, "show", "HEAD:tracked-00.txt").stdout == "reviewed\n"
     assert git_run(git_repo, "diff", "--cached", "--quiet", "--exit-code").returncode == 0
-    published_shared = git_run(
-        git_repo, "rev-parse", "--shared-index-path"
-    ).stdout.removesuffix("\n")
+    published_shared = git_run(git_repo, "rev-parse", "--shared-index-path").stdout.removesuffix(
+        "\n"
+    )
     assert published_shared
     published_shared_path = Path(published_shared)
     if not published_shared_path.is_absolute():

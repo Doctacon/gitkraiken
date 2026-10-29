@@ -8,7 +8,8 @@ entire [roadmap](design/world-class-rhizome.md). Later investigation, integratio
 personalization, and captured hosted-review workflows remain incomplete.
 Ordinary staged commits are available through a reviewed-index transaction with
 native hooks/signing and a deliberate terminal handoff. Release and cross-platform
-acceptance remain outstanding; the installer crash/retry defect is still deferred.
+acceptance remain outstanding. The installer crash/retry regression is repaired
+and passes isolated tests; live installer/platform validation is still pending.
 
 ## Run
 

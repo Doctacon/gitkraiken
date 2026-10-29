@@ -85,9 +85,9 @@ _MAX_ACTIVITY = 20
 _MAX_ACTIVITY_MESSAGE = 2_000
 
 _LOCKS_GUARD = threading.Lock()
-_REPOSITORY_LOCKS: weakref.WeakValueDictionary[
-    tuple[int, int], threading.RLock
-] = weakref.WeakValueDictionary()
+_REPOSITORY_LOCKS: weakref.WeakValueDictionary[tuple[int, int], threading.RLock] = (
+    weakref.WeakValueDictionary()
+)
 
 
 @dataclass(frozen=True)
@@ -152,8 +152,7 @@ def _hash_bytes(value: bytes) -> str:
 def _safe_activity_message(value: str) -> str:
     redacted = _redact(value)
     cleaned = "".join(
-        character if character in "\n\t" or ord(character) >= 32 else "�"
-        for character in redacted
+        character if character in "\n\t" or ord(character) >= 32 else "�" for character in redacted
     ).strip()
     if len(cleaned) > _MAX_ACTIVITY_MESSAGE:
         return cleaned[: _MAX_ACTIVITY_MESSAGE - 18] + "\n[output truncated]"
@@ -306,9 +305,7 @@ class OperationCoordinator:
 
                 if plan.requires_confirmation:
                     if self.journal is None:  # Defensive even if availability changes later.
-                        raise GitError(
-                            "This operation requires a durable recovery checkpoint."
-                        )
+                        raise GitError("This operation requires a durable recovery checkpoint.")
                     checkpoint = self._prepare_checkpoint(plan.action)
                     checkpoint_id = checkpoint.id
                     self._update_activity(
@@ -333,6 +330,7 @@ class OperationCoordinator:
                             *pending.selection,
                         )
                     elif plan.action.operation == "commit":
+
                         def validate_commit() -> None:
                             self._assert_identity()
                             self._assert_state(plan.action, pending.state)
@@ -343,9 +341,7 @@ class OperationCoordinator:
                 except Exception:
                     if checkpoint_id:
                         outcome = (
-                            "uncertain"
-                            if self._remote_outcome_uncertain(plan.action)
-                            else "failed"
+                            "uncertain" if self._remote_outcome_uncertain(plan.action) else "failed"
                         )
                         self._complete_checkpoint(checkpoint_id, outcome)
                     raise
@@ -383,7 +379,8 @@ class OperationCoordinator:
                 and isinstance(error, GitError)
             )
             uncertain = (
-                checkpoint_outcome_uncertain or remote_uncertain
+                checkpoint_outcome_uncertain
+                or remote_uncertain
                 or isinstance(error, GitOutcomeUncertain)
             )
             state = "uncertain" if uncertain else "failed"
@@ -439,8 +436,7 @@ class OperationCoordinator:
         if selection[0] not in ids or selection[1] not in ids:
             raise GitError("The selected line range is outside this patch.")
         if not any(
-            selection[0] <= line.id <= selection[1]
-            and line.kind in {"add", "delete"}
+            selection[0] <= line.id <= selection[1] and line.kind in {"add", "delete"}
             for line in patch.lines
         ):
             raise GitError("The selected range must contain at least one changed line.")
@@ -572,9 +568,7 @@ class OperationCoordinator:
             state["config"] = self._config_state()
 
         if operation in _TARGET_OPERATIONS and action.target:
-            target = self.repository._resolve_commit(
-                action.target, label=f"{operation} target"
-            )
+            target = self.repository._resolve_commit(action.target, label=f"{operation} target")
             state["target_oid"] = target
             details["target_oid"] = target
         elif operation in {"create-branch", "tag"}:
@@ -621,9 +615,7 @@ class OperationCoordinator:
         elif operation == "create-worktree":
             if len(action.paths) != 1:
                 raise GitError("Create worktree requires exactly one destination path.")
-            destination = self.repository._external_path(
-                action.paths[0], "Worktree destination"
-            )
+            destination = self.repository._external_path(action.paths[0], "Worktree destination")
             state["destination"] = self._destination_state(destination)
             state["worktrees"] = _hash_bytes(
                 self.repository._git(
@@ -633,9 +625,7 @@ class OperationCoordinator:
             )
             details["destination"] = os.fspath(destination)
             if action.name:
-                name = self.repository._validate_branch(
-                    action.name, "New worktree branch name"
-                )
+                name = self.repository._validate_branch(action.name, "New worktree branch name")
                 state["destination_ref"] = self._ref_oid(f"refs/heads/{name}")
                 if state["destination_ref"]:
                     raise GitError(f"A branch named {name} already exists.")
@@ -732,9 +722,7 @@ class OperationCoordinator:
         status = self.repository._status()
         selected: list[str]
         if action.paths:
-            requested = self.repository._related_status_paths(
-                self.repository._paths(action.paths)
-            )
+            requested = self.repository._related_status_paths(self.repository._paths(action.paths))
             selected = list(requested)
             for requested_path in requested:
                 prefix = requested_path.rstrip("/") + "/"
@@ -746,10 +734,7 @@ class OperationCoordinator:
                 )
         else:
             selected = [
-                path
-                for change in status
-                for path in (change.path, change.original_path)
-                if path
+                path for change in status for path in (change.path, change.original_path) if path
             ]
         digest = hashlib.sha256()
         status_by_path = {
@@ -763,9 +748,7 @@ class OperationCoordinator:
             self._include_digest(digest, os.fsencode(name))
             self._include_digest(
                 digest,
-                repr(status_by_path.get(name, ("", "", "", ""))).encode(
-                    "utf-8", "surrogateescape"
-                ),
+                repr(status_by_path.get(name, ("", "", "", ""))).encode("utf-8", "surrogateescape"),
             )
             self._include_path(digest, name)
         return digest.hexdigest(), names
@@ -788,13 +771,7 @@ class OperationCoordinator:
             ],
             operation="review checkout target paths",
         )
-        return tuple(
-            sorted(
-                _decode(path)
-                for path in result.stdout.split(b"\x00")
-                if path
-            )
-        )
+        return tuple(sorted(_decode(path) for path in result.stdout.split(b"\x00") if path))
 
     def _attributes_state(
         self,
@@ -827,10 +804,7 @@ class OperationCoordinator:
             for _path, attribute, value in zip(
                 fields[0::3], fields[1::3], fields[2::3], strict=True
             ):
-                if (
-                    attribute in conversion_attributes
-                    and value not in {b"unset", b"unspecified"}
-                ):
+                if attribute in conversion_attributes and value not in {b"unset", b"unspecified"}:
                     raise GitError(
                         "Staging paths with effective content-conversion attributes is "
                         "unsupported; use external Git for this transformation."
@@ -892,21 +866,16 @@ class OperationCoordinator:
                 descriptor = os.open(path, flags)
                 with os.fdopen(descriptor, "rb") as stream:
                     opened = os.fstat(stream.fileno())
-                    if (
-                        not stat.S_ISREG(opened.st_mode)
-                        or self._file_identity(opened) != self._file_identity(metadata)
-                    ):
-                        raise GitError(
-                            "A worktree path changed while its operation was reviewed."
-                        )
+                    if not stat.S_ISREG(opened.st_mode) or self._file_identity(
+                        opened
+                    ) != self._file_identity(metadata):
+                        raise GitError("A worktree path changed while its operation was reviewed.")
                     file_digest = hashlib.sha256()
                     for block in iter(lambda: stream.read(1024 * 1024), b""):
                         file_digest.update(block)
                     after = os.fstat(stream.fileno())
                 if self._file_identity(after) != self._file_identity(opened):
-                    raise GitError(
-                        "A worktree path changed while its operation was reviewed."
-                    )
+                    raise GitError("A worktree path changed while its operation was reviewed.")
                 self._include_digest(digest, file_digest.digest())
             except GitError:
                 raise
@@ -915,9 +884,7 @@ class OperationCoordinator:
         elif stat.S_ISDIR(metadata.st_mode):
             self._include_digest(digest, b"directory")
         else:
-            raise GitError(
-                "Directory and special-file changes require an external Git review."
-            )
+            raise GitError("Directory and special-file changes require an external Git review.")
 
     @staticmethod
     def _file_identity(info: os.stat_result) -> tuple[int, int, int, int, int]:
@@ -997,7 +964,9 @@ class OperationCoordinator:
         if stat.S_ISDIR(info.st_mode):
             try:
                 state["kind"] = "directory"
-                state["entries"] = sorted(os.fsencode(item.name).hex() for item in destination.iterdir())
+                state["entries"] = sorted(
+                    os.fsencode(item.name).hex() for item in destination.iterdir()
+                )
             except OSError as error:
                 raise GitError(f"Could not inspect worktree destination: {error}") from error
         elif stat.S_ISLNK(info.st_mode):
@@ -1158,9 +1127,7 @@ class OperationCoordinator:
                     started=current.started,
                     elapsed=max(0.0, elapsed),
                     checkpoint_id=(
-                        current.checkpoint_id
-                        if checkpoint_id is None
-                        else checkpoint_id
+                        current.checkpoint_id if checkpoint_id is None else checkpoint_id
                     ),
                 )
                 break

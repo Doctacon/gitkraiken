@@ -59,13 +59,16 @@ class RecoveryResult:
 
 
 def _canonical_json(value: object) -> bytes:
-    return json.dumps(
-        value,
-        ensure_ascii=True,
-        allow_nan=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8") + b"\n"
+    return (
+        json.dumps(
+            value,
+            ensure_ascii=True,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        + b"\n"
+    )
 
 
 def _envelope(body: dict[str, Any]) -> bytes:
@@ -183,11 +186,7 @@ class RecoveryJournal:
     ) -> None:
         if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes <= 0:
             raise RecoveryError("Recovery content budget must be a positive byte count.")
-        if (
-            not isinstance(max_age_days, int)
-            or isinstance(max_age_days, bool)
-            or max_age_days < 0
-        ):
+        if not isinstance(max_age_days, int) or isinstance(max_age_days, bool) or max_age_days < 0:
             raise RecoveryError("Recovery maximum age must be a nonnegative day count.")
         self.root = Path(os.path.abspath(Path(root).expanduser()))
         self.max_bytes = max_bytes
@@ -246,9 +245,7 @@ class RecoveryJournal:
         # Completed, unpinned checkpoints are eligible for capacity eviction.
         # Admission is constrained by content which policy forbids evicting.
         protected_usage = sum(
-            int(body["size_bytes"])
-            for body in bodies
-            if body["active"] or body["pinned"]
+            int(body["size_bytes"]) for body in bodies if body["active"] or body["pinned"]
         )
         available = self.max_bytes - protected_usage
         if available <= 0:
@@ -281,7 +278,9 @@ class RecoveryJournal:
                 preflight_bytes += int(index_state.get("size", 0))
                 preflight_bytes += int(worktree_state.get("size", 0))
                 if preflight_bytes >= available:
-                    raise RecoveryError("Requested file preimages exceed the recovery content budget.")
+                    raise RecoveryError(
+                        "Requested file preimages exceed the recovery content budget."
+                    )
 
                 index_record = self._materialize_git_state(
                     repo, index_root, pure, index_state, available
@@ -378,7 +377,9 @@ class RecoveryJournal:
                 ) from error
             if isinstance(error, RecoveryError):
                 raise
-            raise RecoveryError(f"Could not prepare the required recovery checkpoint: {error}") from error
+            raise RecoveryError(
+                f"Could not prepare the required recovery checkpoint: {error}"
+            ) from error
 
     @_serialized
     def complete(self, checkpoint_id: str, outcome: str = "succeeded") -> None:
@@ -476,7 +477,9 @@ class RecoveryJournal:
         if not recovered:
             summary = "Checkpoint contains no history or file preimages to recover."
         else:
-            summary = "Recovered aside: " + "; ".join(recovered) + ". Current checkout was not changed."
+            summary = (
+                "Recovered aside: " + "; ".join(recovered) + ". Current checkout was not changed."
+            )
         return RecoveryResult(branch=branch, directory=files_directory, summary=summary)
 
     @staticmethod
@@ -522,14 +525,10 @@ class RecoveryJournal:
             if not separator or len(fields) != 3:
                 raise RecoveryError("Git returned malformed index metadata.")
             if path == requested:
-                records.append(
-                    {"mode": fields[0], "oid": fields[1].lower(), "stage": fields[2]}
-                )
+                records.append({"mode": fields[0], "oid": fields[1].lower(), "stage": fields[2]})
         return records
 
-    def _index_state(
-        self, repo: Repository, path: str, head: str
-    ) -> tuple[dict[str, Any], bool]:
+    def _index_state(self, repo: Repository, path: str, head: str) -> tuple[dict[str, Any], bool]:
         result = repo._git(
             ["ls-files", "--stage", "-z", "--", path],
             literal_paths=True,
@@ -604,9 +603,13 @@ class RecoveryJournal:
         except OSError as error:
             raise RecoveryError(f"Cannot inspect worktree path {path!r}: {error}") from error
         if stat.S_ISLNK(info.st_mode):
-            raise RecoveryError(f"Tracked symlink worktree representation is unsupported: {path!r}.")
+            raise RecoveryError(
+                f"Tracked symlink worktree representation is unsupported: {path!r}."
+            )
         if not stat.S_ISREG(info.st_mode):
-            raise RecoveryError(f"Only regular tracked worktree files can be checkpointed: {path!r}.")
+            raise RecoveryError(
+                f"Only regular tracked worktree files can be checkpointed: {path!r}."
+            )
         mode = "100755" if info.st_mode & 0o111 else "100644"
         return {
             "present": True,
@@ -669,7 +672,9 @@ class RecoveryJournal:
             return {"present": False}
         source = repo.root.joinpath(*pure.parts)
         if not hasattr(os, "O_NOFOLLOW"):
-            raise RecoveryError("This platform cannot safely checkpoint worktree files without following symlinks.")
+            raise RecoveryError(
+                "This platform cannot safely checkpoint worktree files without following symlinks."
+            )
         try:
             descriptor = os.open(source, os.O_RDONLY | os.O_NOFOLLOW)
             with os.fdopen(descriptor, "rb") as input_file:
@@ -683,7 +688,9 @@ class RecoveryJournal:
         except RecoveryError:
             raise
         except OSError as error:
-            raise RecoveryError(f"Cannot read worktree preimage {pure.as_posix()!r}: {error}") from error
+            raise RecoveryError(
+                f"Cannot read worktree preimage {pure.as_posix()!r}: {error}"
+            ) from error
         identity = [
             after.st_dev,
             after.st_ino,
@@ -725,7 +732,9 @@ class RecoveryJournal:
         try:
             free = shutil.disk_usage(self.root).free
         except OSError as error:
-            raise RecoveryError(f"Cannot preflight free space for history recovery: {error}") from error
+            raise RecoveryError(
+                f"Cannot preflight free space for history recovery: {error}"
+            ) from error
         if estimate > free:
             raise RecoveryError("Insufficient free space for the required history checkpoint.")
 
@@ -735,7 +744,9 @@ class RecoveryJournal:
                 if not entry.name.startswith(".tmp-"):
                     continue
                 if entry.is_symlink() or not entry.is_dir():
-                    raise RecoveryError("Unsafe unpublished recovery state requires manual inspection.")
+                    raise RecoveryError(
+                        "Unsafe unpublished recovery state requires manual inspection."
+                    )
                 shutil.rmtree(entry)
         except RecoveryError:
             raise

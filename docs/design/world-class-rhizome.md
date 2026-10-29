@@ -473,6 +473,12 @@ Use a recorded reference SSD laptop and reproducible fixtures within this envelo
 | Usable local workspace | At or below 2 s cold / 1 s warm |
 | Ordinary diff presentation | At or below 500 ms |
 
+**M1 exception approved 2026-10-29:** the operator accepted the measured **1.509 s
+startup maximum** on the recorded local reference profile. See the
+[acceptance record](../validation/m1-performance.md#operator-acceptance--2026-10-29).
+The original target above remains recorded; this exception does not waive other
+measurements, environments or release gates.
+
 Record hardware, OS/tool versions, workload construction, and cold/warm definitions.
 Do not claim these figures have been met. Network, hooks, and signers can take their
 own time, but cannot excuse a frozen UI. A stalled network request must not freeze

@@ -71,9 +71,13 @@ def test_split_index_expiry_keeps_the_visible_real_index_readable(git_repo, git_
     def read_before_publication(command, *args, **kwargs):
         result = run(command, *args, **kwargs)
         if "update-index" in command and kwargs.get("env", {}).get("GIT_INDEX_FILE"):
-            readers.append(run(
-                ["git", "ls-files", "--stage", "-z"], cwd=git_repo, capture_output=True,
-            ))
+            readers.append(
+                run(
+                    ["git", "ls-files", "--stage", "-z"],
+                    cwd=git_repo,
+                    capture_output=True,
+                )
+            )
         return result
 
     monkeypatch.setattr(subprocess, "run", read_before_publication)
@@ -90,9 +94,7 @@ def test_split_index_expiry_keeps_the_visible_real_index_readable(git_repo, git_
     assert git_run(git_repo, "config", "splitIndex.sharedIndexExpire").stdout.strip() == "now"
 
 
-def test_stage_selected_replacement_preserves_other_worktree_edit(
-    git_repo: Path, git_run
-) -> None:
+def test_stage_selected_replacement_preserves_other_worktree_edit(git_repo: Path, git_run) -> None:
     _commit_file(git_repo, git_run, "notes.txt", b"one\ntwo\nthree\nfour\n")
     path = git_repo / "notes.txt"
     path.write_bytes(b"one\nTWO\nthree\nFOUR\n")
@@ -247,9 +249,7 @@ def test_literal_odd_path_is_never_shell_interpolated(git_repo: Path, git_run) -
 
 
 @pytest.mark.parametrize("changed", ["worktree", "index", "head"])
-def test_apply_rejects_stale_repository_state(
-    git_repo: Path, git_run, changed: str
-) -> None:
+def test_apply_rejects_stale_repository_state(git_repo: Path, git_run, changed: str) -> None:
     _commit_file(git_repo, git_run, "stale.txt", b"old\n")
     path = git_repo / "stale.txt"
     path.write_bytes(b"new\n")

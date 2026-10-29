@@ -79,9 +79,7 @@ _URL_RE = re.compile(
     r"(?<![A-Za-z0-9+.-])(?P<leading>[0-9+.-]*)"
     r"(?P<url>[A-Za-z][A-Za-z0-9+.-]*://[^\s'\"<>]+)"
 )
-_SCP_URL_RE = re.compile(
-    r"(?<![^@\s/:])(?P<url>[^@\s/:]+@[^@\s/:]+:[^\s'\"<>]+)"
-)
+_SCP_URL_RE = re.compile(r"(?<![^@\s/:])(?P<url>[^@\s/:]+@[^@\s/:]+:[^\s'\"<>]+)")
 
 
 @dataclass(frozen=True)
@@ -148,7 +146,7 @@ def _redact(text: str) -> str:
         # Keep common punctuation which the broad URL match may consume.
         value = match.group("url")
         trimmed = value.rstrip(".,;)]}")
-        suffix = value[len(trimmed):]
+        suffix = value[len(trimmed) :]
         return match.groupdict().get("leading", "") + _redact_url(trimmed) + suffix
 
     return _SCP_URL_RE.sub(replace, _URL_RE.sub(replace, text))
@@ -429,8 +427,10 @@ def _commit_terminal(argv: list[str]):
                 raise GitError("Bring Rhizome to the foreground before committing.")
             attributes = termios.tcgetattr(terminal)
             try:
-                yield [sys.executable, "-I", "-S", "-c", _COMMIT_TERMINAL_EXEC,
-                       str(terminal), *argv], (terminal,)
+                yield (
+                    [sys.executable, "-I", "-S", "-c", _COMMIT_TERMINAL_EXEC, str(terminal), *argv],
+                    (terminal,),
+                )
             finally:
                 # tcsetpgrp/tcsetattr must work while Git still owns the foreground.
                 # Blocking SIGTTOU is thread-local; don't change the UI's handlers.
@@ -482,7 +482,8 @@ class _CommitIndexTransaction:
             raise GitError("The commit index transaction is not open.")
         info = self.temporary.lstat()
         if (
-            self.temporary_fd is None or not stat.S_ISDIR(info.st_mode)
+            self.temporary_fd is None
+            or not stat.S_ISDIR(info.st_mode)
             or self._identity(info) != self.temporary_owner
             or self._identity(os.fstat(self.temporary_fd)) != self.temporary_owner
         ):
@@ -498,9 +499,16 @@ class _CommitIndexTransaction:
         if self.lock_owner is None or self.directory_fd is None:
             return False
         try:
-            return self._identity(os.stat(
-                self.lock_name, dir_fd=self.directory_fd, follow_symlinks=False,
-            )) == self.lock_owner
+            return (
+                self._identity(
+                    os.stat(
+                        self.lock_name,
+                        dir_fd=self.directory_fd,
+                        follow_symlinks=False,
+                    )
+                )
+                == self.lock_owner
+            )
         except FileNotFoundError:
             return False
 
@@ -520,20 +528,25 @@ class _CommitIndexTransaction:
         nofollow = getattr(os, "O_NOFOLLOW", 0)
         try:
             self.directory_fd = os.open(
-                self.directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+                self.directory,
+                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
             )
             self.lock_fd = os.open(
-                self.lock_name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow,
-                0o600, dir_fd=self.directory_fd,
+                self.lock_name,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow,
+                0o600,
+                dir_fd=self.directory_fd,
             )
             self.lock_owner = self._identity(os.fstat(self.lock_fd))
             self.temporary = Path(tempfile.mkdtemp(prefix="rhizome-commit-", dir=self.directory))
             self.temporary_fd = os.open(
-                self.temporary, os.O_RDONLY | nofollow | getattr(os, "O_DIRECTORY", 0),
+                self.temporary,
+                os.O_RDONLY | nofollow | getattr(os, "O_DIRECTORY", 0),
             )
             self.temporary_owner = self._identity(os.fstat(self.temporary_fd))
             source_fd = os.open(
-                self.index.name, os.O_RDONLY | nofollow | getattr(os, "O_NONBLOCK", 0),
+                self.index.name,
+                os.O_RDONLY | nofollow | getattr(os, "O_NONBLOCK", 0),
                 dir_fd=self.directory_fd,
             )
             with os.fdopen(source_fd, "rb") as source:
@@ -561,7 +574,9 @@ class _CommitIndexTransaction:
             "the real index, and this candidate have been inspected. No automatic replay.\n"
         ).encode()
         self.context_fd = os.open(
-            self.candidate.parent / "context.txt", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600,
+            self.candidate.parent / "context.txt",
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            0o600,
         )
         self.context_owner = self._identity(os.fstat(self.context_fd))
         with os.fdopen(os.dup(self.context_fd), "wb") as stream:
@@ -581,7 +596,10 @@ class _CommitIndexTransaction:
         self.verify()
 
     def run(
-        self, args: list[str], *, input_bytes: bytes,
+        self,
+        args: list[str],
+        *,
+        input_bytes: bytes,
     ) -> tuple[subprocess.CompletedProcess[bytes], str]:
         """Wait for native Git without a deadline or an exceptional-path kill.
 
@@ -615,9 +633,14 @@ class _CommitIndexTransaction:
             # child. Only preparation failures before this point are settled.
             self.started = True
             process = subprocess.Popen(
-                command, cwd=self.repository.root, env=env,
-                stdin=stdin, stdout=stdout, stderr=stderr,
-                process_group=0, pass_fds=terminal_fds,
+                command,
+                cwd=self.repository.root,
+                env=env,
+                stdin=stdin,
+                stdout=stdout,
+                stderr=stderr,
+                process_group=0,
+                pass_fds=terminal_fds,
             )
             self.git_pid = self.git_pgid = process.pid
             self._append_context(
@@ -636,13 +659,15 @@ class _CommitIndexTransaction:
                     mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTTOU})
                     try:
                         while offset < end:
-                            chunk = os.pread(stderr.fileno(), min(_MAX_ERROR_BYTES, end - offset), offset)
+                            chunk = os.pread(
+                                stderr.fileno(), min(_MAX_ERROR_BYTES, end - offset), offset
+                            )
                             if not chunk:
                                 break
                             offset += len(chunk)
                             remaining = memoryview(chunk)
                             while remaining:
-                                remaining = remaining[os.write(terminal_fds[0], remaining):]
+                                remaining = remaining[os.write(terminal_fds[0], remaining) :]
                     finally:
                         signal.pthread_sigmask(signal.SIG_SETMASK, mask)
 
@@ -706,7 +731,7 @@ class _CommitIndexTransaction:
         while chunk := stream.read(_MAX_ERROR_BYTES):
             parts = chunk.split(b"\n")
             for position, part in enumerate(parts):
-                prefix += part[:max(0, _MAX_ERROR_BYTES - len(prefix))]
+                prefix += part[: max(0, _MAX_ERROR_BYTES - len(prefix))]
                 if position < len(parts) - 1:
                     if match := header.match(prefix):
                         created.append(match.group(1))
@@ -720,8 +745,7 @@ class _CommitIndexTransaction:
     def _append_context(self, observation: str) -> None:
         descriptor = os.open(
             self.candidate.parent / "context.txt",
-            os.O_WRONLY | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
-            | getattr(os, "O_NONBLOCK", 0),
+            os.O_WRONLY | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),
         )
         with os.fdopen(descriptor, "wb") as stream:
             info = os.fstat(stream.fileno())
@@ -752,21 +776,25 @@ class _CommitIndexTransaction:
         else:
             raise GitError("The alternate index is still locked; its state is not stable.")
         nofollow = getattr(os, "O_NOFOLLOW", 0)
-        candidate_fd = os.open(self.candidate, os.O_RDONLY | nofollow | getattr(os, "O_NONBLOCK", 0))
+        candidate_fd = os.open(
+            self.candidate, os.O_RDONLY | nofollow | getattr(os, "O_NONBLOCK", 0)
+        )
         try:
             candidate_info = os.fstat(candidate_fd)
             if not stat.S_ISREG(candidate_info.st_mode):
                 raise GitError("Git did not leave a regular commit index.")
             # Validate the binary index, including extensions/shared storage.
             self.repository._git(
-                ["ls-files", "--stage", "-z"], index_file=self.candidate,
+                ["ls-files", "--stage", "-z"],
+                index_file=self.candidate,
                 operation="validate commit index",
             )
             os.fsync(candidate_fd)
         finally:
             os.close(candidate_fd)
         shared = self.repository._git(
-            ["rev-parse", "--shared-index-path"], index_file=self.candidate,
+            ["rev-parse", "--shared-index-path"],
+            index_file=self.candidate,
             operation="inspect commit split index",
         ).stdout
         if shared := _decode(shared).removesuffix("\n"):
@@ -798,8 +826,10 @@ class _CommitIndexTransaction:
         self.verify()
         self._append_context("phase: real-index-replace-pending\n")
         os.replace(
-            self.lock_name, self.index.name,
-            src_dir_fd=self.directory_fd, dst_dir_fd=self.directory_fd,
+            self.lock_name,
+            self.index.name,
+            src_dir_fd=self.directory_fd,
+            dst_dir_fd=self.directory_fd,
         )
         self.published = True
         self._append_context("phase: index-replaced-durability-pending\n")
@@ -820,7 +850,10 @@ class _CommitIndexTransaction:
             cleanup_error = failure
         finally:
             for descriptor in (
-                self.context_fd, self.temporary_fd, self.lock_fd, self.directory_fd,
+                self.context_fd,
+                self.temporary_fd,
+                self.lock_fd,
+                self.directory_fd,
             ):
                 if descriptor is not None:
                     try:
@@ -954,19 +987,33 @@ class Repository:
         command = ["check-attr", "-z", "--all", "--stdin"]
         if not source:
             return self._git(
-                command, literal_paths=True, input_bytes=data,
+                command,
+                literal_paths=True,
+                input_bytes=data,
                 operation="review effective path attributes",
             ).stdout
         with tempfile.TemporaryDirectory(prefix="rhizome-attributes-") as directory:
             index = Path(directory) / "index"
             self._git(
-                ["-c", "core.splitIndex=false", "-c", "core.sparseCheckout=false",
-                 "-c", "index.sparse=false", "read-tree", source],
-                index_file=index, operation="read captured attribute tree",
+                [
+                    "-c",
+                    "core.splitIndex=false",
+                    "-c",
+                    "core.sparseCheckout=false",
+                    "-c",
+                    "index.sparse=false",
+                    "read-tree",
+                    source,
+                ],
+                index_file=index,
+                operation="read captured attribute tree",
             )
             return self._git(
-                [*command, "--cached"], literal_paths=True, input_bytes=data,
-                index_file=index, operation="review captured path attributes",
+                [*command, "--cached"],
+                literal_paths=True,
+                input_bytes=data,
+                index_file=index,
+                operation="review captured path attributes",
             ).stdout
 
     def _replace_index_entries(self, records: bytes, validate: Callable[[], None]) -> None:
@@ -991,14 +1038,19 @@ class Repository:
 
         def owns_lock() -> bool:
             try:
-                return identity(os.stat(lock_name, dir_fd=directory_fd, follow_symlinks=False)) == lock_owner
+                return (
+                    identity(os.stat(lock_name, dir_fd=directory_fd, follow_symlinks=False))
+                    == lock_owner
+                )
             except FileNotFoundError:
                 return False
 
         try:
             directory_fd = os.open(directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
             lock_fd = os.open(
-                lock_name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow, 0o600,
+                lock_name,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow,
+                0o600,
                 dir_fd=directory_fd,
             )
             lock_owner = identity(os.fstat(lock_fd))
@@ -1012,16 +1064,25 @@ class Repository:
                     with os.fdopen(source_fd, "rb") as source:
                         info = os.fstat(source.fileno())
                         if not stat.S_ISREG(info.st_mode):
-                            raise GitError("The Git index is not a regular file; no changes applied.")
+                            raise GitError(
+                                "The Git index is not a regular file; no changes applied."
+                            )
                         with candidate.open("xb") as destination:
                             shutil.copyfileobj(source, destination)
                         candidate.chmod(stat.S_IMODE(info.st_mode))
                 self._git(
                     # The real index still references its old shared base until
                     # publication. Native candidate maintenance must not expire it.
-                    ["-c", "splitIndex.sharedIndexExpire=never", "update-index", "-z", "--index-info"],
+                    [
+                        "-c",
+                        "splitIndex.sharedIndexExpire=never",
+                        "update-index",
+                        "-z",
+                        "--index-info",
+                    ],
                     input_bytes=records,
-                    index_file=candidate, operation="apply selected patch to index",
+                    index_file=candidate,
+                    operation="apply selected patch to index",
                 )
                 candidate_fd = os.open(candidate, os.O_RDONLY | nofollow)
                 try:
@@ -1032,7 +1093,8 @@ class Repository:
                 finally:
                     os.close(candidate_fd)
                 shared = self._git(
-                    ["rev-parse", "--shared-index-path"], index_file=candidate,
+                    ["rev-parse", "--shared-index-path"],
+                    index_file=candidate,
                     operation="inspect candidate split index",
                 ).stdout
                 if shared := _decode(shared).removesuffix("\n"):
@@ -1099,15 +1161,13 @@ class Repository:
         try:
             result = self._git(
                 ["config", "--includes", "--null", "--get", "i18n.commitEncoding"],
-                ok_codes=(0, 1), operation="read commit encoding configuration",
+                ok_codes=(0, 1),
+                operation="read commit encoding configuration",
             )
         except GitError as error:
             raise GitError("Could not read the commit encoding configuration.") from error
         raw = b"UTF-8\0" if result.returncode == 1 else result.stdout
-        if (
-            len(raw) > 129 or not raw.endswith(b"\0")
-            or b"\0" in raw[:-1] or len(raw) == 1
-        ):
+        if len(raw) > 129 or not raw.endswith(b"\0") or b"\0" in raw[:-1] or len(raw) == 1:
             raise GitError("The commit encoding configuration is malformed.")
         try:
             configured = raw[:-1].decode("ascii", "strict")
@@ -1142,7 +1202,8 @@ class Repository:
         try:
             result = self._git(
                 ["config", "--includes", "--null", "--path", "--get", "commit.template"],
-                ok_codes=(0, 1), operation="read commit template configuration",
+                ok_codes=(0, 1),
+                operation="read commit template configuration",
             )
         except GitError as error:
             raise GitError("Could not read the commit template configuration.") from error
@@ -1150,8 +1211,10 @@ class Repository:
             return None
         raw_path = result.stdout
         if (
-            len(raw_path) > 16 * 1024 or not raw_path.endswith(b"\0")
-            or b"\0" in raw_path[:-1] or len(raw_path) == 1
+            len(raw_path) > 16 * 1024
+            or not raw_path.endswith(b"\0")
+            or b"\0" in raw_path[:-1]
+            or len(raw_path) == 1
         ):
             raise GitError("The commit template configuration is malformed.")
         path = Path(os.fsdecode(raw_path[:-1]))
@@ -1189,8 +1252,15 @@ class Repository:
             os.close(descriptor)
 
         stable_fields = (
-            "st_dev", "st_ino", "st_mode", "st_nlink", "st_uid", "st_gid",
-            "st_size", "st_mtime_ns", "st_ctime_ns",
+            "st_dev",
+            "st_ino",
+            "st_mode",
+            "st_nlink",
+            "st_uid",
+            "st_gid",
+            "st_size",
+            "st_mtime_ns",
+            "st_ctime_ns",
         )
         if any(getattr(before, field) != getattr(after, field) for field in stable_fields):
             raise GitError("The commit template changed while it was being read.")
@@ -1204,15 +1274,15 @@ class Repository:
         try:
             decoded = content.decode(encoding.codec.name, "strict")
         except (LookupError, UnicodeError, TypeError) as error:
-            raise GitError(
-                f"The commit template is not valid {encoding.label} text."
-            ) from error
+            raise GitError(f"The commit template is not valid {encoding.label} text.") from error
         if "\0" in decoded:
             raise GitError("The commit template contains unsupported NUL characters.")
         return decoded
 
     def _encode_commit_message(
-        self, message: str, encoding: _CommitEncoding | None = None,
+        self,
+        message: str,
+        encoding: _CommitEncoding | None = None,
     ) -> bytes:
         """Strictly encode an accepted message without altering its text."""
         encoding = encoding or self._commit_encoding()
@@ -1221,9 +1291,7 @@ class Repository:
         try:
             return message.encode(encoding.codec.name, "strict")
         except (LookupError, UnicodeError, TypeError) as error:
-            raise GitError(
-                f"The commit message cannot be encoded as {encoding.label}."
-            ) from error
+            raise GitError(f"The commit message cannot be encoded as {encoding.label}.") from error
 
     def _commit_index_fingerprint(self) -> bytes:
         """Bind flags/extensions as well as entries, without normalizing the index."""
@@ -1246,7 +1314,8 @@ class Repository:
         self._ensure_no_operation_or_conflicts("commit")
         staged = self._git(
             ["diff", "--cached", "--quiet", "--exit-code", "--no-ext-diff", "--no-textconv"],
-            ok_codes=(0, 1), operation="check staged changes",
+            ok_codes=(0, 1),
+            operation="check staged changes",
         )
         if staged.returncode == 0:
             raise GitError("There are no staged changes to commit.")
@@ -1255,7 +1324,8 @@ class Repository:
 
         def head_state() -> tuple[str, str]:
             symbolic = self._git(
-                ["symbolic-ref", "--quiet", "HEAD"], ok_codes=(0, 1),
+                ["symbolic-ref", "--quiet", "HEAD"],
+                ok_codes=(0, 1),
                 operation="inspect commit HEAD identity",
             )
             return self._head(), _decode(symbolic.stdout).removesuffix("\n")
@@ -1269,24 +1339,50 @@ class Repository:
                 self._preflight_context(action)
                 self._ensure_no_operation_or_conflicts("commit")
                 if before != head_state() or index_before != self._commit_index_fingerprint():
-                    raise GitError("Repository changed before the commit index was locked. Review again.")
+                    raise GitError(
+                        "Repository changed before the commit index was locked. Review again."
+                    )
                 staged = self._git(
-                    ["diff", "--cached", "--quiet", "--exit-code", "--no-ext-diff", "--no-textconv"],
-                    index_file=transaction.candidate, ok_codes=(0, 1),
+                    [
+                        "diff",
+                        "--cached",
+                        "--quiet",
+                        "--exit-code",
+                        "--no-ext-diff",
+                        "--no-textconv",
+                    ],
+                    index_file=transaction.candidate,
+                    ok_codes=(0, 1),
                     operation="check locked staged changes",
                 )
                 if staged.returncode == 0:
                     raise GitError("There are no staged changes to commit.")
                 transaction.record(*before)
                 result, created_oid = transaction.run(
-                    ["-c", "core.abbrev=no", "-c", "color.ui=false", "-c", "color.diff=false",
-                     "-c", "splitIndex.sharedIndexExpire=never",
-                     "-c", f"i18n.commitEncoding={commit_encoding.configured}",
-                     "commit", "--edit", "--no-status", "--no-verbose", "-F", "-"],
+                    [
+                        "-c",
+                        "core.abbrev=no",
+                        "-c",
+                        "color.ui=false",
+                        "-c",
+                        "color.diff=false",
+                        "-c",
+                        "splitIndex.sharedIndexExpire=never",
+                        "-c",
+                        f"i18n.commitEncoding={commit_encoding.configured}",
+                        "commit",
+                        "--edit",
+                        "--no-status",
+                        "--no-verbose",
+                        "-F",
+                        "-",
+                    ],
                     input_bytes=message_bytes,
                 )
                 if result.returncode < 0:
-                    raise GitOutcomeUncertain("Git was interrupted by a signal; hook quiescence is unknown.")
+                    raise GitOutcomeUncertain(
+                        "Git was interrupted by a signal; hook quiescence is unknown."
+                    )
                 # Native Git prints its created OID after post-commit, not the
                 # potentially substituted HEAD. This is a bounded compatibility
                 # seam, not porcelain: missing/ambiguous headers fail closed.
@@ -1301,7 +1397,9 @@ class Repository:
                 transaction.record_observed(*after, when="after-index-publication")
                 if result.returncode == 0:
                     if not created_oid:
-                        raise GitOutcomeUncertain("Git did not report one unambiguous created commit.")
+                        raise GitOutcomeUncertain(
+                            "Git did not report one unambiguous created commit."
+                        )
                     kind = self._git(
                         ["--no-replace-objects", "cat-file", "-t", created_oid],
                         operation="verify created commit type",
@@ -1317,14 +1415,20 @@ class Repository:
                     ]
                     expected = [before[0].encode("ascii")] if before[0] else []
                     if (
-                        kind != b"commit\n" or created_oid != after[0]
+                        kind != b"commit\n"
+                        or created_oid != after[0]
                         or after != head_state()
-                        or after[0] == before[0] or after[1] != before[1]
+                        or after[0] == before[0]
+                        or after[1] != before[1]
                         or parents != expected
                     ):
-                        raise GitOutcomeUncertain("HEAD/ref postconditions do not match the created commit.")
+                        raise GitOutcomeUncertain(
+                            "HEAD/ref postconditions do not match the created commit."
+                        )
                 elif after != before:
-                    raise GitOutcomeUncertain("HEAD/ref changed despite Git reporting a commit failure.")
+                    raise GitOutcomeUncertain(
+                        "HEAD/ref changed despite Git reporting a commit failure."
+                    )
                 transaction.settled = True
                 _raise_process_error(result, timeout=None, ok_codes=(0,), operation="commit")
                 return _friendly_output(result, "Git commit completed.")
@@ -1631,7 +1735,14 @@ class Repository:
 
     def _status(self) -> tuple[FileChange, ...]:
         result = self._git(
-            ["--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=no"],
+            [
+                "--no-optional-locks",
+                "status",
+                "--porcelain=v1",
+                "-z",
+                "--untracked-files=all",
+                "--ignored=no",
+            ],
             operation="read status",
         )
         records = _decode(result.stdout).split("\x00")
@@ -2165,9 +2276,7 @@ class Repository:
             return Repository._refspec_match(left, right) is not None
         left_prefix, left_suffix = left.split("*", 1)
         right_prefix, right_suffix = right.split("*", 1)
-        return (
-            left_prefix.startswith(right_prefix) or right_prefix.startswith(left_prefix)
-        ) and (
+        return (left_prefix.startswith(right_prefix) or right_prefix.startswith(left_prefix)) and (
             left_suffix.endswith(right_suffix) or right_suffix.endswith(left_suffix)
         )
 
@@ -2250,6 +2359,7 @@ class Repository:
             return symbolic
         if root.is_symlink() or not root.is_dir():
             raise GitError("Git ref storage is not a safe directory.")
+
         def unreadable(error: OSError) -> None:
             raise error
 
@@ -2401,9 +2511,8 @@ class Repository:
                 if not refspec.destination:
                     continue
                 for prior_remote, prior_destination in destinations:
-                    if (
-                        prior_remote != scope.remote
-                        and self._fetch_patterns_overlap(prior_destination, refspec.destination)
+                    if prior_remote != scope.remote and self._fetch_patterns_overlap(
+                        prior_destination, refspec.destination
                     ):
                         raise GitError(
                             f"Remotes {prior_remote} and {scope.remote} have ambiguous overlapping "

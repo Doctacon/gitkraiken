@@ -24,9 +24,7 @@ def _commit_file(git_repo: Path, git_run, path: str, content: bytes, message: st
 
 def _retained_file_bytes(path: Path) -> int:
     return sum(
-        item.lstat().st_size
-        for item in path.rglob("*")
-        if item.is_file() and not item.is_symlink()
+        item.lstat().st_size for item in path.rglob("*") if item.is_file() and not item.is_symlink()
     )
 
 
@@ -42,9 +40,7 @@ def test_prepare_and_recover_aside_preserve_distinct_index_and_worktree_preimage
     (git_repo / "untracked.txt").write_text("private untracked\n")
 
     journal = RecoveryJournal(tmp_path / "private")
-    checkpoint = journal.prepare(
-        Repository(git_repo), operation="reset-hard", paths=("script.sh",)
-    )
+    checkpoint = journal.prepare(Repository(git_repo), operation="reset-hard", paths=("script.sh",))
 
     assert checkpoint.active is True
     assert checkpoint.repository == str(git_repo)
@@ -130,9 +126,7 @@ def test_absent_preimages_and_unsafe_paths_fail_closed(
     os.rename(git_repo / "folder", git_repo / "real-folder")
     (git_repo / "folder").symlink_to(outside, target_is_directory=True)
     with pytest.raises(RecoveryError, match="symlink ancestor"):
-        journal.prepare(
-            Repository(git_repo), operation="unsafe", paths=("folder/tracked.txt",)
-        )
+        journal.prepare(Repository(git_repo), operation="unsafe", paths=("folder/tracked.txt",))
     assert len(journal.list()) == 1
 
 
@@ -181,7 +175,9 @@ def test_budget_pins_unknown_outcomes_and_expiry_are_fail_closed(
     completed = limited.list()[0]
     assert completed.active is False
 
-    future = int(completed.created_at.timestamp() * 1_000_000_000) + 2 * 24 * 60 * 60 * 1_000_000_000
+    future = (
+        int(completed.created_at.timestamp() * 1_000_000_000) + 2 * 24 * 60 * 60 * 1_000_000_000
+    )
     monkeypatch.setattr(recovery.time, "time_ns", lambda: future)
     assert limited.list() == ()
 
@@ -191,17 +187,9 @@ def test_corrupt_content_is_never_recovered_or_silently_evicted(
 ) -> None:
     _commit_file(git_repo, git_run, "tracked.txt", b"original\n", "tracked")
     journal = RecoveryJournal(tmp_path / "private")
-    checkpoint = journal.prepare(
-        Repository(git_repo), operation="protect", paths=("tracked.txt",)
-    )
+    checkpoint = journal.prepare(Repository(git_repo), operation="protect", paths=("tracked.txt",))
     payload = (
-        tmp_path
-        / "private"
-        / "checkpoints"
-        / checkpoint.id
-        / "files"
-        / "worktree"
-        / "tracked.txt"
+        tmp_path / "private" / "checkpoints" / checkpoint.id / "files" / "worktree" / "tracked.txt"
     )
     payload.write_bytes(b"tampered\n")
 
@@ -227,9 +215,7 @@ def test_atomic_publication_failure_leaves_no_checkpoint_or_repository_mutation(
 
     monkeypatch.setattr(recovery.os, "replace", refuse_replace)
     with pytest.raises(RecoveryError, match="required recovery checkpoint"):
-        journal.prepare(
-            Repository(git_repo), operation="protect", paths=("tracked.txt",)
-        )
+        journal.prepare(Repository(git_repo), operation="protect", paths=("tracked.txt",))
 
     assert list((tmp_path / "private" / "checkpoints").iterdir()) == []
     assert git_run(git_repo, "status", "--porcelain=v1").stdout == before_status

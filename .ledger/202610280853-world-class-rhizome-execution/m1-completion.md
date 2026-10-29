@@ -3,7 +3,8 @@
 ## Current authorization
 
 The operator requested all remaining M1 work with engineering recommendations,
-then an explicit stop before M2. Continue deferring installer crash/retry. The
+then an explicit stop before M2. Installer crash/retry was initially deferred; the
+operator has now authorized its bounded repair (see the follow-up below). The
 prior existing-checks-only choice applied to the completed composer increment;
 this increment includes the identified acceptance gaps. Start: clean operator
 commit `0a1ea66` (`feat: security pass`). No project commits, publication, private
@@ -155,6 +156,38 @@ and focused checks, separately from final acceptance.
    131 code/test/build/documentation inputs against unchanged operator HEAD.
    Docs and this ledger distinguish local results from unperformed acceptance.
 
+## Formatting follow-up — 2026-10-29, 18:01–18:15 UTC
+
+The operator accepted the measured **1.51 s startup** and authorized the remaining
+baseline formatting cleanup. This follow-up began at clean `ea6df96` (`feat: M1`).
+Exactly 21 Python files were reformatted; all retained identical parsed ASTs.
+Root Ruff lint, whole-tree formatting (103 files), and whitespace checks pass.
+All 15 reformatted test modules ran: **208 passed, 1 failed in 265.33 s**. The sole
+failure is the unchanged deferred installer crash/retry regression; no assertion,
+skip, installer behavior or benchmark threshold changed. Evidence:
+`m1-formatting-followup.json` and `m1-formatting-tests.txt`. Earlier failed static
+reports and the original candidate manifest remain historical evidence.
+The startup exception is recorded in the design/validation documents; it does not
+waive the remaining V04 measurements or other release gates. No publication or M2
+work was undertaken.
+
+## Installer repair follow-up — 2026-10-29, 18:38–18:51 UTC
+
+The operator explicitly authorized this repair under the same 15-minute limit.
+Reproduced the existing regression (**1 failed in 3.39 s**): a killed intermediate
+launcher returned while its child survived, but `guarded_command` unconditionally
+removed the activity fence. Signal-style statuses greater than 128 now retain
+activity/staging for manual inspection; ordinary failures remain retryable.
+The fence is persistent, not an automatic descendant monitor or post-exit recovery.
+
+Original plus three lifecycle neighbors: **4 passed in 8.00 s**. Complete installer
+and CLI/distribution modules: **45 passed in 42.21 s**. All installer cases through
+local `/bin/dash`: **37 passed in 39.83 s**. Both shell syntax checks, Ruff lint/
+whole-tree formatting and whitespace checks pass. No test assertions changed.
+One mistaken nonexistent test-module command ran no tests; its error log remains
+preserved. See `m1-installer-repair.md` for exact scope, evidence and limitations.
+No live installation, hosted run, publication or M2 work occurred.
+
 ## Local implementation/evidence checklist — not release acceptance
 
 - [x] Integrated narrow/wide UI and plain-glyph mode; screenshots regenerated/reviewed.
@@ -163,20 +196,21 @@ and focused checks, separately from final acceptance.
 - [x] Local diagnostics; exact captured preview exported without overwrite.
 - [x] Composer/state/control/diagnostics public-interface cases.
 - [x] Current/minimum Git affected tests; current-tmux and native-commit terminal journeys.
-- [x] Full collection covered in bounded regression partitions; deferred installer failure visible.
-- [x] Reference-scale benchmark and explicit performance miss; no threshold waiver.
+- [x] Full collection covered in historical bounded partitions; original installer failure retained.
+- [x] Repair installer crash/retry regression; focused installer and CLI checks pass.
+- [x] Reference-scale benchmark; measured 1.509 s startup accepted by the operator.
 - [x] Compatibility automation and local-versus-pending matrix.
 - [x] Docs/help/screenshots and acceptance record reconciled.
-- [ ] Reach the 1 s warm-startup target and finish the remaining V04 measurements.
-- [ ] Clear whole-tree formatting debt: 21 untouched files, all byte-identical to HEAD.
+- [ ] Finish the remaining V04 measurements; the measured startup time is accepted.
+- [x] Clear whole-tree formatting debt: 21 additional files, all with unchanged ASTs.
 
-Local root lint, M1-owned-file formatting and offline wheel/sdist build pass. Full
-formatter acceptance is not claimed. All 24 formatted M1-owned Python files retained
-identical ASTs. Broader product acceptance also depends on the external gates below.
+Local root lint and whole-tree formatting pass; prior offline wheel/sdist build
+checks also pass. All 24 earlier formatted M1-owned files and the 21 follow-up files
+retained identical ASTs. Broader acceptance still depends on the gates below.
 
 ## Nonlocal / explicitly blocked gates
 
-- Installer crash/retry repair and live install lifecycle remain deferred.
+- Installer crash/retry regression is repaired locally; live install lifecycle validation remains pending.
 - Hosted CI requires separately publishing/running the workflow.
 - Actual other-OS/architecture/WSL/SSH terminal cells require those environments.
 - Five-person usability pilot requires real participants; prepare but do not invent.

@@ -18,7 +18,7 @@ Host: macOS 26.6.2, Darwin 25.6.0, arm64 Apple M2 Pro; Python 3.13.0; Ghostty in
 | Composer, current Git | Pass | All 27 dedicated cases; 40.12 s. |
 | Composer + refresh, Git 2.36.0 | Pass | 27 composer and 12 refresh cases; 46.33 s. |
 | Real 80×24 commit journey, current and Git 2.36.0 | Pass | Partial stage, interactive hook rejection/draft retention, successful native commit and resumed UI. |
-| Deferred installer crash/retry regression | Fail/blocker | Exact test still allows a retry while the intermediate launcher's child survives. Installer lifecycle live checks remain blocked. |
+| Installer crash/retry regression | Pass, repair follow-up | Signal-style exits retain the activity fence and staging; retries refuse while activity is unverifiable. Manual inspection remains required. |
 
 The Git 2.36 smoke command prepended the existing disposable source build to `PATH` and ran:
 
@@ -61,37 +61,54 @@ scripts/popup_smoke.py --hotkey       FAIL: same obsolete double-click expectati
 scripts/pane_smoke.py                 FAIL: Reopen did not refresh remote state
 ```
 
-The deferred installer test remains honestly red:
+### Installer crash/retry repair — 2026-10-29
 
-```sh
-uv run pytest tests/test_install.py::test_killed_intermediate_launcher_retains_activity_until_child_exits -q
-# 1 failed in 3.05s: retry.returncode was 0, expected refusal
-```
+The previously deferred regression was reproduced again (**1 failed in 3.39 s**),
+then repaired in `scripts/install.sh`. A signal-style exit status greater than 128
+now preserves the activity marker and staging instead of treating launcher death
+as evidence that its descendants finished. Ordinary command failures remain
+retryable. The fence does not automatically expire; manual inspection is required.
 
-No skip or xfail was added. The complete suite remains a normal required CI job and will therefore remain red until that separately owned crash/retry defect is fixed.
+- Original regression plus three lifecycle neighbors: **4 passed in 8.00 s**.
+- Complete installer and CLI/distribution modules: **45 passed in 42.21 s**.
+- Complete installer module invoked through `/bin/dash`: **37 passed in 39.83 s**.
+- System `sh` and `dash` syntax checks, root Ruff lint/format and whitespace checks pass.
+
+No test expectations, skip or xfail changed. These are disposable, boundary-double
+checks on the local macOS host, not live downloads or a Linux/platform certification.
+See [repair evidence](../../.ledger/202610280853-world-class-rhizome-execution/m1-installer-repair.md).
+The required complete-suite CI job remains enabled; a fresh full-suite/hosted run
+has not been performed.
 
 ## Current local regression and packaging evidence
 
-All 746 collected cases have bounded partition evidence: **745 pass, one known
-installer failure**. This is aggregate coverage, not a single all-green full run.
+The earlier 746-case bounded partition evidence recorded **745 passes and one
+installer failure**. That failure is superseded by the repair checks above, not
+removed from its original log. This is not a fresh single all-green full run.
 The additional C-locale case is included. After formatting, 60 affected CLI/control/
 responsive/activity checks passed in 41.51 s. All 24 formatted M1-owned files retained
 identical Python ASTs. Root Ruff lint passes; task-local throwaway prototypes are
 excluded from product lint. Offline wheel/sdist construction passes, and the wheel
 contains the M1 controls, diagnostics and stylesheet.
 
-**Whole-tree formatting remains red:** 21 files would be reformatted, each verified
-byte-for-byte identical to HEAD. The baseline itself had 26 product files failing
-format checks. No broad unrelated formatting rewrite or installer change was made.
-The normal CI format gate is retained, so the quality workflow is not claimed green.
-See [static summary](../../.ledger/202610280853-world-class-rhizome-execution/m1-static-summary.txt).
+**Whole-tree formatting now passes (2026-10-29 follow-up):** the operator authorized
+formatting the remaining 21 files from clean `ea6df96` (`feat: M1`). All 21 retain
+identical Python ASTs; no installer logic, assertions, skips or failure expectations
+changed. `ruff check .`, `ruff format --check .` (103 files) and `git diff --check`
+pass. The normal CI gate remains enabled; no hosted-CI success is inferred.
+See [file hashes / AST proof](../../.ledger/202610280853-world-class-rhizome-execution/m1-formatting-followup.json)
+and [affected-test log](../../.ledger/202610280853-world-class-rhizome-execution/m1-formatting-tests.txt):
+all 15 reformatted test modules ran, with **208 passed and the one known installer
+failure in 265.33 s**. No new failures appeared in this affected-test run.
+The earlier [static summary](../../.ledger/202610280853-world-class-rhizome-execution/m1-static-summary.txt)
+retains the historical formatting failures; those are superseded, not erased.
 
 ## CI changes (not executed locally)
 
 `.github/workflows/ci.yml` now separates:
 
 - Linux and macOS current-Git non-installer quality/test/build jobs.
-- A normal Linux complete-suite job including the deferred installer regression.
+- A normal Linux complete-suite job including installer regressions.
 - Linux and macOS current Git/tmux startup, popup/hotkey and pane journeys in UTF-8 locales.
 - A Linux exact-boundary job provisioning build dependencies, building Git 2.36.0 and tmux 3.2 from checksum-verified sources into runner-temporary prefixes, then running non-installer tests and the same isolated tmux journeys.
 - A reduced benchmark-tooling smoke explicitly labeled non-acceptance.
@@ -118,6 +135,6 @@ The workflow has not been pushed or triggered; hosted-runner results remain pend
 | Real SSH path | Pending; no authorized remote host |
 | Full popup/pane containment, resize, pause/resume, clipboard fallback | Current-tmux automated journeys pass locally; broader terminal/clipboard matrix remains pending |
 | 80×24 and wide keyboard/mouse core journeys | Pending human/real-terminal coverage; see usability template |
-| Clean install/update/rollback/uninstall lifecycle | Blocked by deferred crash/retry defect |
+| Clean install/update/rollback/uninstall lifecycle | Isolated boundary-double tests pass; live installation/platform checks remain pending |
 
 No pending architecture, WSL, SSH, terminal, clipboard, or installer cell is waived or advertised as verified.

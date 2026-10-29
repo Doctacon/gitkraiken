@@ -1,4 +1,5 @@
 """Public Repository.execute commit-publication fault proofs."""
+
 from __future__ import annotations
 
 import os
@@ -28,7 +29,8 @@ def _index_entries(repository: Path, index: Path) -> bytes:
 
 
 @pytest.mark.parametrize(
-    "fault", ("candidate-fsync", "candidate-move", "index-replace", "directory-fsync"),
+    "fault",
+    ("candidate-fsync", "candidate-move", "index-replace", "directory-fsync"),
 )
 def test_publication_fault_retains_created_commit_and_inspectable_storage(
     git_repo, git_run, monkeypatch, fault
@@ -65,8 +67,10 @@ def test_publication_fault_retains_created_commit_and_inspectable_storage(
             info = os.fstat(descriptor)
             if candidate.exists() and (info.st_dev, info.st_ino) == _identity(candidate):
                 observation.update(
-                    candidate=candidate, identity=_identity(candidate),
-                    data=candidate.read_bytes(), entries=_index_entries(git_repo, candidate),
+                    candidate=candidate,
+                    identity=_identity(candidate),
+                    data=candidate.read_bytes(),
+                    entries=_index_entries(git_repo, candidate),
                 )
                 if fault == "candidate-fsync":
                     raise OSError(f"Injected {fault} failure")
@@ -164,8 +168,10 @@ def test_replaced_recovery_context_is_neither_written_nor_opened_blockingly(
 
     def prevent_fixture_deadlock(path, flags, *args, **kwargs):
         if (
-            replacement == "fifo" and path == observation.get("context")
-            and flags & os.O_ACCMODE != os.O_RDWR and not flags & os.O_NONBLOCK
+            replacement == "fifo"
+            and path == observation.get("context")
+            and flags & os.O_ACCMODE != os.O_RDWR
+            and not flags & os.O_NONBLOCK
         ):
             blocking_attempts.append(path)
             raise BlockingIOError("A blocking FIFO open would hang without a reader")

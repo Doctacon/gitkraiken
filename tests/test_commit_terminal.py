@@ -1,4 +1,5 @@
 """Real controlling-terminal coverage for the public native-commit seam."""
+
 from __future__ import annotations
 
 import errno
@@ -42,7 +43,11 @@ def _process_group_states(process_group: int) -> list[str]:
 
 @pytest.mark.parametrize("prompt_stream", ("terminal", "stderr", "ssh-signing"))
 def test_public_commit_hook_can_read_the_controlling_terminal(
-    git_repo, git_run, tmp_path, monkeypatch, prompt_stream,
+    git_repo,
+    git_run,
+    tmp_path,
+    monkeypatch,
+    prompt_stream,
 ):
     """A public commit should retain the foreground-terminal access native Git has."""
     # Fixed identities and dates make the native and Repository commits exact
@@ -75,9 +80,9 @@ def test_public_commit_hook_can_read_the_controlling_terminal(
             "set -eu\n"
             f": > {shlex.quote(str(entered))}\n"
             "printf 'RHIZOME_TTY_PROMPT\\n' "
-            + ("> /dev/tty\n" if prompt_stream == "terminal" else ">&2\n") +
-            "IFS= read -r reply < /dev/tty\n"
-            "test \"$reply\" = approve\n"
+            + ("> /dev/tty\n" if prompt_stream == "terminal" else ">&2\n")
+            + "IFS= read -r reply < /dev/tty\n"
+            'test "$reply" = approve\n'
             f"printf '%s\\n' \"$reply\" > {shlex.quote(str(answer))}\n"
         )
         hook.chmod(0o700)
@@ -94,7 +99,9 @@ def test_public_commit_hook_can_read_the_controlling_terminal(
         key = tmp_path / "fixture-signing-key"
         subprocess.run(
             [signer, "-q", "-t", "ed25519", "-N", "fixture-passphrase", "-f", str(key)],
-            check=True, stdin=subprocess.DEVNULL, capture_output=True,
+            check=True,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
         )
         allowed = tmp_path / "fixture-allowed-signers"
         allowed.write_text("test@example.invalid " + key.with_suffix(".pub").read_text())
@@ -169,9 +176,7 @@ def test_public_commit_hook_can_read_the_controlling_terminal(
 
                 subprocess.Popen = observe_commit
                 try:
-                    result = Repository(git_repo).execute(
-                        Action("commit", message="terminal hook")
-                    )
+                    result = Repository(git_repo).execute(Action("commit", message="terminal hook"))
                     product_outcome_path.write_text(
                         json.dumps(
                             {
@@ -189,9 +194,7 @@ def test_public_commit_hook_can_read_the_controlling_terminal(
                                 "kind": "error",
                                 "type": type(error).__name__,
                                 "message": str(error),
-                                "native_returncode": (
-                                    spawned[0].returncode if spawned else None
-                                ),
+                                "native_returncode": (spawned[0].returncode if spawned else None),
                             }
                         )
                     )
@@ -211,7 +214,9 @@ def test_public_commit_hook_can_read_the_controlling_terminal(
                     break
                 if git_pid is None and product_pid_path.exists():
                     git_pid = int(product_pid_path.read_text())
-                if git_pid is not None and (product_entered.exists() or prompt_stream == "ssh-signing"):
+                if git_pid is not None and (
+                    product_entered.exists() or prompt_stream == "ssh-signing"
+                ):
                     states = _process_group_states(git_pid)
                     if states and any("T" in state for state in states):
                         stopped_states = states
@@ -350,9 +355,10 @@ def test_public_commit_hook_can_read_the_controlling_terminal(
     assert observation["native_returncode"] == 0
     if prompt_stream == "ssh-signing":
         for repository in (native_repo, git_repo):
-            assert "gpgsig -----BEGIN SSH SIGNATURE-----" in git_run(
-                repository, "cat-file", "commit", "HEAD"
-            ).stdout
+            assert (
+                "gpgsig -----BEGIN SSH SIGNATURE-----"
+                in git_run(repository, "cat-file", "commit", "HEAD").stdout
+            )
             git_run(repository, "verify-commit", "HEAD")
     else:
         assert native_entered.is_file() and native_answer.read_text() == "approve\n"
@@ -366,12 +372,14 @@ def test_public_commit_hook_can_read_the_controlling_terminal(
 
     # Both paths accepted the same hook input and must leave the same commit,
     # logical index, staged content, and worktree content.
-    assert git_run(git_repo, "rev-parse", "HEAD").stdout == git_run(
-        native_repo, "rev-parse", "HEAD"
-    ).stdout
-    assert git_run(git_repo, "ls-files", "--stage", "-z").stdout == git_run(
-        native_repo, "ls-files", "--stage", "-z"
-    ).stdout
+    assert (
+        git_run(git_repo, "rev-parse", "HEAD").stdout
+        == git_run(native_repo, "rev-parse", "HEAD").stdout
+    )
+    assert (
+        git_run(git_repo, "ls-files", "--stage", "-z").stdout
+        == git_run(native_repo, "ls-files", "--stage", "-z").stdout
+    )
     assert git_run(git_repo, "show", ":example.txt").stdout == "reviewed\n"
     assert git_run(native_repo, "show", ":example.txt").stdout == "reviewed\n"
     assert (git_repo / "example.txt").read_text() == "reviewed\n"

@@ -60,8 +60,8 @@ cleanup() {
     if [ -n "$INSTALL_LOCK" ] && [ -n "$LOCK_NONCE" ] &&
         lock_record_matches "$INSTALL_LOCK" "$$" "$LOCK_NONCE" &&
         { [ -e "$INSTALL_LOCK/activity" ] || [ -L "$INSTALL_LOCK/activity" ]; }; then
-        # A surviving foreground wrapper still owns every path it may be using.
-        # Leave all marked state and the lock for a later, quiescent recovery.
+        # A wrapper or an orphaned descendant may still own these paths.
+        # Preserve all marked state and the lock while activity is unverifiable.
         exit "$status"
     fi
     if [ -n "$TMP_WORK" ] && [ -d "$TMP_WORK" ] && [ ! -L "$TMP_WORK" ]; then
@@ -230,10 +230,9 @@ assert_no_lock_activity() {
     fi
 }
 
-# The owner records activity before the wrapper starts; wrapper disappearance
-# retains that fence. FIXME: direct command return alone does not prove descendant
-# quiescence when an intermediate launcher dies. Installation remains unaccepted
-# until this path also retains activity for such surviving writers.
+# The owner records activity before the foreground command starts. If its wrapper
+# or an intermediate launcher is signaled, descendants may outlive it. Retain the
+# fence for manual inspection rather than guessing when orphaned writers finish.
 guarded_command() {
     [ -n "$INSTALL_LOCK" ] && [ -n "$LOCK_NONCE" ] ||
         fail "cannot guard a command without transaction-lock ownership"
@@ -257,7 +256,15 @@ guarded_command() {
         set +e
         "$@"
         command_status=$?
-        clear_activity
+        # POSIX shells report signal deaths with a status greater than 128.
+        # An intentional high exit code is indistinguishable, so also fail closed.
+        # Ordinary failures retain the existing cleanup/retry behavior.
+        if [ "$command_status" -le 128 ]; then
+            clear_activity
+        else
+            printf 'rhizome bootstrap: command ended with status %s; subprocess activity retained for manual inspection: %s\n' \
+                "$command_status" "$INSTALL_LOCK" >&2
+        fi
         trap - EXIT HUP INT TERM
         exit "$command_status"
     )

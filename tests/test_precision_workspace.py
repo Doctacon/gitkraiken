@@ -124,5 +124,7 @@ async def test_mouse_hunk_selection_preserves_other_hunks(git_repo, git_run):
         await app.workers.wait_for_complete()
         await pilot.pause()
 
-        assert git_run(git_repo, "show", ":example.txt").stdout == original.replace("line 2\n", "FIRST CHANGE\n")
+        assert git_run(git_repo, "show", ":example.txt").stdout == original.replace(
+            "line 2\n", "FIRST CHANGE\n"
+        )
         assert path.read_text() == edited

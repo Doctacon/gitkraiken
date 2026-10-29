@@ -68,25 +68,25 @@ def bootstrap_environment(tmp_path: Path) -> tuple[dict[str, str], Path, Path]:
         '"${PYTHONHOME:-unset}" "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" '
         '"${GIT_TRACE2:-unset}" "${GIT_TRACE2_EVENT:-unset}" '
         '"${GIT_CURL_VERBOSE:-unset}" "${GIT_TRACE_REDACT:-unset}" >> "$test_root/bootstrap.log"\n'
-        'output=\n'
-        'url=\n'
+        "output=\n"
+        "url=\n"
         'while [ "$#" -gt 0 ]; do\n'
         '  if [ "$1" = "--output" ]; then shift; output=$1\n'
         '  elif [ "${1#https://}" != "$1" ]; then url=$1; fi\n'
-        '  shift\n'
-        'done\n'
+        "  shift\n"
+        "done\n"
         'case "$url" in\n'
         '  */install-runtime-constraints.txt) cp "$test_root/repository/scripts/install-runtime-constraints.txt" "$output" ;;\n'
         '  */install-build-constraints.txt) cp "$test_root/repository/scripts/install-build-constraints.txt" "$output" ;;\n'
         '  *) cp "$test_root/downloaded archive" "$output" ;;\n'
-        'esac\n',
+        "esac\n",
     )
     checksum_stub = (
         'test_root=$(CDPATH= cd "$(dirname "$0")/.." && pwd)\n'
         'printf "CHECKSUM\\n" >> "$test_root/bootstrap.log"\n'
         'if [ -e "$test_root/control/bad-checksum" ]; then '
-        'digest=0000000000000000000000000000000000000000000000000000000000000000; '
-        f'else digest={UV_DARWIN_ARM64_SHA256}; fi\n'
+        "digest=0000000000000000000000000000000000000000000000000000000000000000; "
+        f"else digest={UV_DARWIN_ARM64_SHA256}; fi\n"
         'printf "%s  archive\\n" "$digest"\n'
     )
     _executable(commands / "shasum", checksum_stub)
@@ -95,14 +95,14 @@ def bootstrap_environment(tmp_path: Path) -> tuple[dict[str, str], Path, Path]:
         commands / "tar",
         'test_root=$(CDPATH= cd "$(dirname "$0")/.." && pwd)\n'
         'printf "EXTRACT\\n" >> "$test_root/bootstrap.log"\n'
-        'destination=\n'
+        "destination=\n"
         'while [ "$#" -gt 0 ]; do\n'
         '  if [ "$1" = "-C" ]; then shift; destination=$1; fi\n'
-        '  shift\n'
-        'done\n'
+        "  shift\n"
+        "done\n"
         'mkdir -p "$destination/uv-aarch64-apple-darwin"\n'
         'printf "#!/bin/sh\\nset -eu\\nTEST_ROOT=\'%s\'\\n" "$test_root" > "$destination/uv-aarch64-apple-darwin/uv"\n'
-        'cat >> "$destination/uv-aarch64-apple-darwin/uv" <<\'UV\'\n'
+        "cat >> \"$destination/uv-aarch64-apple-darwin/uv\" <<'UV'\n"
         'printf "UV %s | %s | %s | %s | %s | %s | proxy=%s ca=%s prompt=%s home=%s gitdir=%s header=%s global=%s netrc=%s clientcert=%s pythonpath=%s pythonhome=%s data=%s config=%s template=%s tls=%s trace2=%s trace2event=%s curlverbose=%s redact=%s\\n" '
         '"$*" "$UV_TOOL_DIR" "$UV_TOOL_BIN_DIR" "$UV_PYTHON_INSTALL_DIR" '
         '"$UV_PYTHON_BIN_DIR" "$UV_CACHE_DIR" "${HTTPS_PROXY:-}" "${SSL_CERT_FILE:-}" '
@@ -118,58 +118,58 @@ def bootstrap_environment(tmp_path: Path) -> tuple[dict[str, str], Path, Path]:
         '  *" python install "*)\n'
         '    [ ! -e "$TEST_ROOT/control/fail-python" ] || exit 71\n'
         '    mkdir -p "$UV_PYTHON_INSTALL_DIR" "$UV_PYTHON_BIN_DIR" "$UV_CACHE_DIR"\n'
-        '    ;;\n'
+        "    ;;\n"
         '  *" tool install "*)\n'
         '    if [ -e "$TEST_ROOT/control/intermediate-launcher" ]; then\n'
         '      printf "%s\\n" "$$" > "$TEST_ROOT/control/intermediate-launcher-pid"\n'
         '      sh "$TEST_ROOT/control/delayed-foreground-child" '
         '"$UV_TOOL_DIR/intermediate-work" </dev/null >/dev/null 2>&1\n'
-        '    fi\n'
+        "    fi\n"
         '    if [ -e "$TEST_ROOT/control/signal-wrapper" ]; then\n'
         '      kill -TERM "$PPID"\n'
         '      printf "%s\\n" "$$" > "$TEST_ROOT/control/signaled-child-pid"\n'
         '      : > "$TEST_ROOT/control/wrapper-signaled"\n'
         '      while [ -e "$TEST_ROOT/control/signal-wrapper" ]; do sleep 0.05; done\n'
-        '    fi\n'
+        "    fi\n"
         '    if [ -e "$TEST_ROOT/control/hold" ]; then\n'
         '      : > "$TEST_ROOT/control/ready"\n'
         '      while [ -e "$TEST_ROOT/control/hold" ]; do sleep 0.05; done\n'
-        '    fi\n'
+        "    fi\n"
         '    if [ -e "$TEST_ROOT/control/foreground-hold" ]; then\n'
         '      sh "$TEST_ROOT/control/foreground-child" "$UV_TOOL_DIR/foreground-work"\n'
-        '    fi\n'
+        "    fi\n"
         '    [ ! -e "$TEST_ROOT/control/fail-tool" ] || exit 73\n'
         '    mkdir -p "$UV_TOOL_DIR" "$UV_TOOL_BIN_DIR"\n'
-        '    cat > "$UV_TOOL_BIN_DIR/rhizome" <<\'APP\'\n'
-        '#!/bin/sh\n'
-        'set -eu\n'
-        'if env | grep \'^UV_\' >/dev/null; then\n'
+        "    cat > \"$UV_TOOL_BIN_DIR/rhizome\" <<'APP'\n"
+        "#!/bin/sh\n"
+        "set -eu\n"
+        "if env | grep '^UV_' >/dev/null; then\n"
         '  echo "installer UV variables leaked" >&2\n'
-        '  exit 90\n'
-        'fi\n'
+        "  exit 90\n"
+        "fi\n"
         'echo "fake rhizome"\n'
-        'APP\n'
+        "APP\n"
         '    chmod 700 "$UV_TOOL_BIN_DIR/rhizome"\n'
-        '    ;;\n'
-        'esac\n'
-        'UV\n'
+        "    ;;\n"
+        "esac\n"
+        "UV\n"
         'chmod 700 "$destination/uv-aarch64-apple-darwin/uv"\n',
     )
     _executable(
         control / "foreground-child",
-        'work=$1\n'
+        "work=$1\n"
         'test_root=$(CDPATH= cd "$(dirname "$0")/.." && pwd)\n'
         'mkdir -p "$work"\n'
         'printf "%s\\n" "$$" > "$test_root/control/child-pid"\n'
         ': > "$test_root/control/child-ready"\n'
         'while [ -e "$test_root/control/foreground-hold" ]; do\n'
         '  printf "child owns this work\\n" > "$work/sentinel"\n'
-        '  sleep 0.05\n'
-        'done\n',
+        "  sleep 0.05\n"
+        "done\n",
     )
     _executable(
         control / "delayed-foreground-child",
-        'work=$1\n'
+        "work=$1\n"
         'test_root=$(CDPATH= cd "$(dirname "$0")/.." && pwd)\n'
         'printf "%s\\n" "$$" > "$test_root/control/delayed-child-pid"\n'
         ': > "$test_root/control/delayed-child-ready"\n'
@@ -236,18 +236,18 @@ def _select_wget_boundary(environment: dict[str, str]) -> None:
         '"${PYTHONHOME:-unset}" "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" '
         '"${GIT_TRACE2:-unset}" "${GIT_TRACE2_EVENT:-unset}" '
         '"${GIT_CURL_VERBOSE:-unset}" "${GIT_TRACE_REDACT:-unset}" >> "$test_root/bootstrap.log"\n'
-        'output=\n'
-        'url=\n'
+        "output=\n"
+        "url=\n"
         'while [ "$#" -gt 0 ]; do\n'
         '  if [ "$1" = "-O" ]; then shift; output=$1\n'
         '  elif [ "${1#https://}" != "$1" ]; then url=$1; fi\n'
-        '  shift\n'
-        'done\n'
+        "  shift\n"
+        "done\n"
         'case "$url" in\n'
         '  */install-runtime-constraints.txt) cp "$test_root/repository/scripts/install-runtime-constraints.txt" "$output" ;;\n'
         '  */install-build-constraints.txt) cp "$test_root/repository/scripts/install-build-constraints.txt" "$output" ;;\n'
         '  *) cp "$test_root/downloaded archive" "$output" ;;\n'
-        'esac\n',
+        "esac\n",
     )
     environment["PATH"] = str(commands)
 
@@ -258,8 +258,8 @@ def _inject_killing_mv(environment: dict[str, str], match: Path) -> None:
         commands / "mv",
         'if [ "${FAKE_MV_KILL:-0}" = 1 ] && [ "$1" = "$FAKE_MV_MATCH" ]; then\n'
         '  kill -KILL "$PPID"\n'
-        '  exit 99\n'
-        'fi\n'
+        "  exit 99\n"
+        "fi\n"
         'exec /bin/mv "$@"\n',
     )
     environment["FAKE_MV_MATCH"] = str(match)
@@ -271,15 +271,15 @@ def _inject_blocking_partial_rm(environment: dict[str, str], match: Path) -> Non
     test_root = Path(environment["HOME"]).parent
     _executable(
         commands / "rm",
-        f'match={shlex.quote(str(match))}\n'
-        f'test_root={shlex.quote(str(test_root))}\n'
+        f"match={shlex.quote(str(match))}\n"
+        f"test_root={shlex.quote(str(test_root))}\n"
         'if [ "${1:-}" = -rf ] && [ "${2:-}" = "$match" ] && '
         '[ -e "$test_root/control/uninstall-hold" ]; then\n'
         '  /bin/rm -rf "$match/bin"\n'
         '  : > "$test_root/control/uninstall-ready"\n'
         '  while [ -e "$test_root/control/uninstall-hold" ]; do sleep 0.05; done\n'
-        '  exit 74\n'
-        'fi\n'
+        "  exit 74\n"
+        "fi\n"
         'exec /bin/rm "$@"\n',
     )
 
@@ -1038,9 +1038,7 @@ def test_install_reconciles_an_interrupted_rollback_before_updating(bootstrap_en
     assert _run(environment, "--revision", REVISION_A).returncode == 0
     assert _run(environment, "--revision", REVISION_B).returncode == 0
     journal = root / "transactions" / "rollback"
-    journal.write_text(
-        f"rhizome-rollback-v1\nrevisions/{REVISION_A}\nrevisions/{REVISION_B}\n"
-    )
+    journal.write_text(f"rhizome-rollback-v1\nrevisions/{REVISION_A}\nrevisions/{REVISION_B}\n")
     (root / "current").write_text(f"revisions/{REVISION_A}\n")
     (root / "previous").write_text(f"revisions/{REVISION_A}\n")
 
@@ -1054,9 +1052,7 @@ def test_install_reconciles_an_interrupted_rollback_before_updating(bootstrap_en
 
 @pytest.mark.parametrize("pointer", ["current", "previous"])
 @pytest.mark.parametrize("kind", ["directory", "symlink", "foreign-file"])
-def test_uninstall_refuses_foreign_reserved_pointer_entries(
-    bootstrap_environment, pointer, kind
-):
+def test_uninstall_refuses_foreign_reserved_pointer_entries(bootstrap_environment, pointer, kind):
     environment, root, _ = bootstrap_environment
     assert _run(environment, "--revision", REVISION_A).returncode == 0
     path = root / pointer

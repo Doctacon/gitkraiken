@@ -85,7 +85,9 @@ def _tag_commit(tag: str) -> str:
                 return sha
             kind, sha = _object(_json(f"{_API_ROOT}/git/tags/{sha}"))
     except HTTPError as error:
-        raise UpdateCheckError(f"GitHub returned HTTP {error.code} while resolving the tag.") from error
+        raise UpdateCheckError(
+            f"GitHub returned HTTP {error.code} while resolving the tag."
+        ) from error
     raise UpdateCheckError("GitHub tag metadata is nested too deeply to resolve safely.")
 
 
@@ -117,8 +119,7 @@ def print_update_check(current_version: str) -> None:
         print(f"Installed version: {current_version}")
         return
     script_url = (
-        "https://raw.githubusercontent.com/Doctacon/rhizome/"
-        f"{release.commit}/scripts/install.sh"
+        f"https://raw.githubusercontent.com/Doctacon/rhizome/{release.commit}/scripts/install.sh"
     )
     print(f"Release: {release.name} ({release.tag})")
     print(f"Published: {release.published_at}")

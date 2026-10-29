@@ -1,4 +1,5 @@
 """Public native-commit process boundaries; no coordinator/UI bypass proof."""
+
 from __future__ import annotations
 
 import shlex

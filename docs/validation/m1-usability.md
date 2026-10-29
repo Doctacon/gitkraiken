@@ -2,7 +2,11 @@
 
 **Status: not run. No participants or usability results are claimed.**
 
-Run only with a usable M1 candidate after major V01–V06 blockers are resolved. The deferred installer crash/retry defect blocks installer-lifecycle live checks; it must not be hidden or retried during this pilot. Use a synthetic disposable repository, isolated application state, and no private source or credentials.
+Run only with a usable M1 candidate after major V01–V06 blockers are resolved.
+The installer crash/retry regression now passes isolated tests, but live installer
+lifecycle validation remains pending. Do not bypass an activity lock during this
+pilot. Use a synthetic disposable repository, isolated application state, and no
+private source or credentials.
 
 ## Moderator setup
 

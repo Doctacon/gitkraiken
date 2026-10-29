@@ -4,6 +4,7 @@ Run: uv run --locked python scripts/commit_smoke.py
 Requires the optional tmux smoke-test tool, not a Rhizome runtime dependency.
 Never kills a live mutation: an unfinished fixture is retained for inspection.
 """
+
 from __future__ import annotations
 
 import json
@@ -17,7 +18,7 @@ import time
 import uuid
 from pathlib import Path
 
-RUNNER = r'''
+RUNNER = r"""
 import asyncio
 import json
 import sys
@@ -75,7 +76,7 @@ try:
 except BaseException:
     result = {"ok": False, "error": traceback.format_exc()}
 (base / "result.json").write_text(json.dumps(result))
-'''
+"""
 
 
 def main() -> None:
@@ -87,7 +88,8 @@ def main() -> None:
     for name in ("TMUX", "TMUX_PANE"):
         env.pop(name, None)
     for name, directory in (
-        ("HOME", "home"), ("XDG_CONFIG_HOME", "config"),
+        ("HOME", "home"),
+        ("XDG_CONFIG_HOME", "config"),
         ("RHIZOME_STATE_HOME", "state"),
     ):
         (base / directory).mkdir()
@@ -122,30 +124,52 @@ def main() -> None:
         hook.write_text(
             "#!/bin/sh\nset -eu\n"
             f"base={shlex.quote(str(base))}\n"
-            "printf '%s\\n' \"$$\" >> \"$base/attempts\"\n"
+            'printf \'%s\\n\' "$$" >> "$base/attempts"\n'
             "printf 'APP_TTY_APPROVAL\\n' >&2\n"
             "IFS= read -r answer < /dev/tty\n"
-            "printf '%s\\n' \"$answer\" >> \"$base/answers\"\n"
-            "test \"$answer\" = approve\n"
-            "if test -e \"$base/reject\"; then\n"
-            "  : > \"$base/refused\"\n"
+            'printf \'%s\\n\' "$answer" >> "$base/answers"\n'
+            'test "$answer" = approve\n'
+            'if test -e "$base/reject"; then\n'
+            '  : > "$base/refused"\n'
             "  printf 'Fixture hook refused commit\\n' >&2\n  exit 1\nfi\n"
         )
         hook.chmod(0o700)
         runner = base / "runner.py"
         runner.write_text(RUNNER)
         pane = tmux(
-            "-f", "/dev/null", "new-session", "-d", "-P", "-F", "#{pane_id}",
-            "-s", "commit", "-x", "80", "-y", "24", "/bin/sh",
+            "-f",
+            "/dev/null",
+            "new-session",
+            "-d",
+            "-P",
+            "-F",
+            "#{pane_id}",
+            "-s",
+            "commit",
+            "-x",
+            "80",
+            "-y",
+            "24",
+            "/bin/sh",
         )
         tmux("set-option", "-t", "commit", "remain-on-exit", "on")
-        tmux("send-keys", "-t", pane, "-l", shlex.join(["exec", sys.executable, str(runner), str(base)]))
+        tmux(
+            "send-keys",
+            "-t",
+            pane,
+            "-l",
+            shlex.join(["exec", sys.executable, str(runner), str(base)]),
+        )
         tmux("send-keys", "-t", pane, "Enter")
         answered = 0
         deadline = time.monotonic() + 90
         while time.monotonic() < deadline:
-            attempts = (base / "attempts").read_text().splitlines() if (base / "attempts").exists() else []
-            if len(attempts) > answered and "APP_TTY_APPROVAL" in tmux("capture-pane", "-p", "-t", pane):
+            attempts = (
+                (base / "attempts").read_text().splitlines() if (base / "attempts").exists() else []
+            )
+            if len(attempts) > answered and "APP_TTY_APPROVAL" in tmux(
+                "capture-pane", "-p", "-t", pane
+            ):
                 tmux("send-keys", "-t", pane, "-l", "approve")
                 tmux("send-keys", "-t", pane, "Enter")
                 answered += 1

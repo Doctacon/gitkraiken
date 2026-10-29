@@ -11,7 +11,9 @@ from rhizome.app import RhizomeApp
 from rhizome.persistence import WorkspaceStateStore
 
 
-async def test_offline_preference_prevents_automatic_remote_fetch(git_repo, bare_remote, git_run, monkeypatch):
+async def test_offline_preference_prevents_automatic_remote_fetch(
+    git_repo, bare_remote, git_run, monkeypatch
+):
     git_run(git_repo, "remote", "add", "origin", str(bare_remote))
     WorkspaceStateStore().save("global", {"offline": True})
     calls = []
@@ -134,7 +136,9 @@ async def test_pull_request_drafts_keep_distinct_target_intents(git_repo, git_ru
             await choose_option(reopened, pilot, "create-pr")
             await settle(reopened, pilot)
             assert reopened.screen.query_one("#pr-title", Input).value == title
-            assert reopened.screen.query_one("#pr-description", TextArea).text == f"Only for {target}."
+            assert (
+                reopened.screen.query_one("#pr-description", TextArea).text == f"Only for {target}."
+            )
             await pilot.press("escape")
             await pilot.pause()
 
@@ -187,7 +191,9 @@ async def test_corrupt_draft_is_reported_and_never_silently_replaced(git_repo):
         await settle(reopened, pilot)
         assert "not saved" in str(reopened.query_one("#draft-status", Static).renderable).lower()
         await pilot.press("f3")
-        reopened.query_one("#commit-message", TextArea).load_text("Do not overwrite unknown saved content")
+        reopened.query_one("#commit-message", TextArea).load_text(
+            "Do not overwrite unknown saved content"
+        )
         await pilot.pause()
         assert documents[0].read_bytes() == b"{corrupt fixture"
 

@@ -56,17 +56,13 @@ def test_fetch_rejects_user_namespace_destinations_before_transport(
     remote, _ = _remote_with_branch(tmp_path, git_run)
     _add_remote(git_run, git_repo, remote)
     _set_fetch(git_run, git_repo, f"+refs/heads/main:{destination}")
-    before = git_run(
-        git_repo, "for-each-ref", "--format=%(refname) %(objectname)"
-    ).stdout
+    before = git_run(git_repo, "for-each-ref", "--format=%(refname) %(objectname)").stdout
 
     with pytest.raises(GitError, match="remote-tracking"):
         Repository(git_repo).execute(Action("fetch", remote="origin"))
 
     assert _oid(git_run, git_repo) == local
-    assert git_run(
-        git_repo, "for-each-ref", "--format=%(refname) %(objectname)"
-    ).stdout == before
+    assert git_run(git_repo, "for-each-ref", "--format=%(refname) %(objectname)").stdout == before
 
 
 @pytest.mark.parametrize("alias", ("refs/heads/alias", "refs/tags/alias", "refs/notes/alias"))
@@ -152,9 +148,7 @@ def test_native_tag_auto_follow_preserves_existing_symbolic_targets(
         assert git_run(repo, "symbolic-ref", alias).stdout.strip() == target
 
 
-def test_fetch_detects_aliases_of_an_indirect_cache_destination(
-    git_repo, tmp_path, git_run
-):
+def test_fetch_detects_aliases_of_an_indirect_cache_destination(git_repo, tmp_path, git_run):
     local = _commit(git_run, git_repo, "local.txt", "local\n")
     remote, _ = _remote_with_branch(tmp_path, git_run)
     _add_remote(git_run, git_repo, remote)
@@ -223,9 +217,7 @@ def test_fetch_refuses_an_incomplete_symbolic_ref_inventory(
     local = _commit(git_run, git_repo, "local.txt", "local\n")
     remote, _ = _remote_with_branch(tmp_path, git_run)
     _add_remote(git_run, git_repo, remote)
-    git_run(
-        git_repo, "symbolic-ref", "refs/remotes/origin/main", "refs/heads/not-yet-local"
-    )
+    git_run(git_repo, "symbolic-ref", "refs/remotes/origin/main", "refs/heads/not-yet-local")
     tracking = git_repo / ".git" / "refs" / "remotes"
     scandir = os.scandir
 
@@ -238,9 +230,12 @@ def test_fetch_refuses_an_incomplete_symbolic_ref_inventory(
     with pytest.raises(GitError, match="inspect"):
         Repository(git_repo).execute(Action("fetch", remote="origin"))
     assert _oid(git_run, git_repo) == local
-    assert git_run(
-        git_repo, "show-ref", "--verify", "--quiet", "refs/heads/not-yet-local", check=False
-    ).returncode != 0
+    assert (
+        git_run(
+            git_repo, "show-ref", "--verify", "--quiet", "refs/heads/not-yet-local", check=False
+        ).returncode
+        != 0
+    )
 
 
 def test_fetch_rejects_checked_out_branch_destination_and_preserves_head(
@@ -287,8 +282,7 @@ def test_fetch_reads_included_inherited_refspec(
     _add_remote(git_run, git_repo, remote)
     inherited = tmp_path / "inherited-fetch.conf"
     inherited.write_text(
-        "[remote \"origin\"]\n"
-        "\tfetch = +refs/heads/main:refs/heads/inherited-victim\n"
+        '[remote "origin"]\n\tfetch = +refs/heads/main:refs/heads/inherited-victim\n'
     )
     home = tmp_path / "fetch-home"
     home.mkdir()
@@ -507,15 +501,16 @@ def test_fetch_honors_explicit_no_tags_without_disabling_safe_cache_updates(
 
     assert _oid(git_run, git_repo, "refs/remotes/origin/main") == incoming
     assert _oid(git_run, git_repo) == local
-    assert git_run(
-        git_repo, "show-ref", "--verify", "--quiet", "refs/tags/remote-only", check=False
-    ).returncode != 0
+    assert (
+        git_run(
+            git_repo, "show-ref", "--verify", "--quiet", "refs/tags/remote-only", check=False
+        ).returncode
+        != 0
+    )
     assert git_run(git_repo, "config", "remote.origin.tagOpt").stdout.strip() == "--no-tags"
 
 
-def test_fetch_rejects_nondefault_tag_mode(
-    git_repo: Path, tmp_path: Path, git_run
-) -> None:
+def test_fetch_rejects_nondefault_tag_mode(git_repo: Path, tmp_path: Path, git_run) -> None:
     _commit(git_run, git_repo, "local.txt", "local\n")
     remote, _ = _remote_with_branch(tmp_path, git_run)
     _add_remote(git_run, git_repo, remote)
@@ -545,9 +540,7 @@ def test_fetch_rejects_malformed_or_unsupported_refspecs(
         Repository(git_repo).execute(Action("fetch", remote="origin"))
 
 
-def test_fetch_rejects_ambiguous_cache_mappings(
-    git_repo: Path, tmp_path: Path, git_run
-) -> None:
+def test_fetch_rejects_ambiguous_cache_mappings(git_repo: Path, tmp_path: Path, git_run) -> None:
     _commit(git_run, git_repo, "local.txt", "local\n")
     remote, _ = _remote_with_branch(tmp_path, git_run)
     _add_remote(git_run, git_repo, remote)

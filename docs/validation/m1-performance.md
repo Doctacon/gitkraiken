@@ -1,7 +1,19 @@
 # M1 performance evidence (V04)
 
-**Status:** reference envelope remeasured locally on 2026-10-29; V04 is **not fully passed**.
-Candidate revision is `0a1ea6638846fb8ebed382b27ccdf066945e4700` plus uncommitted M1 changes. These are local working-tree results, not an accepted release or hosted-CI result.
+**Status:** the measured **1.51 s startup is accepted for M1 by the operator**;
+other V04 evidence remains incomplete.
+The measurements below used `0a1ea6638846fb8ebed382b27ccdf066945e4700` plus the
+then-uncommitted M1 changes. They are local measurements, not hosted-CI or full release acceptance.
+
+## Operator acceptance — 2026-10-29
+
+The operator explicitly accepted this measured startup time while authorizing the
+remaining formatting cleanup. The **1.509 s maximum** on the recorded five-run
+reference profile is therefore no longer an M1 blocker. This is a scoped acceptance
+of the measured candidate, not a new general latency threshold. The original 1 s
+target, raw measurements and benchmark failure flags remain unchanged for traceability.
+Cache-cold startup, resource/slow-provider evidence and other release gates are not
+waived by this decision.
 
 ## Latest local follow-up (17:08 UTC)
 
@@ -12,7 +24,7 @@ The command completed in **30.5 seconds**, under a 180-second command limit.
 | Measurement (seconds) | min | median | p95 / max | Assessment |
 | --- | ---: | ---: | ---: | --- |
 | `Repository.snapshot(300)` | 0.834 | 0.842 | 0.857 | Diagnostic |
-| Process launch → usable app | 1.426 | 1.440 | 1.509 | **Still fails 1 s warm target** |
+| Process launch → usable app | 1.426 | 1.440 | 1.509 | **Accepted M1 exception**; original 1 s target not met |
 | Same-process refresh → paint | 0.926 | 0.936 | 0.942 | Meets 1 s in these samples |
 | Feedback → paint proxy | 0.0199 | 0.0206 | 0.0215 | Meets p95 ≤100 ms |
 | Large diff → paint proxy | 0.308 | 0.312 | 0.319 | Meets ≤500 ms |
@@ -25,9 +37,10 @@ first reproduced two scans for one refresh and now asserts one.
 
 A [targeted profile](../../.ledger/202610280853-world-class-rhizome-execution/m1-startup-profile.json)
 measured a 0.921 s snapshot: the complete author-date history-index read took 0.517 s,
-status 0.101 s, and ref listing 0.039 s. Further startup optimization needs additional
-M1 work; no history-order semantic change or new persistent repository cache was introduced.
-The remaining 1 s startup miss is **not waived**. Cache-cold startup remains unestablished.
+status 0.101 s, and ref listing 0.039 s. No history-order semantic change or new
+persistent repository cache was introduced. Further startup optimization is not
+required to close this measured M1 gap after operator acceptance. Cache-cold startup
+remains unestablished.
 
 Peak RSS was 98.1 MiB; startup used at most 0.727 process CPU seconds and diff at most
 0.195 seconds. The original resource budgets below remain proposals. The benchmark waits

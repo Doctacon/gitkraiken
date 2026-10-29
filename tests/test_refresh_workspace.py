@@ -95,15 +95,26 @@ async def test_pr_results_are_bound_to_the_captured_remote_even_after_an_aba_cha
             nonlocal changed
             if "get-url" in command and not changed:
                 changed = True
-                run(["git", "-C", str(git_repo), "remote", "set-url", "origin", transient], check=True)
+                run(
+                    ["git", "-C", str(git_repo), "remote", "set-url", "origin", transient],
+                    check=True,
+                )
             if command[0] == "gh":
                 api_calls.append(command)
-                run(["git", "-C", str(git_repo), "remote", "set-url", "origin", original], check=True)
-                payload = [{
-                    "number": 7, "title": "From the transient repository",
-                    "head": {"ref": "feature"}, "base": {"ref": "main"},
-                    "user": {"login": "reviewer"}, "draft": False,
-                }]
+                run(
+                    ["git", "-C", str(git_repo), "remote", "set-url", "origin", original],
+                    check=True,
+                )
+                payload = [
+                    {
+                        "number": 7,
+                        "title": "From the transient repository",
+                        "head": {"ref": "feature"},
+                        "base": {"ref": "main"},
+                        "user": {"login": "reviewer"},
+                        "draft": False,
+                    }
+                ]
                 return subprocess.CompletedProcess(command, 0, json.dumps(payload).encode(), b"")
             return run(command, *args, **kwargs)
 
@@ -250,7 +261,10 @@ async def test_slow_automatic_fetch_does_not_block_opening_local_diff(
                     break
             assert app.query_one("#precision-diff").display
             lines = app.query_one("#precision-lines", DataTable)
-            assert any("reviewed locally" in str(lines.get_row_at(row)[0]) for row in range(lines.row_count))
+            assert any(
+                "reviewed locally" in str(lines.get_row_at(row)[0])
+                for row in range(lines.row_count)
+            )
             assert not release.exists()
         finally:
             release.touch()

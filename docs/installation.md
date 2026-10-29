@@ -101,6 +101,12 @@ platform validation remain release gates. Install, rollback, and uninstall share
 lock beside the root in its canonical parent, including first-root publication. An
 interruption that leaves unverifiable lock ownership fails closed for manual
 inspection; never blindly delete a lock while an installer might still be running.
+If a guarded command dies with a signal-style exit status (greater than 128), its
+children may survive. The installer retains its activity marker, lock and staging
+files, and refuses subsequent install/rollback/uninstall attempts. This fence does
+not automatically expire when a child exits: manual inspection is required.
+Intentional high exit codes receive the same conservative treatment. Ordinary
+command failures retain the existing cleanup and retry behavior.
 
 Generated tmux bindings contain an absolute Python path. A managed revision changes
 that path: review/regenerate your opt-in binding after an update or rollback.

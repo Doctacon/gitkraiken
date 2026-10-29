@@ -23,8 +23,7 @@ def _change_range(document, *needles: str) -> tuple[int, int]:
     selected = [
         line.id
         for line in document.lines
-        if line.kind in {"add", "delete"}
-        and any(needle in line.text for needle in needles)
+        if line.kind in {"add", "delete"} and any(needle in line.text for needle in needles)
     ]
     assert selected
     return min(selected), max(selected)
@@ -76,10 +75,12 @@ def test_commit_excludes_an_external_index_writer_after_review(git_repo, git_run
     def external_writer(command, *args, **kwargs):
         if "commit" in command and not competing:
             path.write_text("changed after review\n")
-            competing.append(run(
-                ["git", "-C", str(git_repo), "add", "example.txt"],
-                capture_output=True,
-            ))
+            competing.append(
+                run(
+                    ["git", "-C", str(git_repo), "add", "example.txt"],
+                    capture_output=True,
+                )
+            )
         return popen(command, *args, **kwargs)
 
     monkeypatch.setattr(subprocess, "Popen", external_writer)
@@ -171,9 +172,7 @@ def test_routine_stage_unstage_and_commit_have_exact_real_git_effects(git_repo, 
     assert git_run(git_repo, "log", "-1", "--format=%s").stdout.strip() == "reviewed commit"
 
 
-def test_precision_stage_and_unstage_use_coordinator_with_exact_index_effects(
-    git_repo, git_run
-):
+def test_precision_stage_and_unstage_use_coordinator_with_exact_index_effects(git_repo, git_run):
     file = git_repo / "example.txt"
     file.write_text("a\nb\nc\nd\n")
     git_run(git_repo, "add", "example.txt")
@@ -223,7 +222,8 @@ def test_precision_publication_durability_failure_is_uncertain(git_repo, git_run
     coordinator = OperationCoordinator(repo)
     plan = coordinator.plan(
         Action("stage", paths=("example.txt",)),
-        patch=document, selection=_change_range(document, "old", "reviewed"),
+        patch=document,
+        selection=_change_range(document, "old", "reviewed"),
     )
     git_dir = (git_repo / ".git").stat()
     sync = os.fsync
@@ -286,7 +286,9 @@ def test_precision_plan_rejects_mismatched_patch_intent(git_repo, git_run):
     with pytest.raises(GitError, match="exactly match"):
         operations.plan(Action("stage", paths=("other.txt",)), patch=document, selection=selection)
     with pytest.raises(GitError, match="staged patch"):
-        operations.plan(Action("unstage", paths=("example.txt",)), patch=document, selection=selection)
+        operations.plan(
+            Action("unstage", paths=("example.txt",)), patch=document, selection=selection
+        )
     with pytest.raises(GitError, match="only valid"):
         operations.plan(Action("commit", message="no"), patch=document, selection=selection)
 
@@ -369,9 +371,7 @@ def test_stage_plan_fails_closed_for_existing_content_conversion(git_repo, git_r
     assert file.read_bytes() == b"reviewed\r\n"
 
 
-def test_stage_plan_refuses_new_conversion_attributes_for_expanded_paths(
-    git_repo, git_run
-):
+def test_stage_plan_refuses_new_conversion_attributes_for_expanded_paths(git_repo, git_run):
     directory = git_repo / "nested"
     directory.mkdir()
     file = directory / "example.txt"
@@ -458,9 +458,7 @@ def test_checkpoint_completion_failure_after_discard_remains_uncertain_and_activ
     assert checkpoint.active is True
 
 
-def test_discard_stops_when_checkpoint_cannot_cover_tracked_symlink(
-    git_repo, git_run, tmp_path
-):
+def test_discard_stops_when_checkpoint_cannot_cover_tracked_symlink(git_repo, git_run, tmp_path):
     target = git_repo / "target.txt"
     target.write_text("outside tracked symlink\n")
     link = git_repo / "link.txt"
@@ -519,7 +517,10 @@ def test_fetch_set_upstream_and_non_force_push_use_exact_local_remote(
     )
     assert "origin/main" in upstream_plan.consequences[0]
     operations.submit(upstream_plan)
-    assert git_run(git_repo, "rev-parse", "--abbrev-ref", "@{upstream}").stdout.strip() == "origin/main"
+    assert (
+        git_run(git_repo, "rev-parse", "--abbrev-ref", "@{upstream}").stdout.strip()
+        == "origin/main"
+    )
 
     remote_commit = git_run(
         bare_remote,
@@ -532,7 +533,9 @@ def test_fetch_set_upstream_and_non_force_push_use_exact_local_remote(
     ).stdout.strip()
     git_run(bare_remote, "update-ref", "refs/heads/main", remote_commit)
     operations.submit(operations.plan(Action("fetch", remote="origin")))
-    assert git_run(git_repo, "rev-parse", "refs/remotes/origin/main").stdout.strip() == remote_commit
+    assert (
+        git_run(git_repo, "rev-parse", "refs/remotes/origin/main").stdout.strip() == remote_commit
+    )
 
     git_run(git_repo, "merge", "--ff-only", "refs/remotes/origin/main")
     file.write_text("two\n")
@@ -560,8 +563,12 @@ def test_push_revalidation_failure_is_failed_not_remote_uncertainty(
         operations.submit(plan)
 
     assert operations.activity()[0].state == "failed"
-    assert git_run(bare_remote, "show-ref", "--verify", "refs/heads/main", check=False).returncode != 0
-    assert git_run(replacement, "show-ref", "--verify", "refs/heads/main", check=False).returncode != 0
+    assert (
+        git_run(bare_remote, "show-ref", "--verify", "refs/heads/main", check=False).returncode != 0
+    )
+    assert (
+        git_run(replacement, "show-ref", "--verify", "refs/heads/main", check=False).returncode != 0
+    )
 
 
 def test_timed_out_push_is_visible_as_uncertain_and_is_not_retried(
@@ -570,12 +577,7 @@ def test_timed_out_push_is_visible_as_uncertain_and_is_not_retried(
     git_run(git_repo, "commit", "--allow-empty", "-m", "initial")
     attempts = tmp_path / "ssh-attempts"
     ssh = tmp_path / "slow-ssh"
-    ssh.write_text(
-        "#!/bin/sh\n"
-        f"echo attempt >> {shlex.quote(str(attempts))}\n"
-        "sleep 2\n"
-        "exit 1\n"
-    )
+    ssh.write_text(f"#!/bin/sh\necho attempt >> {shlex.quote(str(attempts))}\nsleep 2\nexit 1\n")
     ssh.chmod(0o700)
     monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "ssh")
     monkeypatch.setenv("GIT_SSH_COMMAND", str(ssh))
@@ -598,9 +600,7 @@ def test_timed_out_push_is_visible_as_uncertain_and_is_not_retried(
         operations.submit(plan)
 
 
-def test_checkout_branch_tag_and_worktree_creation_have_exact_targets(
-    git_repo, git_run, tmp_path
-):
+def test_checkout_branch_tag_and_worktree_creation_have_exact_targets(git_repo, git_run, tmp_path):
     file = git_repo / "example.txt"
     file.write_text("one\n")
     git_run(git_repo, "add", "example.txt")
@@ -614,9 +614,7 @@ def test_checkout_branch_tag_and_worktree_creation_have_exact_targets(
     assert git_run(git_repo, "rev-parse", "HEAD").stdout.strip() == first
     assert git_run(git_repo, "branch", "--show-current").stdout.strip() == ""
 
-    operations.submit(
-        operations.plan(Action("create-branch", name="reviewed", target="HEAD"))
-    )
+    operations.submit(operations.plan(Action("create-branch", name="reviewed", target="HEAD")))
     assert git_run(git_repo, "branch", "--show-current").stdout.strip() == "reviewed"
     operations.submit(operations.plan(Action("tag", name="reviewed-tag", target="HEAD")))
     assert git_run(git_repo, "rev-parse", "reviewed-tag^{}").stdout.strip() == first
@@ -637,9 +635,7 @@ def test_tag_plan_refuses_a_moved_explicit_target(git_repo, git_run):
         git_repo, "commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", "later"
     ).stdout.strip()
     operations = OperationCoordinator(Repository(git_repo))
-    plan = operations.plan(
-        Action("tag", name="reviewed-tag", target="refs/heads/topic")
-    )
+    plan = operations.plan(Action("tag", name="reviewed-tag", target="refs/heads/topic"))
 
     git_run(git_repo, "update-ref", "refs/heads/topic", later)
     with pytest.raises(GitError, match="changed"):
@@ -685,9 +681,7 @@ def test_checkout_plan_refuses_changed_tracking_destination(git_repo, git_run, b
     assert git_run(git_repo, "branch", "--show-current").stdout.strip() == "main"
 
 
-def test_checkout_plan_refuses_changed_external_target_attributes(
-    git_repo, git_run, tmp_path
-):
+def test_checkout_plan_refuses_changed_external_target_attributes(git_repo, git_run, tmp_path):
     file = git_repo / "example.txt"
     file.write_text("one\n")
     git_run(git_repo, "add", "example.txt")
@@ -721,18 +715,14 @@ def test_fetch_plan_refuses_included_global_destination_change(
     home.mkdir()
     included = home / "fetch.conf"
     included.write_text(
-        "[remote \"origin\"]\n"
-        "\tfetch = +refs/heads/main:refs/remotes/reviewed/main\n"
+        '[remote "origin"]\n\tfetch = +refs/heads/main:refs/remotes/reviewed/main\n'
     )
     (home / ".gitconfig").write_text(f"[include]\n\tpath = {included}\n")
     monkeypatch.setenv("HOME", str(home))
     operations = OperationCoordinator(Repository(git_repo))
     plan = operations.plan(Action("fetch", remote="origin"))
 
-    included.write_text(
-        "[remote \"origin\"]\n"
-        "\tfetch = +refs/heads/main:refs/remotes/changed/main\n"
-    )
+    included.write_text('[remote "origin"]\n\tfetch = +refs/heads/main:refs/remotes/changed/main\n')
     with pytest.raises(GitError, match="changed"):
         operations.submit(plan)
 
@@ -748,15 +738,11 @@ def test_fetch_plan_refuses_included_global_destination_change(
     )
 
 
-def test_create_worktree_plan_refuses_destination_created_after_review(
-    git_repo, git_run, tmp_path
-):
+def test_create_worktree_plan_refuses_destination_created_after_review(git_repo, git_run, tmp_path):
     git_run(git_repo, "commit", "--allow-empty", "-m", "initial")
     destination = tmp_path / "new-worktree"
     operations = OperationCoordinator(Repository(git_repo))
-    plan = operations.plan(
-        Action("create-worktree", target="HEAD", paths=(str(destination),))
-    )
+    plan = operations.plan(Action("create-worktree", target="HEAD", paths=(str(destination),)))
 
     destination.mkdir()
     (destination / "precious.txt").write_text("do not overwrite\n")
@@ -804,9 +790,7 @@ def test_default_and_configured_refs_remain_protected_and_ref_changes_stay_gated
     configured_delete = operations.plan(Action("delete-branch", target="release"))
     assert configured_delete.available is False
     assert "protected" in configured_delete.reason
-    topic_rename = operations.plan(
-        Action("rename-branch", target="topic", name="renamed-topic")
-    )
+    topic_rename = operations.plan(Action("rename-branch", target="topic", name="renamed-topic"))
     assert topic_rename.available is False
     assert "restoration" in topic_rename.reason
     protected_rewrite = operations.plan(Action("reset-soft", target="HEAD"))
@@ -823,9 +807,7 @@ def test_default_and_configured_refs_remain_protected_and_ref_changes_stay_gated
     assert git_run(git_repo, "show-ref", "--verify", "refs/heads/topic").returncode == 0
 
 
-def test_detected_remote_default_source_ref_is_protected(
-    git_repo, git_run, tmp_path
-):
+def test_detected_remote_default_source_ref_is_protected(git_repo, git_run, tmp_path):
     git_run(git_repo, "commit", "--allow-empty", "-m", "initial")
     remote = tmp_path / "production.git"
     remote.mkdir()
@@ -899,7 +881,9 @@ def test_mutations_are_serialized_across_worktrees_of_one_common_repository(
     tag_thread.start()
     time.sleep(0.1)
     assert second.activity()[0].state == "queued"
-    assert git_run(other, "show-ref", "--verify", "refs/tags/queued-tag", check=False).returncode != 0
+    assert (
+        git_run(other, "show-ref", "--verify", "refs/tags/queued-tag", check=False).returncode != 0
+    )
 
     release.touch()
     commit_thread.join(timeout=5)
@@ -907,21 +891,18 @@ def test_mutations_are_serialized_across_worktrees_of_one_common_repository(
     assert not commit_thread.is_alive()
     assert not tag_thread.is_alive()
     assert errors == []
-    assert git_run(other, "rev-parse", "queued-tag^{}").stdout.strip() == git_run(
-        other, "rev-parse", "HEAD"
-    ).stdout.strip()
+    assert (
+        git_run(other, "rev-parse", "queued-tag^{}").stdout.strip()
+        == git_run(other, "rev-parse", "HEAD").stdout.strip()
+    )
 
 
-def test_activity_is_bounded_to_the_most_recent_twenty_real_operations(
-    git_repo, git_run
-):
+def test_activity_is_bounded_to_the_most_recent_twenty_real_operations(git_repo, git_run):
     git_run(git_repo, "commit", "--allow-empty", "-m", "initial")
     operations = OperationCoordinator(Repository(git_repo))
 
     for number in range(22):
-        operations.submit(
-            operations.plan(Action("tag", name=f"activity-{number}", target="HEAD"))
-        )
+        operations.submit(operations.plan(Action("tag", name=f"activity-{number}", target="HEAD")))
 
     records = operations.activity()
     assert len(records) == 20
@@ -933,7 +914,9 @@ def test_checkout_plan_refuses_a_moved_target_ref(git_repo, git_run):
     git_run(git_repo, "commit", "--allow-empty", "-m", "initial")
     original = git_run(git_repo, "rev-parse", "HEAD").stdout.strip()
     git_run(git_repo, "branch", "topic")
-    later = git_run(git_repo, "commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", "later").stdout.strip()
+    later = git_run(
+        git_repo, "commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", "later"
+    ).stdout.strip()
     operations = OperationCoordinator(Repository(git_repo))
     plan = operations.plan(Action("checkout", target="refs/heads/topic"))
 

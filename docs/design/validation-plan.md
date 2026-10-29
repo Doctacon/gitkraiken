@@ -260,6 +260,12 @@ no stalled remote freezes local interaction, incomplete work is labeled, and can
 behavior matches the measurement protocol. Resource claims remain provisional until
 the proposed budgets are approved and tested.
 
+**Approved M1 exception (2026-10-29).** The operator accepted the measured 1.509 s
+startup maximum on the recorded five-run local reference profile. This startup
+result is no longer an M1 blocker; original thresholds/raw results stay intact.
+See the [acceptance record](../validation/m1-performance.md#operator-acceptance--2026-10-29).
+Other V04 measurements and release gates remain unchanged.
+
 **Stop/return.** A target cannot be met within the chosen behavior/support envelope,
 cache/fixture assumptions materially change its meaning, or the needed approach
 requires a product/privacy/scope change. Do not weaken thresholds, hide work, shrink

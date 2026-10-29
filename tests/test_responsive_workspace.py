@@ -27,7 +27,8 @@ def assert_workspace_fits(app) -> None:
         # Constrained workspaces summon one primary task panel, not a cramped
         # permanent graph plus inspector. The graph remains mounted underneath.
         primary = [
-            app.query_one(selector) for selector in ("#refs-panel", "#inspector-panel")
+            app.query_one(selector)
+            for selector in ("#refs-panel", "#inspector-panel")
             if app.query_one(selector).display
         ]
         assert len(primary) == 1

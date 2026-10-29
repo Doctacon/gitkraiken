@@ -101,11 +101,7 @@ class PatchService:
         selected_path = self.repo._path(path)
         if not isinstance(staged, bool):
             raise GitError("Staged must be true or false.")
-        if (
-            not isinstance(context, int)
-            or isinstance(context, bool)
-            or not 0 <= context <= 10_000
-        ):
+        if not isinstance(context, int) or isinstance(context, bool) or not 0 <= context <= 10_000:
             raise GitError("Diff context must be an integer between 0 and 10000.")
         return self._open(selected_path, staged=staged, context=context)
 
@@ -140,9 +136,7 @@ class PatchService:
         self._require_current(document, current)
 
         all_changes = {
-            item.line.id
-            for item in document._items
-            if item.line.kind in {"add", "delete"}
+            item.line.id for item in document._items if item.line.kind in {"add", "delete"}
         }
         # A staged patch is HEAD -> index.  Unstaging selected lines means retaining
         # every *unselected* change from that patch, rather than applying a naïvely
@@ -163,11 +157,15 @@ class PatchService:
             raise GitError("The selected result does not have a supported regular-file mode.")
 
         if exists:
-            blob = self.repo._git(
-                ["hash-object", "-w", "--stdin"],
-                input_bytes=data,
-                operation="store selected patch result",
-            ).stdout.decode("ascii").strip()
+            blob = (
+                self.repo._git(
+                    ["hash-object", "-w", "--stdin"],
+                    input_bytes=data,
+                    operation="store selected patch result",
+                )
+                .stdout.decode("ascii")
+                .strip()
+            )
             index_record = f"{mode} {blob}\t".encode("ascii") + os.fsencode(document.path) + b"\x00"
         else:
             oid_length = max(
@@ -177,11 +175,7 @@ class PatchService:
                 len(document._identity.new_oid),
             )
             index_record = (
-                b"0 "
-                + (b"0" * oid_length)
-                + b"\t"
-                + os.fsencode(document.path)
-                + b"\x00"
+                b"0 " + (b"0" * oid_length) + b"\t" + os.fsencode(document.path) + b"\x00"
             )
 
         def validate() -> None:
@@ -202,11 +196,7 @@ class PatchService:
         new_mode, new_oid = self._index_entry(path) if staged else ("", "")
 
         statuses = self.repo._status()
-        related = [
-            change
-            for change in statuses
-            if path in {change.path, change.original_path}
-        ]
+        related = [change for change in statuses if path in {change.path, change.original_path}]
         reason = ""
         if any(change.conflicted for change in related):
             reason = "Files with unresolved conflicts require a whole-file conflict workflow."
@@ -219,7 +209,9 @@ class PatchService:
         elif new_mode and new_mode not in {"100644", "100755"}:
             reason = "Non-regular index entries do not support textual line selection."
         elif self._has_unsupported_attributes(path):
-            reason = "Custom filters, encodings, or binary diff attributes require a whole-file action."
+            reason = (
+                "Custom filters, encodings, or binary diff attributes require a whole-file action."
+            )
 
         if not staged:
             # This is only a content fingerprint. Canonical target bytes still come
@@ -231,9 +223,7 @@ class PatchService:
                 new_mode = ""
         old_exists = bool(old_oid)
         new_exists = bool(new_oid) if staged else work_kind == "regular"
-        eligible_untracked = any(
-            change.path == path and change.index == "?" for change in related
-        )
+        eligible_untracked = any(change.path == path and change.index == "?" for change in related)
         if (
             not reason
             and not staged
@@ -250,7 +240,9 @@ class PatchService:
         if not reason:
             raw = self._diff(path, staged=staged, context=context, head=head, tracked=old_exists)
             if len(raw) > _MAX_PATCH_BYTES:
-                reason = "This patch exceeds the 2 MiB line-selection limit; use a whole-file action."
+                reason = (
+                    "This patch exceeds the 2 MiB line-selection limit; use a whole-file action."
+                )
                 raw = raw[: _MAX_PATCH_BYTES + 1]
 
         items, hunks = self._parse(raw)
@@ -274,11 +266,7 @@ class PatchService:
                 rebuilt = self._build_data(
                     old_data,
                     hunks,
-                    {
-                        item.line.id
-                        for item in items
-                        if item.line.kind in {"add", "delete"}
-                    },
+                    {item.line.id for item in items if item.line.kind in {"add", "delete"}},
                 )
                 if staged and new_exists and rebuilt != self._read_blob(new_oid):
                     reason = (
@@ -327,9 +315,7 @@ class PatchService:
             raise GitError("Repository content changed. Refresh the patch and select again.")
 
     def _index_fingerprint(self) -> str:
-        data = self.repo._git(
-            ["ls-files", "--stage", "-z"], operation="fingerprint index"
-        ).stdout
+        data = self.repo._git(["ls-files", "--stage", "-z"], operation="fingerprint index").stdout
         return hashlib.sha256(data).hexdigest()
 
     def _worktree_fingerprint(self, path: str) -> tuple[str, str, str]:
@@ -516,16 +502,12 @@ class PatchService:
                 hunk_specs.append(
                     (hunk_number, old_start, old_count, new_start, new_count, len(items))
                 )
-                items.append(
-                    _PatchItem(PatchLine(line_id, "hunk", display, hunk=hunk_number))
-                )
+                items.append(_PatchItem(PatchLine(line_id, "hunk", display, hunk=hunk_number)))
                 continue
             if hunk_number is not None and record.startswith(b"\\ No newline at end of file"):
                 if items and items[-1].line.kind in {"context", "add", "delete"}:
                     items[-1] = replace(items[-1], content=items[-1].content.removesuffix(b"\n"))
-                items.append(
-                    _PatchItem(PatchLine(line_id, "meta", display, hunk=hunk_number))
-                )
+                items.append(_PatchItem(PatchLine(line_id, "meta", display, hunk=hunk_number)))
                 continue
             if hunk_number is not None and record[:1] in {b" ", b"+", b"-"}:
                 prefix = record[:1]

@@ -1,4 +1,5 @@
 """Native commit behavior through Repository; UI stays gated until integration proof."""
+
 from __future__ import annotations
 
 import os
@@ -29,7 +30,9 @@ def test_empty_unborn_commit_refuses_without_leaving_transaction_files(git_repo)
     assert not list((git_repo / ".git").glob("rhizome-commit-*"))
 
 
-def test_native_commit_keeps_competing_index_writer_out(git_repo, git_run, monkeypatch, staged_change):
+def test_native_commit_keeps_competing_index_writer_out(
+    git_repo, git_run, monkeypatch, staged_change
+):
     path = staged_change
     run = subprocess.run
     popen = subprocess.Popen
@@ -38,10 +41,12 @@ def test_native_commit_keeps_competing_index_writer_out(git_repo, git_run, monke
     def external_writer(command, *args, **kwargs):
         if "commit" in command and not competing:
             path.write_text("changed after review\n")
-            competing.append(run(
-                ["git", "-C", str(git_repo), "add", "example.txt"],
-                capture_output=True,
-            ))
+            competing.append(
+                run(
+                    ["git", "-C", str(git_repo), "add", "example.txt"],
+                    capture_output=True,
+                )
+            )
         return popen(command, *args, **kwargs)
 
     monkeypatch.setattr(subprocess, "Popen", external_writer)
@@ -124,8 +129,8 @@ def test_configured_signer_is_invoked_and_rejection_preserves_index(
         "cat >/dev/null\n"
         + (
             "printf 'Fixture signing rejection\\n' >&2\nexit 1\n"
-            if exit_code else
-            "printf '%s\\n' '-----BEGIN PGP SIGNATURE-----' 'Zml4dHVyZQ==' "
+            if exit_code
+            else "printf '%s\\n' '-----BEGIN PGP SIGNATURE-----' 'Zml4dHVyZQ==' "
             "'-----END PGP SIGNATURE-----'\n"
             "printf '[GNUPG:] SIG_CREATED D 1 8 00 1234567890 " + "A" * 40 + "\\n' >&2\n"
         )
@@ -209,7 +214,13 @@ def test_same_parent_ref_substitution_is_not_reported_as_commit_success(
 ):
     head = git_run(git_repo, "rev-parse", "HEAD").stdout.strip()
     sibling = git_run(
-        git_repo, "commit-tree", "HEAD^{tree}", "-p", head, "-m", "Concurrent sibling",
+        git_repo,
+        "commit-tree",
+        "HEAD^{tree}",
+        "-p",
+        head,
+        "-m",
+        "Concurrent sibling",
     ).stdout.strip()
     hook = git_repo / ".git" / "hooks" / "post-commit"
     hook.write_text(f"#!/bin/sh\ngit update-ref refs/heads/main {sibling}\n")

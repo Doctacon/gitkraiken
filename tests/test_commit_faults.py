@@ -1,4 +1,5 @@
 """Public Repository.execute real-Git commit fault proofs."""
+
 from __future__ import annotations
 
 import os
@@ -24,9 +25,7 @@ def _head_state(git_repo, git_run) -> tuple[str, str]:
     return head, symbolic
 
 
-def test_definite_commit_launch_failure_cleans_owned_transaction(
-    git_repo, git_run, monkeypatch
-):
+def test_definite_commit_launch_failure_cleans_owned_transaction(git_repo, git_run, monkeypatch):
     path = git_repo / "example.txt"
     path.write_text("base\n")
     git_run(git_repo, "add", path.name)
@@ -144,9 +143,7 @@ def test_spawn_boundary_failure_with_a_live_child_retains_transaction(
     assert git_run(git_repo, "show", "HEAD:hook-only.txt").stdout == "hook content\n"
 
 
-def test_unprovable_group_liveness_retains_the_unpublished_index(
-    git_repo, git_run, monkeypatch
-):
+def test_unprovable_group_liveness_retains_the_unpublished_index(git_repo, git_run, monkeypatch):
     path = git_repo / "example.txt"
     path.write_text("base\n")
     git_run(git_repo, "add", path.name)
@@ -177,9 +174,7 @@ def test_unprovable_group_liveness_retains_the_unpublished_index(
     assert f"git-pgid: {probes[0]}" in (artifacts[0] / "context.txt").read_text()
 
 
-def test_negative_direct_signal_retains_owned_lock_and_candidate(
-    git_repo, git_run, monkeypatch
-):
+def test_negative_direct_signal_retains_owned_lock_and_candidate(git_repo, git_run, monkeypatch):
     path = git_repo / "example.txt"
     path.write_text("base\n")
     git_run(git_repo, "add", path.name)
@@ -194,9 +189,7 @@ def test_negative_direct_signal_retains_owned_lock_and_candidate(
     hook_finished = git_repo.parent / "signal-hook-finished"
     hook = git_repo / ".git" / "hooks" / "pre-commit"
     hook.write_text(
-        "#!/bin/sh\n"
-        f"trap ': > {shlex.quote(str(hook_finished))}' EXIT\n"
-        "kill -TERM \"$PPID\"\n"
+        f"#!/bin/sh\ntrap ': > {shlex.quote(str(hook_finished))}' EXIT\nkill -TERM \"$PPID\"\n"
     )
     hook.chmod(0o700)
 
@@ -243,13 +236,16 @@ def test_negative_direct_signal_retains_owned_lock_and_candidate(
     retained_candidate = candidate.read_bytes()
     assert spawned["candidate_bytes"] == before_index
     assert retained_candidate
-    assert subprocess.run(
-        ["git", "ls-files", "--stage", "-z"],
-        cwd=git_repo,
-        env={**os.environ, "GIT_INDEX_FILE": str(candidate)},
-        check=True,
-        capture_output=True,
-    ).stdout == before_entries.encode()
+    assert (
+        subprocess.run(
+            ["git", "ls-files", "--stage", "-z"],
+            cwd=git_repo,
+            env={**os.environ, "GIT_INDEX_FILE": str(candidate)},
+            check=True,
+            capture_output=True,
+        ).stdout
+        == before_entries.encode()
+    )
     assert lock.is_file()
     assert (lock.stat().st_dev, lock.stat().st_ino) == spawned["lock_identity"]
     context = (artifact / "context.txt").read_text()
@@ -297,12 +293,13 @@ def test_foreground_hook_child_blocks_publication_after_hook_shell_is_killed(
         "status=$?\n"
         f"printf '%s\\n' \"$status\" > {shlex.quote(str(child_status))}\n"
         f": > {shlex.quote(str(child_finished))}\n"
-        "exit \"$status\"\n"
+        'exit "$status"\n'
     )
     child.chmod(0o700)
     hook = (
         git_repo / ".git" / "hooks" / "post-commit"
-        if launcher == "post-commit" else git_repo.parent / "fixture-signer"
+        if launcher == "post-commit"
+        else git_repo.parent / "fixture-signer"
     )
     hook.write_text(
         "#!/bin/sh\n"
@@ -359,7 +356,11 @@ def test_foreground_hook_child_blocks_publication_after_hook_shell_is_killed(
     active_execute_finished = False
     try:
         deadline = time.monotonic() + 10
-        while not child_ready.exists() and not execute_finished.is_set() and time.monotonic() < deadline:
+        while (
+            not child_ready.exists()
+            and not execute_finished.is_set()
+            and time.monotonic() < deadline
+        ):
             time.sleep(0.01)
         child_was_ready = child_ready.exists()
         if child_was_ready:
@@ -394,7 +395,9 @@ def test_foreground_hook_child_blocks_publication_after_hook_shell_is_killed(
             deadline = time.monotonic() + 15
             while not child_finished.exists() and time.monotonic() < deadline:
                 time.sleep(0.02)
-            assert child_finished.exists(), "foreground child did not complete after its gate was released"
+            assert child_finished.exists(), (
+                "foreground child did not complete after its gate was released"
+            )
         worker.join(timeout=15)
         assert not worker.is_alive(), "Repository.execute did not settle after the child completed"
 
@@ -412,7 +415,9 @@ def test_foreground_hook_child_blocks_publication_after_hook_shell_is_killed(
     else:
         assert spawned["returncode"] > 0, "signer termination must reach native nonzero completion"
         assert _head_state(git_repo, git_run) == before_head
-    assert active_candidate_exists, "Rhizome deleted or moved the candidate while its writer was active"
+    assert active_candidate_exists, (
+        "Rhizome deleted or moved the candidate while its writer was active"
+    )
     assert active_index_identity == before_index_identity
     assert active_index_bytes == before_index
     if active_execute_finished:
@@ -430,14 +435,17 @@ def test_foreground_hook_child_blocks_publication_after_hook_shell_is_killed(
         context = Path(candidate).with_name("context.txt").read_text()
         assert f"git-pgid: {spawned['process'].pid}" in context
         assert "phase: native-group-still-present" in context
-        assert subprocess.run(
-            ["git", "show", ":late-hook.txt"],
-            cwd=git_repo,
-            env={**os.environ, "GIT_INDEX_FILE": candidate},
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout == "late hook content\n"
+        assert (
+            subprocess.run(
+                ["git", "show", ":late-hook.txt"],
+                cwd=git_repo,
+                env={**os.environ, "GIT_INDEX_FILE": candidate},
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+            == "late hook content\n"
+        )
     else:
         if launcher == "post-commit":
             assert isinstance(outcome[0], str), outcome[0]
@@ -472,16 +480,16 @@ def test_duplicate_native_header_beyond_retained_output_is_ambiguous(
         "#!/bin/sh\n"
         "is_commit=\n"
         "for argument do\n"
-        "  test \"$argument\" = commit && is_commit=yes\n"
+        '  test "$argument" = commit && is_commit=yes\n'
         "done\n"
-        f"{shlex.quote(real_git)} \"$@\"\n"
+        f'{shlex.quote(real_git)} "$@"\n'
         "status=$?\n"
-        "if test \"$status\" -eq 0 && test \"$is_commit\" = yes; then\n"
-        f"  ln \"$GIT_INDEX_FILE\" {shlex.quote(str(candidate_at_return))} || exit 97\n"
+        'if test "$status" -eq 0 && test "$is_commit" = yes; then\n'
+        f'  ln "$GIT_INDEX_FILE" {shlex.quote(str(candidate_at_return))} || exit 97\n'
         "  dd if=/dev/zero bs=70000 count=1 2>/dev/null | tr '\\000' x\n"
         f"  printf '\\n[fixture {before_head[0]}] duplicate native-shaped header\\n'\n"
         "fi\n"
-        "exit \"$status\"\n"
+        'exit "$status"\n'
     )
     wrapper.chmod(0o700)
     repo = Repository(git_repo)
@@ -535,9 +543,7 @@ def test_duplicate_native_header_beyond_retained_output_is_ambiguous(
     assert "native-created-oid: (unverified)" in context
 
 
-def test_native_nonzero_after_ref_move_records_observed_state_and_publication(
-    git_repo, git_run
-):
+def test_native_nonzero_after_ref_move_records_observed_state_and_publication(git_repo, git_run):
     path = git_repo / "example.txt"
     path.write_text("base\n")
     git_run(git_repo, "add", path.name)
@@ -563,7 +569,7 @@ def test_native_nonzero_after_ref_move_records_observed_state_and_publication(
         "source=$objects/$prefix/$suffix\n"
         f"printf '%s' \"$tree\" > {shlex.quote(str(tree_oid_file))}\n"
         f"printf '%s' \"$source\" > {shlex.quote(str(tree_source_file))}\n"
-        f"mv \"$source\" {shlex.quote(str(moved_tree))}\n"
+        f'mv "$source" {shlex.quote(str(moved_tree))}\n'
     )
     hook.chmod(0o700)
 
