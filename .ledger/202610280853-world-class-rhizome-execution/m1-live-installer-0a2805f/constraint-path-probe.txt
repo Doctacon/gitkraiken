@@ -1,0 +1,39 @@
+--constraints '/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/rhizome-uv-path-probe-n6gkl0rb/constraints.txt' exit 1
+warning: Requirements file `/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/rhizome-uv-path-probe-n6gkl0rb/constraints.txt` does not contain any dependencies
+  × No solution found when resolving dependencies:
+  ╰─▶ Because rhizome-no-such-fixture was not found in the provided package
+      locations and you require rhizome-no-such-fixture==0, we can conclude
+      that your requirements are unsatisfiable.
+
+      hint: Packages were unavailable because index lookups were disabled
+      and no additional package locations were provided (try: `--find-links
+      <uri>`)
+
+--constraints '/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/rhizome-uv-path-probe-n6gkl0rb/home with spaces/constraints.txt' exit 2
+error: File not found: `/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/rhizome-uv-path-probe-n6gkl0rb/home`
+
+--build-constraints '/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/rhizome-uv-path-probe-n6gkl0rb/home with spaces/constraints.txt' exit 2
+error: File not found: `/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/rhizome-uv-path-probe-n6gkl0rb/home`
+
+--constraints 'file:///var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/rhizome-uv-path-probe-n6gkl0rb/home%20with%20spaces/constraints.txt' exit 1
+warning: Requirements file `/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/rhizome-uv-path-probe-n6gkl0rb/home with spaces/constraints.txt` does not contain any dependencies
+  × No solution found when resolving dependencies:
+  ╰─▶ Because rhizome-no-such-fixture was not found in the provided package
+      locations and you require rhizome-no-such-fixture==0, we can conclude
+      that your requirements are unsatisfiable.
+
+      hint: Packages were unavailable because index lookups were disabled
+      and no additional package locations were provided (try: `--find-links
+      <uri>`)
+
+--build-constraints 'file:///var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/rhizome-uv-path-probe-n6gkl0rb/home%20with%20spaces/constraints.txt' exit 1
+warning: Requirements file `/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/rhizome-uv-path-probe-n6gkl0rb/home with spaces/constraints.txt` does not contain any dependencies
+  × No solution found when resolving dependencies:
+  ╰─▶ Because rhizome-no-such-fixture was not found in the provided package
+      locations and you require rhizome-no-such-fixture==0, we can conclude
+      that your requirements are unsatisfiable.
+
+      hint: Packages were unavailable because index lookups were disabled
+      and no additional package locations were provided (try: `--find-links
+      <uri>`)
+

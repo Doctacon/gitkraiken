@@ -1,0 +1,19 @@
+{
+  "candidate": "80f5e8f7586ee7e3630b0dbc43aeef00b26eed95",
+  "expected": 746,
+  "executed": 746,
+  "partition_exit_codes": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "missing": [],
+  "unexpected": [],
+  "duplicates": [],
+  "failed_or_skipped": [],
+  "timed_out": false,
+  "inputs_unchanged": true,
+  "elapsed_seconds": 352.9,
+  "passed": true
+}

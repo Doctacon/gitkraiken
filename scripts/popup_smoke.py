@@ -77,9 +77,9 @@ def main(*, use_hotkey: bool = False) -> None:
 
     def popup_client(target: str) -> tuple[str, int]:
         clients = tmux(
-            "list-clients", "-F", "#{client_name}\t#{session_name}\t#{client_pid}"
+            "list-clients", "-F", "#{client_name}|#{session_name}|#{client_pid}"
         ).splitlines()
-        match = next((line.split("\t") for line in clients if line.split("\t")[1] == target), None)
+        match = next((line.split("|") for line in clients if line.split("|")[1] == target), None)
         return (match[0], int(match[2])) if match else ("", 0)
 
     def wait_for(check: Callable[[], bool], message: str, *, timeout: float = 8) -> None:
@@ -223,13 +223,16 @@ def main(*, use_hotkey: bool = False) -> None:
                         os.kill(expected_pid, 0)
                         time.sleep(0.1)
 
-                def point_for(text: str, *, contains: str = "") -> tuple[int, int]:
+                def point_for(
+                    text: str, *, contains: str = "", sidebar: bool = False
+                ) -> tuple[int, int]:
                     lines = capture(target).splitlines()
                     row = next(
                         (
                             number
                             for number, line in enumerate(lines)
-                            if text in line and (not contains or contains in line)
+                            if text in (line[:20] if sidebar else line)
+                            and (not contains or contains in line)
                         ),
                         None,
                     )
@@ -275,17 +278,32 @@ def main(*, use_hotkey: bool = False) -> None:
                     wait_for_header("detached HEAD", "Selected-commit Actions checkout")
                     assert_alive("Selected-commit Actions checkout")
 
-                    # The same commit also owns branch test. A graph double-click
-                    # must immediately switch back to that branch from detached HEAD.
+                    # Inspection is non-mutating, even though this commit also
+                    # owns branch test. Switching requires an explicit action.
                     graph_x, graph_y = point_for("●", contains="Popup checkout target")
                     send_mouse(target, graph_x, graph_y, times=2)
+                    assert_alive("Selection-only graph double-click")
+                    assert git("branch", "--show-current") == ""
+                    assert git("rev-parse", "HEAD") == checkout_oid
+
+                    test_x, test_y = point_for("test", sidebar=True)
+                    send_mouse(target, test_x + 1, test_y)
+                    wait_for(
+                        lambda: "Selected test" in capture(target),
+                        "Sidebar click did not select branch test",
+                    )
+                    open_actions(
+                        "Check out refs/heads/test", "Branch test was not explicitly selectable"
+                    )
+                    action_x, action_y = point_for("Check out refs/heads/test")
+                    send_mouse(target, action_x + 1, action_y)
                     wait_for(
                         lambda: git("branch", "--show-current") == "test",
-                        "Graph double-click did not immediately switch to branch test",
+                        "Explicit sidebar checkout did not switch to branch test",
                     )
                     assert git("rev-parse", "HEAD") == checkout_oid
-                    wait_for_header("⑂ test", "Graph double-click checkout")
-                    assert_alive("Graph double-click checkout")
+                    wait_for_header("⑂ test", "Explicit branch checkout")
+                    assert_alive("Explicit branch checkout")
                 else:
                     assert git("branch", "--show-current") == "test"
                     assert git("rev-parse", "HEAD") == checkout_oid
@@ -295,7 +313,7 @@ def main(*, use_hotkey: bool = False) -> None:
 
                     # Also select main in the real sidebar and use its Actions
                     # checkout, proving that path survives in the reopened popup.
-                    main_x, main_y = point_for("main", contains="├ main")
+                    main_x, main_y = point_for("main", sidebar=True)
                     send_mouse(target, main_x + 2, main_y)
                     wait_for(
                         lambda: "Selected main" in capture(target),

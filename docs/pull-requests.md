@@ -11,8 +11,10 @@ Filter by any of these fields, then click a PR or press Enter for its read-only
 summary and **Open in browser** / **Copy URL** actions. Reviewing and merging remain
 in the provider's web UI; selecting a PR never checks it out.
 
-Lists refresh on opening/resuming the workspace and every 30 seconds. Use
-**Refresh PRs** to reload sooner. Existing results stay visible during automatic
+Lists refresh on opening/resuming the workspace and on the configurable 60-second
+automatic cadence, while active and network access is enabled. Offline settings
+pause automatic requests. Use **Refresh PRs** to reload sooner when network access
+is enabled. Existing results stay visible during automatic
 refreshes; expanding/collapsing sections does not trigger extra requests. Lists are
 session-local, reset when the repository or remotes change, and refreshed after
 creating a PR. Each remote has its own
@@ -40,9 +42,13 @@ error rather than silently presenting a partial list.
 
 The checked-out branch is the source; the right-clicked branch is the target.
 There is no inferred Git “parent branch” and selecting a target never checks it out.
-Escape or Cancel abandons the form without a request. While creating, submission
-and cancellation are disabled to avoid duplicate requests. Failures preserve your
-text. A timed-out request may have reached the server: check the repository's PRs
+Escape or Cancel closes the form without a request and retains its private local
+draft. Title and body survive reopening, separately for each worktree and hosted
+provider/repository/source/target intent. Another target never inherits this text.
+Successful creation clears that saved intent; persistence failures are shown rather
+than reported as saved. Offline mode still allows composing and saving a draft, but
+refuses publication before any branch verification or provider request. While creating, submission and cancellation are disabled
+to avoid duplicate requests. Failures preserve your text. A timed-out request may have reached the server: check the repository's PRs
 before retrying. Rhizome never retries creation automatically.
 
 ## One-time authentication
@@ -89,6 +95,10 @@ authentication must also work for the branch checks performed on submission.
 - Ambiguous push destinations and push URLs pointing to a different repository are
   refused rather than creating a PR in the wrong repository. Concurrent changes
   by other users after the remote check remain subject to the provider's behavior.
+
+Captured immutable PR diffs/review workspaces are a later M4 feature. The current
+metadata/browser dialog does not provide that review guarantee. No live private-
+provider certification or real PR creation is implied by the local test suite.
 
 ## Implementation and primary sources
 

@@ -25,6 +25,8 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
+# Task-local throwaway prototypes are evidence, not shipped Python modules.
+extend-exclude = [".ledger"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

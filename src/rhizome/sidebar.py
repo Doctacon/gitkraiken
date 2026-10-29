@@ -22,6 +22,15 @@ from textual.widgets._tree import TreeNode
 from .models import Ref, Snapshot, Stash, Worktree
 from .pull_requests import PullRequest, PullRequestListing
 
+_TREE_LINES = dict(Tree.LINES)
+_TREE_ICON_NODE = Tree.ICON_NODE
+_TREE_ICON_NODE_EXPANDED = Tree.ICON_NODE_EXPANDED
+_PLAIN_TREE_LINES = {
+    "default": ("  ", "| ", "\\-", "+-"),
+    "bold": ("  ", "| ", "\\-", "+-"),
+    "double": ("  ", "| ", "\\-", "+-"),
+}
+
 
 @dataclass(frozen=True)
 class SidebarSelection:
@@ -66,6 +75,13 @@ class _ReferenceTree(Tree[SidebarSelection | _Group]):
         self.guide_depth = 2
         self.auto_expand = False
         self.root.expand()
+
+    def set_plain_glyphs(self, enabled: bool) -> None:
+        """Switch only the tree's generated guides and disclosure marks."""
+        self.LINES = _PLAIN_TREE_LINES if enabled else _TREE_LINES
+        self.ICON_NODE = "> " if enabled else _TREE_ICON_NODE
+        self.ICON_NODE_EXPANDED = "v " if enabled else _TREE_ICON_NODE_EXPANDED
+        self._invalidate()
 
     async def _on_click(self, event: events.Click) -> None:
         # Tree._on_click intentionally discards Click.chain.  Do not call it:
@@ -241,9 +257,15 @@ class ReferenceSidebar(Widget):
         self._pull_request_listings: tuple[PullRequestListing, ...] | None = None
         self._pull_requests_loading = False
         self._pull_requests: dict[str, PullRequest] = {}
+        self._plain_glyphs = False
+
+    @property
+    def _overflow(self) -> Literal["crop", "ellipsis"]:
+        return "crop" if self._plain_glyphs else "ellipsis"
 
     def compose(self) -> ComposeResult:
-        yield Input(placeholder="Filter refs…", id="ref-filter")
+        placeholder = "Filter refs..." if self._plain_glyphs else "Filter refs…"
+        yield Input(placeholder=placeholder, id="ref-filter")
         yield self._tree
         # Footer controls are intentionally below the tree: they stay visible
         # and do not make a worktree move after its first physical click.
@@ -254,6 +276,21 @@ class ReferenceSidebar(Widget):
             yield _SidebarButton("Refresh PRs", id="sidebar-prs-load")
         with VerticalScroll(id="sidebar-state-scroll", can_focus=True):
             yield Static("", id="sidebar-state")
+
+    def set_plain_glyphs(self, enabled: bool) -> None:
+        """Switch generated UI marks without changing reference or path text."""
+        enabled = bool(enabled)
+        if enabled == self._plain_glyphs:
+            return
+        self._plain_glyphs = enabled
+        self._tree.set_plain_glyphs(enabled)
+        if self.is_mounted:
+            self.query_one("#ref-filter", Input).placeholder = (
+                "Filter refs..." if enabled else "Filter refs…"
+            )
+        if self._snapshot is not None:
+            self._rebuild(self._snapshot)
+        self._sync_controls()
 
     def get_selection(self, key: str) -> SidebarSelection | None:
         return self._leaves.get(key)
@@ -313,7 +350,11 @@ class ReferenceSidebar(Widget):
             # Keep this first: a PR diagnostic must not hide the selected path.
             details.append(selected.label)
         if self._pull_requests_loading and self._pull_request_listings is None:
-            details.append("Loading open pull requests…")
+            details.append(
+                "Loading open pull requests..."
+                if self._plain_glyphs
+                else "Loading open pull requests…"
+            )
         elif self._pull_request_listings is not None:
             if not self._pull_request_listings:
                 details.append(
@@ -478,9 +519,9 @@ class ReferenceSidebar(Widget):
                 and first == (data.key, True)
                 and self._root is not None
             ):
-                if data.kind in {"local", "remote"}:
-                    self.post_message(self.CheckoutRequested(data, self._root))
-                elif data.kind == "linked-worktree" and self._worktree_openable(data):
+                # Browsing a ref never checks it out. Checkout is an explicit
+                # command; opening another registered worktree is navigation.
+                if data.kind == "linked-worktree" and self._worktree_openable(data):
                     self.post_message(self.WorktreeOpenRequested(data, self._root))
             return
         self._click_latch = (data.key, label_hit) if isinstance(data, SidebarSelection) else None
@@ -533,7 +574,7 @@ class ReferenceSidebar(Widget):
         self, node: TreeNode[SidebarSelection | _Group], item: SidebarSelection, active: bool
     ) -> None:
         label = item.label.rsplit("/", 1)[-1] if item.kind == "local" else item.label
-        text = Text(label, no_wrap=True, overflow="ellipsis")
+        text = Text(label, no_wrap=True, overflow=self._overflow)
         if getattr(node, "_sidebar_current", False):
             text.stylize("bold #006d77")
         if active:
@@ -543,7 +584,7 @@ class ReferenceSidebar(Widget):
     def _add_leaf(
         self, parent: TreeNode, item: SidebarSelection, *, current: bool = False
     ) -> TreeNode:
-        node = parent.add_leaf(Text(item.label, no_wrap=True, overflow="ellipsis"), item)
+        node = parent.add_leaf(Text(item.label, no_wrap=True, overflow=self._overflow), item)
         node._sidebar_current = current  # type: ignore[attr-defined]
         self._tree_nodes[item.key] = node
         self._leaves[item.key] = item
@@ -554,7 +595,7 @@ class ReferenceSidebar(Widget):
         self, parent: TreeNode, key: str, label: str, *, default: bool, tooltip: str = ""
     ) -> TreeNode:
         node = parent.add(
-            Text(label, no_wrap=True, overflow="ellipsis"),
+            Text(label, no_wrap=True, overflow=self._overflow),
             _Group(key, label, tooltip),
             expand=self._expanded.get(key, default),
         )
@@ -665,7 +706,7 @@ class ReferenceSidebar(Widget):
             )
             if worktree.bare or worktree.prunable:
                 node.set_label(
-                    Text(node.data.label, style="#7b5b4f", no_wrap=True, overflow="ellipsis")
+                    Text(node.data.label, style="#7b5b4f", no_wrap=True, overflow=self._overflow)
                 )
         if not worktrees:
             worktree_group.add_leaf(
@@ -759,14 +800,22 @@ class ReferenceSidebar(Widget):
     def _build_pull_requests(self, root: TreeNode) -> None:
         if self._pull_requests_loading and self._pull_request_listings is None:
             root.add(
-                Text("Loading pull requests…", no_wrap=True),
+                Text(
+                    "Loading pull requests..." if self._plain_glyphs else "Loading pull requests…",
+                    no_wrap=True,
+                ),
                 _Group("group:prs-loading", "Loading"),
                 allow_expand=False,
             )
             return
         if self._pull_request_listings is None:
             root.add(
-                Text("Pull requests load automatically…", no_wrap=True),
+                Text(
+                    "Pull requests load automatically..."
+                    if self._plain_glyphs
+                    else "Pull requests load automatically…",
+                    no_wrap=True,
+                ),
                 _Group("group:prs-unloaded", "Not loaded"),
                 allow_expand=False,
             )
@@ -789,7 +838,12 @@ class ReferenceSidebar(Widget):
             if error:
                 # Text is intentionally literal: remote diagnostics may contain brackets.
                 group.add_leaf(
-                    Text("Could not load — see details below", no_wrap=True),
+                    Text(
+                        "Could not load - see details below"
+                        if self._plain_glyphs
+                        else "Could not load — see details below",
+                        no_wrap=True,
+                    ),
                     _Group(f"group:prs-error:{remote}", error),
                 )
             elif not requests:
@@ -807,8 +861,7 @@ class ReferenceSidebar(Widget):
                 allow_expand=False,
             )
 
-    @staticmethod
-    def _worktree_selection(worktree: Worktree) -> SidebarSelection:
+    def _worktree_selection(self, worktree: Worktree) -> SidebarSelection:
         path = Path(worktree.path)
         branch = worktree.branch
         head = worktree.head
@@ -837,16 +890,16 @@ class ReferenceSidebar(Widget):
         reason = worktree.lock_reason or worktree.prune_reason
         # State leads so unavailable/current status remains visible in narrow panes;
         # the complete branch and path remain available through filtering and tooltip.
+        separator = " | " if self._plain_glyphs else " · "
         label = (
-            (f"{', '.join(markers)} · " if markers else "")
-            + f"{detail} · {path}"
-            + (f" · {reason}" if reason else "")
+            (f"{', '.join(markers)}{separator}" if markers else "")
+            + f"{detail}{separator}{path}"
+            + (f"{separator}{reason}" if reason else "")
         )
         return SidebarSelection(str(path), "linked-worktree", label, str(path), head)
 
-    @staticmethod
-    def _pr_selection(request: PullRequest) -> SidebarSelection:
-        draft = "Draft · " if request.draft else ""
+    def _pr_selection(self, request: PullRequest) -> SidebarSelection:
+        draft = ("Draft | " if self._plain_glyphs else "Draft · ") if request.draft else ""
         return SidebarSelection(
             request.url, "pull-request", f"{draft}#{request.number} {request.title}", request.url
         )

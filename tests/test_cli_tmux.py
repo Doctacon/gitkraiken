@@ -73,7 +73,7 @@ def test_existing_window_is_reused(tmp_path, monkeypatch):
         patch("rhizome.tmux.shutil.which", return_value="/bin/tmux"),
         patch(
             "rhizome.tmux._run",
-            side_effect=[result(f"@2\tother\n@4\t{key}\n"), result(), result()],
+            side_effect=[result(f"@2|other\n@4|{key}\n"), result(), result()],
         ) as run,
     ):
         launch(tmp_path, socket="/tmp/socket")
@@ -89,7 +89,7 @@ def test_new_window_sets_only_its_marker(tmp_path, monkeypatch):
     monkeypatch.setenv("TMUX", "/fake/socket,1,0")
     with (
         patch("rhizome.tmux.shutil.which", return_value="/bin/tmux"),
-        patch("rhizome.tmux._run", side_effect=[result("@2\t\n"), result("@7\n"), result()]) as run,
+        patch("rhizome.tmux._run", side_effect=[result("@2|\n"), result("@7\n"), result()]) as run,
     ):
         launch(tmp_path)
     assert run.call_args_list[1].args[0] == "new-window"
@@ -189,6 +189,10 @@ def test_popup_focus_notification_failure_does_not_report_open_failure(tmp_path,
 
 
 def test_config_is_printed_without_repository_or_config_mutation(tmp_path, monkeypatch, capsys):
+    # Autouse isolation prepares private HOME/config directories before the CLI
+    # runs. They must remain empty and unchanged, not be mistaken for CLI writes.
+    before = sorted(tmp_path.rglob("*"))
+    assert all(path.is_dir() for path in before)
     monkeypatch.chdir(tmp_path)
     with patch("rhizome.git.Repository", side_effect=AssertionError("should not open repo")):
         main(["--tmux-config"])
@@ -200,7 +204,8 @@ def test_config_is_printed_without_repository_or_config_mutation(tmp_path, monke
     assert "#{q:client_name}" in output
     assert "#{q:socket_path}" in output
     assert "pane_current_path" not in output  # no filesystem data in shell source
-    assert not list(tmp_path.iterdir())
+    assert sorted(tmp_path.rglob("*")) == before
+    assert all(path.is_dir() for path in before)
 
 
 def test_config_quotes_tmux_parser_and_literal_hashes(monkeypatch):
@@ -263,7 +268,7 @@ def test_hotkey_inside_popup_detaches_without_opening_another():
 def test_hotkey_inside_pane_restores_origin_without_touching_processes():
     with (
         patch(
-            "rhizome.tmux._run", side_effect=[result("\t%7\n"), result(), result(), result()]
+            "rhizome.tmux._run", side_effect=[result("|%7\n"), result(), result(), result()]
         ) as run,
         patch("rhizome.tmux.launch_pane") as show,
     ):
@@ -315,13 +320,21 @@ def test_pane_focus_notification_failure_still_unlocks(tmp_path):
     assert run.call_args_list[-1].args == ("wait-for", "-U", "rhizome-pane-%7")
 
 
-def test_new_pane_is_guarded_before_start_and_swap(tmp_path):
+@pytest.mark.parametrize("locale", ["C", "UTF-8"])
+def test_new_pane_is_guarded_before_start_and_swap(tmp_path, locale):
     def fake_run(*args, **kwargs):
         if args[0] == "new-session":
-            return result("$2\t%9\n")
-        if args[-1] == "#{pane_width}\t#{pane_height}":
-            return result("80\t24\n")
-        return result()
+            text = (
+                args[args.index("-F") + 1]
+                .replace("#{session_id}", "$2")
+                .replace("#{pane_id}", "%9")
+            )
+        elif args[-1].startswith("#{pane_width}"):
+            text = args[-1].replace("#{pane_width}", "80").replace("#{pane_height}", "24")
+        else:
+            return result()
+        # Real tmux display formats sanitize control characters in the C locale.
+        return result((text.replace("\t", "_") if locale == "C" else text) + "\n")
 
     with patch("rhizome.tmux._run", side_effect=fake_run) as run:
         launch_pane(tmp_path, pane="%7", socket="/tmp/socket")
@@ -345,9 +358,9 @@ def test_new_pane_is_guarded_before_start_and_swap(tmp_path):
 def test_pane_setup_failure_never_kills_the_origin(tmp_path, failure):
     def fake_run(*args, **kwargs):
         if args[0] == "new-session":
-            return result("$2\t%9\n")
-        if args[-1] == "#{pane_width}\t#{pane_height}":
-            return result("80\t24\n")
+            return result("$2|%9\n")
+        if args[-1] == "#{pane_width}|#{pane_height}":
+            return result("80|24\n")
         if args[0] == failure:
             raise TmuxError("failed")
         return result()

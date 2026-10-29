@@ -121,7 +121,9 @@ async def test_refresh_keeps_working_tab_and_explicit_diff_not_highlight(file_re
         await pilot.press("enter")
         await settle(app, pilot)
         assert app._active_diff[0].path == "a.txt"
-        # Staging selection and the explicitly opened diff are independent.
+        # Activation now focuses the precision diff. Explicitly return to Files
+        # to change the whole-file staging selection without replacing the review.
+        table.focus()
         await pilot.press("down")
         assert app._selected_file[0].path == "b.txt"
         (file_repo / "a.txt").write_text("updated diff content\n")
@@ -131,19 +133,25 @@ async def test_refresh_keeps_working_tab_and_explicit_diff_not_highlight(file_re
         assert tabs.active == "wip-tab"
         assert app._active_diff[0].path == "a.txt"
         assert "a.txt" in app.query_one("#center-diff-title", Static).renderable.plain
-        assert "+updated diff content" in app.query_one("#center-diff", Static).renderable.plain
+        assert "+first change" in app.query_one("#center-diff", Static).renderable.plain
+        assert "STALE" in app.query_one("#precision-status", Static).renderable
         assert composer.text == "Keep this draft"
-        # Same status codes still refresh file contents without a new snapshot.
+        # Same status codes still detect changes, without replacing captured review.
         (file_repo / "a.txt").write_text("changed again\n")
         app.poll_repository()
         await settle(app, pilot)
-        assert "+changed again" in app.query_one("#center-diff", Static).renderable.plain
+        assert "+first change" in app.query_one("#center-diff", Static).renderable.plain
+        assert "STALE" in app.query_one("#precision-status", Static).renderable
         assert tabs.active == "wip-tab"
 
         (file_repo / "a.txt").write_text("".join(f"line {i}\n" for i in range(100)))
         app.poll_repository()
         await settle(app, pilot)
-        assert not app._active_diff  # Disappeared diff closes, other files remain.
+        assert app._active_diff  # External disappearance must not dismiss an active review.
+        assert "STALE" in app.query_one("#precision-status", Static).renderable
+        await pilot.click("#back-to-graph")
+        await pilot.pause()
+        assert not app._active_diff
         assert app.query_one("#graph-workspace").display
         assert tabs.active == "wip-tab"
 
@@ -166,7 +174,9 @@ async def test_refresh_does_not_reset_diff_scroll(file_repo, scope):
             table.focus()
             await pilot.press("enter")
         await settle(app, pilot)
-        preview = app.query_one("#center-diff-scroll")
+        preview = app.query_one(
+            "#precision-lines" if scope == "worktree" else "#center-diff-scroll"
+        )
         preview.scroll_to(y=30, animate=False)
         await pilot.pause()
         before = preview.scroll_offset

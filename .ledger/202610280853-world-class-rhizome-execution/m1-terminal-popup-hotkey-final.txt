@@ -1,0 +1,1 @@
+PASS: explicit popup (prefix+g detach) keeps outer client PID 91429 and app PID 91438 alive throughout; popup client PIDs [91443, 91969] each stay alive while attached and change on reopen; headers detached HEAD → test → main; detach/reopen works on a custom socket (/bin/zsh)

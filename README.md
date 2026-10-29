@@ -1,40 +1,92 @@
 # Rhizome
 
-A GitKraken-inspired Git workspace for your terminal. Browse branches and commits,
-review diffs, stage files, and commit with a mouse or keyboard.
-**Runs standalone; tmux is optional.** Uses your existing Git authentication.
+A local-first Git workspace for your terminal. Browse without changing your
+checkout, review mixed edits, stage exact hunks or line ranges, and commit with a
+mouse or keyboard. **Runs standalone; tmux is optional.** Git uses your existing
+authentication.
 
 ![Rhizome's branches, commit graph, and changed files](docs/assets/workspace.png)
 
-## Install & run
+## M1 — Focused precision core
 
-macOS or Linux (including WSL2). Requires **Git 2.36+** and
-[uv](https://docs.astral.sh/uv/); uv can install the required Python 3.13.
+M1 is **complete and accepted for a full release**, with explicit validation
+[coverage and deferrals](docs/validation/m1-release-acceptance.md). This readiness
+record does not itself publish a GitHub release. Later investigation, integration,
+personalization and hosted-review milestones remain deferred.
+
+Ordinary staged commits use a reviewed-index transaction and native Git hooks/signing.
+The workspace temporarily hands the terminal to Git and returns afterward; failures
+retain the draft. The screenshot above predates the precision workspace; see the
+current [wide precision view](docs/assets/m1-precision-wide.png) and
+[80×24 composer](docs/assets/m1-composer-80x24.png).
+
+Run an inspected development checkout with Python 3.13+, Git 2.36+, and
+[uv](https://docs.astral.sh/uv/):
 
 ```sh
-uv tool install --python 3.13 git+https://github.com/Doctacon/rhizome.git
-rhizome /path/to/repository
+uv sync --locked
+uv run --locked rhizome /path/to/repository
+# Or explore a disposable real Git repository with a local-only remote:
+uv run --locked rhizome --demo
 ```
 
-Run `rhizome` inside a repository, or try `rhizome --demo` for a disposable
-local demo. A true-color terminal at **120×40 or larger** is recommended.
+The target is macOS, Linux, and WSL2, including SSH/tmux, at **80×24 or larger**.
+Wide terminals show the three-panel workspace; narrow terminals summon one primary
+task panel. Platform, minimum-version, real-terminal, and human usability validation
+must not be inferred from the local headless tests.
 
-## Use
+## Precision workflow
 
-- Select a commit to see its details and changed files on the right.
-- Click a file to show its diff in the center; **Esc** or **Back to graph** returns.
-- Use **Working directory** to stage files and commit. WIP appears in the graph only
-  when you have changes.
-- **Ctrl+P** opens actions, **/** searches, **?** shows help, **Ctrl+Q** quits.
-- Optional tmux integration: `rhizome --tmux /path/to/repository`.
-  See the [tmux guide](docs/usage.md#tmux) for the persistent pane hotkey.
+1. **Files / F2** opens working changes. Activate a file to inspect its captured diff.
+2. Press **v**, extend a contiguous range with arrows, then **s** to stage or **u**
+   to unstage. Mouse/Shift-click ranges and hunk controls are also available.
+3. Search, expand context, or show whitespace without changing the canonical patch.
+4. **Commit / F3** opens the durable composer. On repository open, saved drafts take
+   priority over configured Git templates. Edit the message and choose **Commit**
+   to commit staged content with Git-owned cleanup and encoding. Hooks/signing can
+   request input while the workspace is suspended. **Back / Esc** restores the prior
+   review view.
 
-Remote refs and pull requests refresh automatically on opening/resuming and every
-30 seconds; local changes refresh every two seconds. Pull and push remain explicit:
-pull is fast-forward-only and push never force-pushes history. Selected Git actions
-run immediately, so take care with discard and reset.
+Browsing and double-clicking never check out a branch. Use an explicit **Checkout**
+action. If a reviewed file changes externally, the captured review remains visible
+and becomes stale: refresh and select again before applying it.
 
-[Full usage & setup](docs/usage.md) · [Pull requests](docs/pull-requests.md) ·
-[Development & checks](docs/usage.md#development-and-checks)
+**Ctrl+P** opens actions, **Ctrl+L / Activity** shows queued/running/completed Git
+work, **F4 / Workspace** opens core preferences, saved-state controls and local
+diagnostics, **?** shows help, and **Ctrl+Q** quits. Closing Activity does not cancel Git.
+See [workspace controls](docs/usage.md#drafts-and-core-preferences) for global offline,
+plain glyphs, session-only exclusion and exact-preview diagnostic export.
+
+## Safety and network behavior
+
+Unproven destructive/integration workflows are intentionally unavailable—not routed
+around their guards. This currently includes discard, resets, rewriting, stash
+mutations, pull, deletion, external-patch application, and Continue/Abort. Use an
+explicit external Git/editor workflow for those tasks and refresh afterward;
+Rhizome does not promise recovery for external actions.
+
+Fetch validates configured destinations before updating remote-tracking caches;
+unsafe mappings, tag pruning, and resolving user-ref aliases into affected caches
+are refused. Native non-force tag auto-follow and explicit `--no-tags` are honored.
+Optional automatic fetch and hosted metadata refresh use a configurable
+**60-second** interval and pause for inactive terminals or user work. Local polling
+remains separate from network requests. Offline mode disables network actions;
+non-force push remains deliberate. No force-push or telemetry is added.
+
+## Installation and integration
+
+The inspectable bootstrap accepts **only a full Git commit**, provisions a private
+pinned uv/Python environment, and provides explicit update, rollback, and uninstall
+commands. It never edits shell, Git, or tmux configuration. Real lifecycle checks
+pass on macOS ARM64 and Linux ARM64/AMD64 (AMD64 under emulation); this is not a
+claim that every platform or network environment was tested. See
+[installation and ownership boundaries](docs/installation.md).
+
+Optional tmux integration: `rhizome --tmux /path/to/repository` with tmux 3.2+.
+The [tmux guide](docs/usage.md#tmux) explains the opt-in persistent pane hotkey.
+
+[Usage](docs/usage.md) · [Pull requests](docs/pull-requests.md) ·
+[Development and checks](docs/usage.md#development-and-checks) ·
+[Validation plan](docs/design/validation-plan.md)
 
 An independent terminal adaptation, not an official GitKraken product.

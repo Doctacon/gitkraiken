@@ -1,0 +1,9 @@
+Sample 1: exit 0
+PASS: real tmux window starts, renders repository, reuses its window, and quits
+
+Sample 2: exit 0
+PASS: real tmux window starts, renders repository, reuses its window, and quits
+
+Sample 3: exit 0
+PASS: real tmux window starts, renders repository, reuses its window, and quits
+

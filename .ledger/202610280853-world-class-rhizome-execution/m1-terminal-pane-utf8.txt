@@ -1,0 +1,1 @@
+PASS: prefix+g is pane-local; native resize 80x26 → 60x22 → 110x34; neighbors stay interactive; independent origins; concurrent toggles; state and zoom; remote state refreshed on resume without pulling; Ctrl+Q and visible/hidden crashes restore the original shell without focus theft

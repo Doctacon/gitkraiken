@@ -1,0 +1,21 @@
+{
+  "candidate": "44cdd1641df92e4084690cbd7288ad9d34e38d92",
+  "expected": 746,
+  "executed": 746,
+  "partition_exit_codes": [
+    0,
+    1,
+    0,
+    0
+  ],
+  "missing": [],
+  "unexpected": [],
+  "duplicates": [],
+  "failed_or_skipped": [
+    "tests/test_refresh.py::test_remote_change_during_automatic_read_discards_and_retries"
+  ],
+  "timed_out": false,
+  "inputs_unchanged": true,
+  "elapsed_seconds": 390.78,
+  "passed": false
+}

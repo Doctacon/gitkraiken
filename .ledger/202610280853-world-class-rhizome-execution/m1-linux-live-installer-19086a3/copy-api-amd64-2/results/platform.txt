@@ -1,0 +1,3 @@
+Linux 46303c090050 6.8.0-100-generic #100-Ubuntu SMP PREEMPT_DYNAMIC Tue Jan 13 16:39:21 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+Python 3.12.3
+git version 2.43.0

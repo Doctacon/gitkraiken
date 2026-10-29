@@ -1,0 +1,6 @@
+Rolled back from 19086a362dd9ac48bdffdd461816add47ca7c6ed to 44cdd1641df92e4084690cbd7288ad9d34e38d92.
+Rollback changes only the launcher pointer and does not restart a running Rhizome process.
+
+Launch Rhizome directly (no PATH or profile edit was made):
+  /private/tmp/rhizome-m1-live-fwxv0yvz/home with spaces/private apps/rhizome/bin/rhizome [REPOSITORY]
+This action does not restart any running Rhizome process.

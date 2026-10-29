@@ -1,0 +1,71 @@
+Planned persistent effects (revision 19086a362dd9ac48bdffdd461816add47ca7c6ed):
+  Installation root: /tmp/rhizome-m1-live-jywk4ns_/home with spaces/private apps/rhizome
+  New isolated revision payload: /tmp/rhizome-m1-live-jywk4ns_/home with spaces/private apps/rhizome/store/19086a362dd9ac48bdffdd461816add47ca7c6ed
+  Verified private uv: 0.11.7 (uv-x86_64-unknown-linux-gnu.tar.gz)
+  Managed Python: 3.13.13 under that revision
+  Lock-derived runtime artifacts and the complete build backend closure are pinned
+  Atomic current pointer; the prior current revision is retained as previous
+No shell profile, PATH, Git, tmux, or system installation is modified. No sudo is used.
+Installed and selected Rhizome commit 19086a362dd9ac48bdffdd461816add47ca7c6ed.
+
+Launch Rhizome directly (no PATH or profile edit was made):
+  /tmp/rhizome-m1-live-jywk4ns_/home with spaces/private apps/rhizome/bin/rhizome [REPOSITORY]
+This action does not restart any running Rhizome process.
+
+Direct uv alternative (using an independently installed uv 0.11.7):
+  Use managed CPython 3.13.13 and the pinned runtime/build constraints shipped at commit 19086a362dd9ac48bdffdd461816add47ca7c6ed.
+Rollback: /tmp/rhizome-m1-live-jywk4ns_/install.sh --rollback
+Uninstall: /tmp/rhizome-m1-live-jywk4ns_/install.sh --uninstall
+
+[stderr]
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+
+  0 23.1M    0 98286    0     0   158k      0  0:02:29 --:--:--  0:02:29  158k
+ 76 23.1M   76 17.6M    0     0  10.9M      0  0:00:02  0:00:01  0:00:01 17.4M
+100 23.1M  100 23.1M    0     0  13.1M      0  0:00:01  0:00:01 --:--:-- 19.9M
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+100  2242  100  2242    0     0   5898      0 --:--:-- --:--:-- --:--:--  5978
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+100  1493  100  1493    0     0   3922      0 --:--:-- --:--:-- --:--:--  3970
+<jemalloc>: MADV_DONTNEED does not work (memset will be used instead)
+<jemalloc>: (This is the expected behaviour if you are running under QEMU)
+<jemalloc>: MADV_DONTNEED does not work (memset will be used instead)
+<jemalloc>: (This is the expected behaviour if you are running under QEMU)
+Downloading cpython-3.13.13-linux-x86_64-gnu (download) (33.7MiB)
+ Downloaded cpython-3.13.13-linux-x86_64-gnu (download)
+Installed Python 3.13.13 in 4.37s
+ + cpython-3.13.13-linux-x86_64-gnu
+<jemalloc>: MADV_DONTNEED does not work (memset will be used instead)
+<jemalloc>: (This is the expected behaviour if you are running under QEMU)
+Resolved 10 packages in 656ms
+   Updating https://github.com/Doctacon/rhizome.git (19086a362dd9ac48bdffdd461816add47ca7c6ed)
+Downloading pygments (1.2MiB)
+ Downloaded pygments
+    Updated https://github.com/Doctacon/rhizome.git (19086a362dd9ac48bdffdd461816add47ca7c6ed)
+   Building rhizome @ git+https://github.com/Doctacon/rhizome.git@19086a362dd9ac48bdffdd461816add47ca7c6ed
+      Built rhizome @ git+https://github.com/Doctacon/rhizome.git@19086a362dd9ac48bdffdd461816add47ca7c6ed
+Prepared 10 packages in 5.91s
+Installed 10 packages in 22ms
+ + linkify-it-py==2.2.0 (from https://files.pythonhosted.org/packages/13/d4/1152d1c7ab42d8b908be64fd200ddc870dc9d4925e951198702084aa1a7d/linkify_it_py-2.2.0-py3-none-any.whl#sha256=3adc40eb5af300b2605fcfdb968c24e1d780a90f1f2221af7c15e5111e94d443)
+ + markdown-it-py==4.2.0 (from https://files.pythonhosted.org/packages/b3/81/4da04ced5a082363ecfa159c010d200ecbd959ae410c10c0264a38cac0f5/markdown_it_py-4.2.0-py3-none-any.whl#sha256=9f7ebbcd14fe59494226453aed97c1070d83f8d24b6fc3a3bcf9a38092641c4a)
+ + mdit-py-plugins==0.6.1 (from https://files.pythonhosted.org/packages/a5/69/6da5581c6a7fede7dc261bf4e67d6adca4196f176b43288b55b3db395b6e/mdit_py_plugins-0.6.1-py3-none-any.whl#sha256=214c82fb2ac524472ab6a5bcab1de80f73b50443e187f401bfd77efbc7c6481d)
+ + mdurl==0.1.2 (from https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl#sha256=84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8)
+ + platformdirs==4.13.5 (from https://files.pythonhosted.org/packages/6c/8a/1d8cb3842909dc193a73835adedf412e32e18f8ffd59f43983949622fe6f/platformdirs-4.13.5-py3-none-any.whl#sha256=53d3ec4280b815c1e0b02edad7f9ee8fda1ba9c0865dd9c2e6e63849ce82fc1e)
+ + pygments==2.21.0 (from https://files.pythonhosted.org/packages/71/46/17f022dd3e953bf20a04a028a21ec746d942f8d2af30fa0f124fa0e6a684/pygments-2.21.0-py3-none-any.whl#sha256=2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9)
+ + rhizome==0.1.0 (from git+https://github.com/Doctacon/rhizome.git@19086a362dd9ac48bdffdd461816add47ca7c6ed)
+ + rich==15.0.0 (from https://files.pythonhosted.org/packages/82/3b/64d4899d73f91ba49a8c18a8ff3f0ea8f1c1d75481760df8c68ef5235bf5/rich-15.0.0-py3-none-any.whl#sha256=33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb)
+ + textual==1.0.0 (from https://files.pythonhosted.org/packages/ac/bb/5fb6656c625019cd653d5215237d7cd6e0b12e7eae4195c3d1c91b2136fc/textual-1.0.0-py3-none-any.whl#sha256=2d4a701781c05104925e463ae370c630567c70c2880e92ab838052e3e23c986f)
+ + typing-extensions==4.16.0 (from https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl#sha256=481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8)
+Installed 1 executable: rhizome
+warning: `/tmp/rhizome-m1-live-jywk4ns_/home with spaces/private apps/rhizome/store/19086a362dd9ac48bdffdd461816add47ca7c6ed/bin` is not on your PATH. To use installed tools, add the directory to your PATH.

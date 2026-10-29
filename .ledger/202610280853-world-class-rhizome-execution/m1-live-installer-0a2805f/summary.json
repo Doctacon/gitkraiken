@@ -1,0 +1,24 @@
+{
+  "candidate": "0a2805f35a45bec51cad6f277d3f0e40f914e084",
+  "previous_revision": "44cdd1641df92e4084690cbd7288ad9d34e38d92",
+  "sandbox": "/private/tmp/rhizome-m1-live-jfxv8lid",
+  "steps": [
+    {
+      "name": "download-bootstrap",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_seconds": 0.38
+    },
+    {
+      "name": "install",
+      "exit_code": 2,
+      "timed_out": false,
+      "elapsed_seconds": 6.96
+    }
+  ],
+  "passed": false,
+  "sandbox_removed": false,
+  "elapsed_seconds": 7.37,
+  "bootstrap_sha256": "55449ce38d5341f880918d62d36ea770fcc6e28f7ffbd92afcee76cec62b0832",
+  "error": "RuntimeError: install did not pass; see its redacted log"
+}

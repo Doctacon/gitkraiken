@@ -1,0 +1,2 @@
+PASS: real 80x24 UI review → partial stage → interactive refusal/draft → commit
+PASS: UI resumes after both outcomes; exact message and unstaged edit preserved

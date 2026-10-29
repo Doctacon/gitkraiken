@@ -28,6 +28,11 @@ def parser() -> argparse.ArgumentParser:
         action="store_true",
         help="print a prefix+g binding for this installation (does not edit tmux.conf)",
     )
+    mode.add_argument(
+        "--check-updates",
+        action="store_true",
+        help="query GitHub for the latest public release (does not install or restart)",
+    )
     result.add_argument(
         "--demo", action="store_true", help="explore a disposable real Git repository"
     )
@@ -42,12 +47,27 @@ def main(argv: list[str] | None = None) -> None:
     args = arg_parser.parse_args(argv)
     if args.tmux_config and (args.demo or args.clone or args.path != "."):
         arg_parser.error("--tmux-config cannot be combined with a repository, --clone, or --demo")
+    if args.check_updates and (args.demo or args.clone or args.path != "."):
+        arg_parser.error(
+            "--check-updates is a standalone network check; do not combine it with "
+            "a repository, --clone, or --demo"
+        )
     if args.demo and (args.clone or args.tmux or args.popup):
         arg_parser.error(
             "--demo runs in this terminal; do not combine it with --clone/--tmux/--popup"
         )
     if args.clone and args.path == ".":
         arg_parser.error("specify a new destination: rhizome --clone URL ./repository")
+    if args.check_updates:
+        from .distribution import UpdateCheckError, print_update_check
+
+        try:
+            print_update_check(__version__)
+        except UpdateCheckError as error:
+            print(f"rhizome: update check failed: {error}", file=sys.stderr)
+            raise SystemExit(1) from None
+        return
+
     from .git import GitError, Repository
     from .tmux import TmuxError, config, launch
 

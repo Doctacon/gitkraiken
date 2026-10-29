@@ -1,0 +1,5 @@
+Removing only the positively marked Rhizome installation:
+  /tmp/rhizome-m1-live-jywk4ns_/home with spaces/private apps/rhizome
+Drafts and recovery data were preserved outside this installation at:
+  /tmp/rhizome-m1-live-jywk4ns_/home with spaces/application-state
+Rhizome installation removed. Shell, PATH, Git, tmux, and unrelated tools were unchanged.

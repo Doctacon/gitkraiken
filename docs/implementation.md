@@ -38,7 +38,14 @@ hosted PR browsing/creation uses authenticated GitHub/Azure CLIs; see [pull requ
     `GitError` on failure. Explicitly selected actions run without a second confirmation. stage and
     unstage with empty paths mean all; discard REQUIRES explicit tracked file paths,
     only worktree edits (never deletes untracked files or resets the index). Commit
-    only staged changes. reset-soft preserves index/worktree; reset-mixed preserves
+    only staged changes, using the reviewed-index transaction and native hooks/signing.
+    Composer text reaches `commit --edit --no-status --no-verbose -F -` via anonymous
+    regular-file stdin, not argv. Strict `i18n.commitEncoding` conversion precedes
+    transaction admission; Git owns cleanup and hook rewriting. Private template
+    loading uses Git's effective path configuration and a bounded regular-file read.
+    Dedicated template/encoding, cleanup, hook and successive-composition cases
+    live in `tests/test_commit_composer.py`; see the M1 ledger for executed evidence.
+    reset-soft preserves index/worktree; reset-mixed preserves
     working files and resets the index; reset-hard explicitly discards changes.
     Reset refuses unfinished operations/conflicts. edit-message amends HEAD only,
     using --only so staged content stays out of the commit. create-worktree uses
@@ -149,16 +156,35 @@ hosted PR browsing/creation uses authenticated GitHub/Azure CLIs; see [pull requ
 - `commit_files.py`: presentation-only changed-file tree. Compacted directory
   chains, basename/status leaves, and typed FileSelected messages. Same-commit
   refresh preserves folds and selection.
+- `persistence.py`, `diagnostics.py`: private versioned state and bounded local
+  diagnostic records. Nonblocking file locks serialize state/journal updates;
+  expected-state comparisons reject competing-instance overwrites. Workspace
+  exclusion keeps only an opaque global policy marker and session-local text.
+  Diagnostic export uses the captured preview document and atomic no-clobber
+  publication; no telemetry or automatic upload.
+- `workspace_controls.py`: F4 core-preferences and diagnostics dialogs. They return
+  typed requests; the application owns confirmations, persistence and I/O. This
+  is not the M2 settings/keymap framework.
 - `app.py`, `dialogs.py`, `app.tcss`: Textual UI. `RhizomeApp(path: str | Path)`.
-  Synchronous Git calls run via `asyncio.to_thread`, not on the UI loop; serialize
-  mutation/refresh work and ignore stale selection detail results. No UI-to-shell
+  Synchronous Git calls normally run via `asyncio.to_thread`; ordinary interactive
+  commits deliberately suspend Textual and hand the foreground terminal to native
+  Git synchronously, then resume after settlement. Draft restoration temporarily
+  makes the editor read-only, restores nonempty drafts before templates, and rejects
+  silently normalized line endings. Untouched template seeds are not persisted.
+  Successful commits reseed the current template unless newer text is present.
+  View restoration resumes navigation/layout, never mutations or patch selections.
+  Serialize mutations and ignore stale selection detail results. No UI-to-shell
   calls. Refresh after success AND failure (conflicts can change repository state).
   Local polling runs every 2s. A single-flight background worker fetches remotes
-  and lists PRs on opening/resuming and every 30s after completion. It shares the
+  and lists PRs on opening/resuming and every 60s after completion by default
+  (core preference controlled). It shares the
   mutation lock but never toggles the workspace's busy styles. Unchanged snapshots
   and PR lists do not rebuild rows; cached PRs remain visible during reads. New
   automatic reads defer during modals/mutations, and late snapshots never repaint
   an active modal. Failed network reads back off until the next interval.
+  Open/manual refresh schedules remote work from the just-presented snapshot,
+  avoiding an immediate duplicate local scan. Post-fetch reconciliation still
+  rereads the repository and checks generation/mutation identity before applying.
 - `cli.py`, `tmux.py`, `demo.py`: entrypoints, opt-in tmux integration, disposable
   real-Git demo fixture. A demo is never presented as the user's repo.
   `--tmux-config` prints an opt-in prefix+g binding using the installation's Python

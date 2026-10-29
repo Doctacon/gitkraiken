@@ -1,0 +1,133 @@
+{
+  "timestamp_utc": "2026-10-29T18:02:53.961600+00:00",
+  "baseline": "ea6df96134b103c3091c8f8b433dd77e33a7cd5e",
+  "scope": "Formatter only; installer behavior and benchmark thresholds unchanged.",
+  "files": [
+    {
+      "path": "scripts/commit_smoke.py",
+      "before_sha256": "a3c17f65803094dc901adc2007de1ba959d667208192df3d1c585d48f05a92a3",
+      "after_sha256": "4f43c6b90c74d75e10d3517a0af493a1493d73043db42f8add67ceaf1a222d7e",
+      "ast_unchanged": true
+    },
+    {
+      "path": "src/rhizome/distribution.py",
+      "before_sha256": "c5c6a2090ffeb4dcd7dc4c7bfa9056b5c01691eeae86a01ce97704227222c76f",
+      "after_sha256": "dd8b421b0505f38633411621697eff3f288ef2e2a83e1eed9ad89eb2368d1cf9",
+      "ast_unchanged": true
+    },
+    {
+      "path": "src/rhizome/git.py",
+      "before_sha256": "3b69b2b56fcd8c7b65220b433bf12d91ae8b9772f17a11c936b2e137a8cbdc16",
+      "after_sha256": "fbc5dd0dc7f7ff20a7a73b5fd65db1a1221c4f94715c331ed204673d2c961943",
+      "ast_unchanged": true
+    },
+    {
+      "path": "src/rhizome/operations.py",
+      "before_sha256": "fd3fdcbcdaf0cbe95dcccce0331be5149d199d5c6f10d5351e1d8ed5b60b50a8",
+      "after_sha256": "13d9a2af0d84aa05e56107156cbce6f22c4efe6e51221e6f85a11f14cde8d1d8",
+      "ast_unchanged": true
+    },
+    {
+      "path": "src/rhizome/patches.py",
+      "before_sha256": "5f8a2e6846d6f0d6b3453e5f0fdb69ca6e1091f2516f990abd299704b73afb4d",
+      "after_sha256": "edc30dbc77c9d2ad9fd80dbbd2fb9dc1de718f966ce84c0cf3ba04efeeed1d11",
+      "ast_unchanged": true
+    },
+    {
+      "path": "src/rhizome/recovery.py",
+      "before_sha256": "6b19f4e710b3326891587fba005a16c9ea73a36f283d93e2e0a36f70b25e0c1c",
+      "after_sha256": "6f19f0290ba4aaa45453b0e40bec1cf1c13dca19d7546f312184572380868a82",
+      "ast_unchanged": true
+    },
+    {
+      "path": "tests/test_commit_faults.py",
+      "before_sha256": "75e68802a51d8b2647e580c7552820c9314339d4010b2944a9ccd06920277835",
+      "after_sha256": "e2e07f86defeef7cdb60435f4f4cfc90415c997abdd7a55f8869bfb4c15bce77",
+      "ast_unchanged": true
+    },
+    {
+      "path": "tests/test_commit_processes.py",
+      "before_sha256": "b100295ed3f618665bcdb77185b0617c399864e39c7b05e3e28eb923543aea68",
+      "after_sha256": "603335b4569eb208d0bd22185e57682f86fe38b656957dbdee47425d424c99f0",
+      "ast_unchanged": true
+    },
+    {
+      "path": "tests/test_commit_publication.py",
+      "before_sha256": "b954b49e39d53621881d9d53e813b840d15049440a3081428f65ce21b8ff285f",
+      "after_sha256": "80f7cb321b45c2978496e222bae326e4654ce348e7770c759b0deed258892944",
+      "ast_unchanged": true
+    },
+    {
+      "path": "tests/test_commit_representations.py",
+      "before_sha256": "25777de27a25af963d160dc77138be58cf6c56a9c930fb64c7353018ebae63a2",
+      "after_sha256": "1148c5e585a3d833f25f209e8000f0222a7e841eeef9750cf920f73d06a24ef8",
+      "ast_unchanged": true
+    },
+    {
+      "path": "tests/test_commit_terminal.py",
+      "before_sha256": "415d4efa6d0c8eb0a3147b158b2e9b0d6c8f3d7ed1a6ad99d9bb24c746307fed",
+      "after_sha256": "c153f44bb352e8fffc20c4f3270dbd19e7f8a6aa1c1a616b8aebbcb1c81e0853",
+      "ast_unchanged": true
+    },
+    {
+      "path": "tests/test_commit_transactions.py",
+      "before_sha256": "8b87a27d4a53f89d004e52062e8c9e4ffbcf64740ac42cb69415bb9fd97ba16f",
+      "after_sha256": "948d034c548b392674e543c7b31dbab9ea2592fe428e9c58435d22014a44b419",
+      "ast_unchanged": true
+    },
+    {
+      "path": "tests/test_fetch_safety.py",
+      "before_sha256": "0a9151288f55d68303e48805eda9bf941f7b21aebd802f01cbfe83490fef8a31",
+      "after_sha256": "5ec9b5c3c4225ed75536178b67ddd39655b4758785b2d1b901a50218d6590e89",
+      "ast_unchanged": true
+    },
+    {
+      "path": "tests/test_install.py",
+      "before_sha256": "9c3050ed74f06e44c80726c3b8cacd8d546a27021bef2e79a7e2dd5988d4085f",
+      "after_sha256": "e6a9f40112060978ac8cb0bf95fe01e219c5e705149c5736aa40c42dad6ea7e8",
+      "ast_unchanged": true
+    },
+    {
+      "path": "tests/test_operations.py",
+      "before_sha256": "634eb99ea550deb212759c34d6b9bddba102640a59080588b280c8ab1217b503",
+      "after_sha256": "601139c87ed30ae198d1de07055cebcfd90572822740b590f5c1680540ab58df",
+      "ast_unchanged": true
+    },
+    {
+      "path": "tests/test_patches.py",
+      "before_sha256": "b08dd23dd2348debba44ec69d99986e2d2ed95b201a6647df576c0bc108c387c",
+      "after_sha256": "5e4caafce03175e020b8c29320e93bae0c9402bbde3706ceaba5412f062caeb4",
+      "ast_unchanged": true
+    },
+    {
+      "path": "tests/test_precision_workspace.py",
+      "before_sha256": "1c85c17e729d43f021d318aadc9872035e7afe9a4b2859619c1461891b0762cf",
+      "after_sha256": "8f6eaa76faaf7368db03803cdbbeaea0c3483788d7c9e10b56d654cab67d5bef",
+      "ast_unchanged": true
+    },
+    {
+      "path": "tests/test_recovery.py",
+      "before_sha256": "0a80e794cf0e644655c23bcc7e601e5869918ad930b87128e20a9f1abd33498d",
+      "after_sha256": "c3ba4204c5517ef41f14ce91a174a434d752e643346952b216b02bde29f5644f",
+      "ast_unchanged": true
+    },
+    {
+      "path": "tests/test_refresh_workspace.py",
+      "before_sha256": "fc7b2fa85bb32d28a75dc29c344b56a039d51594756d4899041bdb03816da3e7",
+      "after_sha256": "fa6f33d4badd85cf735ccd8624cbba0b95d519e812bd30d918bad66de20b03cb",
+      "ast_unchanged": true
+    },
+    {
+      "path": "tests/test_responsive_workspace.py",
+      "before_sha256": "aba37b22ff8fa4e0e9b776b7903a4e9c489021fb2d7a8d5b27b4a5af77bc1a8e",
+      "after_sha256": "e17ff89685afd8439e5817e58094887a164097d5776578d278f8c448254eaba1",
+      "ast_unchanged": true
+    },
+    {
+      "path": "tests/test_workspace_state.py",
+      "before_sha256": "60daf52fc6659881ab1aba58abc330a7e1a56a4c14a37c8c664b2bcd66250d7b",
+      "after_sha256": "8192de1b9a721772bd64608f444acb17080ed5b0bcccd3c0467b369886691aca",
+      "ast_unchanged": true
+    }
+  ]
+}

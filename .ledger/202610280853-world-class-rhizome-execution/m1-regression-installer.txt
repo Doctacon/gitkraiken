@@ -1,0 +1,11 @@
+...............F.....................                                    [100%]
+=================================== FAILURES ===================================
+_____ test_killed_intermediate_launcher_retains_activity_until_child_exits _____
+tests/test_install.py:832: in test_killed_intermediate_launcher_retains_activity_until_child_exits
+    assert retry.returncode != 0, retry.stderr
+E   AssertionError: 
+E   assert 0 != 0
+E    +  where 0 = CompletedProcess(args=['sh', '/Users/crlough/Code/personal/rhizome/scripts/install.sh', '--revision', 'ccccccccccccccc...ts/install.sh --rollback\nUninstall: /Users/crlough/Code/personal/rhizome/scripts/install.sh --uninstall\n', stderr='').returncode
+=========================== short test summary info ============================
+FAILED tests/test_install.py::test_killed_intermediate_launcher_retains_activity_until_child_exits
+1 failed, 36 passed in 44.02s

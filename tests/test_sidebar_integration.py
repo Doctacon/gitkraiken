@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from test_app import choose_option, settle
 from test_sidebar import hit_point
-from textual.widgets import Input, Static, TextArea
+from textual.widgets import Button, Input, Static, TextArea
 from ui_helpers import click
 
 from rhizome.app import RhizomeApp
@@ -193,7 +193,8 @@ async def test_pr_loading_rejects_duplicates_and_survives_help_modal(
         try:
             sidebar.post_message(ReferenceSidebar.PullRequestsRequested(workspace))
             await pilot.pause()
-            assert app.busy
+            assert not app.busy  # A hosted read must not freeze local inspection.
+            assert sidebar.query_one("#sidebar-prs-load", Button).disabled
             sidebar.post_message(ReferenceSidebar.PullRequestsRequested(workspace))
             app.action_help()
             await pilot.pause()

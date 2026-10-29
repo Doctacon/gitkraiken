@@ -1,5 +1,6 @@
 """Automatic refresh stays current without flashing or resetting the workspace."""
 
+import subprocess
 import threading
 from unittest.mock import Mock
 
@@ -26,6 +27,30 @@ def listings():
             (PullRequest(42, "Fix", "https://github.com/org/repo/pull/42", "topic", "main"),),
         ),
     )
+
+
+async def test_manual_refresh_does_not_immediately_rescan_the_same_repository(
+    git_repo, monkeypatch
+):
+    from rhizome.persistence import WorkspaceStateStore
+
+    WorkspaceStateStore().save("global", {"offline": True})
+    snapshots = []
+    snapshot = Repository.snapshot
+
+    def observe(repo, limit=300):
+        snapshots.append(repo.root)
+        return snapshot(repo, limit)
+
+    monkeypatch.setattr(Repository, "snapshot", observe)
+    app = RhizomeApp(git_repo)
+    app.LOCAL_REFRESH_INTERVAL = 3600  # Separate requested work from the periodic poll.
+    async with app.run_test(size=(120, 40)) as pilot:
+        await settle(app, pilot)
+        snapshots.clear()
+        await pilot.press("ctrl+r")
+        await settle(app, pilot)
+        assert snapshots == [git_repo]
 
 
 async def test_local_poll_keeps_controls_and_unchanged_graph_stable(git_repo):
@@ -63,12 +88,17 @@ async def test_open_fetches_remote_commits_without_pulling(
     peer = tmp_path / "peer"
     git_run(tmp_path, "clone", str(bare_remote), str(peer))
     git_run(peer, "commit", "--allow-empty", "-m", "Remote update")
+    remote_head = git_run(peer, "rev-parse", "HEAD").stdout.strip()
     git_run(peer, "push")
     app = RhizomeApp(git_repo)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         assert app.snapshot_data.behind == 1
         assert app.snapshot_data.head == head
+        remote = app.query_one(ReferenceSidebar).get_selection("remote:refs/remotes/origin/main")
+        assert remote is not None and remote.oid == remote_head
+        row = app.query_one(HistoryTable).get_row(remote_head)
+        assert "Remote update" in " ".join(str(cell) for cell in row)
         assert git_run(git_repo, "status", "--porcelain").stdout == ""
 
 
@@ -80,6 +110,26 @@ def remote_workspace(git_repo, git_run, bare_remote):
     return git_repo
 
 
+@pytest.fixture
+def hosted_transport(remote_workspace, git_run, monkeypatch):
+    """Use a real bare Git transport behind the fixture's declared hosted identity."""
+    destination = git_run(remote_workspace, "remote", "get-url", "origin").stdout.strip()
+    git_run(remote_workspace, "remote", "set-url", "origin", "https://github.com/org/repo")
+    run = subprocess.run
+
+    def local_fetch(command, *args, **kwargs):
+        if command[0] == "git" and "fetch" in command:
+            command = [
+                command[0],
+                "-c",
+                f"url.{destination}.insteadOf=https://github.com/org/repo",
+                *command[1:],
+            ]
+        return run(command, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", local_fetch)
+
+
 async def test_remote_poll_cadence_and_resume_refresh(remote_workspace, monkeypatch):
     clock = [100.0]
     monkeypatch.setattr(app_module, "monotonic", lambda: clock[0])
@@ -89,7 +139,7 @@ async def test_remote_poll_cadence_and_resume_refresh(remote_workspace, monkeypa
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         load.assert_called_once()
-        clock[0] += 29
+        clock[0] += 59
         app.poll_repository()
         await settle(app, pilot)
         load.assert_called_once()
@@ -100,7 +150,7 @@ async def test_remote_poll_cadence_and_resume_refresh(remote_workspace, monkeypa
         clock[0] += 5
         app.post_message(events.AppFocus())
         await settle(app, pilot)
-        assert load.call_count == 3  # resume does not wait for the 30-second timer
+        assert load.call_count == 3  # resume does not wait for the 60-second timer
         app.post_message(events.AppFocus())
         await settle(app, pilot)
         assert load.call_count == 3  # duplicate focus notification is coalesced
@@ -114,6 +164,7 @@ async def wait_started(started, pilot):
     raise AssertionError("Background read never started")
 
 
+@pytest.mark.usefixtures("hosted_transport")
 async def test_background_fetch_keeps_cached_ui_and_does_not_disturb_modal(
     remote_workspace, monkeypatch, listings
 ):
@@ -211,13 +262,13 @@ async def test_failed_fetch_still_loads_prs_and_backs_off(remote_workspace, monk
         app.poll_repository()
         await settle(app, pilot)
         fetch.assert_called_once()
-        clock[0] += 30
+        clock[0] += 60
         app.poll_repository()
         await settle(app, pilot)
         assert fetch.call_count == 2
         fetch.side_effect = None
         fetch.return_value = ""
-        clock[0] += 30
+        clock[0] += 60
         app.poll_repository()
         await settle(app, pilot)
         assert "Offline" not in app.query_one("#status-line", Static).renderable.plain
@@ -243,6 +294,7 @@ async def test_focus_refresh_waits_until_dialog_closes(remote_workspace, monkeyp
         assert load.call_count == 2
 
 
+@pytest.mark.usefixtures("hosted_transport")
 async def test_failed_listing_preserves_cache_and_action_result(
     remote_workspace, monkeypatch, listings
 ):
@@ -267,6 +319,7 @@ async def test_failed_listing_preserves_cache_and_action_result(
         assert app._last_error == ""  # no intrusive background error toast
 
 
+@pytest.mark.usefixtures("hosted_transport")
 async def test_closed_pull_request_selection_is_reconciled(remote_workspace, monkeypatch, listings):
     load = Mock(return_value=listings)
     monkeypatch.setattr(Repository, "open_pull_requests", load)
@@ -275,6 +328,7 @@ async def test_closed_pull_request_selection_is_reconciled(remote_workspace, mon
         await settle(app, pilot)
         sidebar = app.query_one(ReferenceSidebar)
         selection = sidebar.get_selection(listings[0].requests[0].url)
+        assert selection is not None
         app._sidebar_selection = selection
         sidebar.set_active(selection)
         load.return_value = ()
@@ -285,6 +339,7 @@ async def test_closed_pull_request_selection_is_reconciled(remote_workspace, mon
         assert sidebar._active_key is None
 
 
+@pytest.mark.usefixtures("hosted_transport")
 async def test_remote_change_during_automatic_read_discards_and_retries(
     remote_workspace, git_run, monkeypatch, listings
 ):
@@ -293,9 +348,12 @@ async def test_remote_change_during_automatic_read_discards_and_retries(
     load = Mock(return_value=listings)
     monkeypatch.setattr(Repository, "open_pull_requests", load)
     app = RhizomeApp(remote_workspace)
+    # Drive each poll explicitly so the timer cannot retry before we inspect the discard.
+    app.LOCAL_REFRESH_INTERVAL = 3600
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
         sidebar = app.query_one(ReferenceSidebar)
+        assert sidebar._pull_request_listings == listings
 
         def change_remote():
             git_run(remote_workspace, "remote", "rename", "origin", "renamed")

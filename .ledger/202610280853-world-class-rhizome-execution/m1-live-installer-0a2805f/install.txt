@@ -1,0 +1,32 @@
+Planned persistent effects (revision 44cdd1641df92e4084690cbd7288ad9d34e38d92):
+  Installation root: /private/tmp/rhizome-m1-live-jfxv8lid/home with spaces/private apps/rhizome
+  New isolated revision payload: /private/tmp/rhizome-m1-live-jfxv8lid/home with spaces/private apps/rhizome/store/44cdd1641df92e4084690cbd7288ad9d34e38d92
+  Verified private uv: 0.11.7 (uv-aarch64-apple-darwin.tar.gz)
+  Managed Python: 3.13.13 under that revision
+  Lock-derived runtime artifacts and the complete build backend closure are pinned
+  Atomic current pointer; the prior current revision is retained as previous
+No shell profile, PATH, Git, tmux, or system installation is modified. No sudo is used.
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+
+  7 19.8M    7 1438k    0     0  1715k      0  0:00:11 --:--:--  0:00:11 1715k
+ 57 19.8M   57 11.3M    0     0  6355k      0  0:00:03  0:00:01  0:00:02 10.0M
+100 19.8M  100 19.8M    0     0  9442k      0  0:00:02  0:00:02 --:--:-- 14.0M
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+100  2242  100  2242    0     0  10052      0 --:--:-- --:--:-- --:--:-- 10099
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+100  1493  100  1493    0     0   7383      0 --:--:-- --:--:-- --:--:--  7391
+Downloading cpython-3.13.13-macos-aarch64-none (download) (17.0MiB)
+ Downloaded cpython-3.13.13-macos-aarch64-none (download)
+Installed Python 3.13.13 in 1.27s
+ + cpython-3.13.13-macos-aarch64-none
+error: File not found: `home`

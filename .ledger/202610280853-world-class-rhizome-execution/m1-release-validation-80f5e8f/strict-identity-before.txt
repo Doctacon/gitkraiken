@@ -1,0 +1,54 @@
+..F.F..                                                                  [100%]
+=================================== FAILURES ===================================
+___________ test_sha256_commit_reports_and_verifies_full_native_oid ____________
+tests/test_commit_representations.py:104: in test_sha256_commit_reports_and_verifies_full_native_oid
+    result = Repository(repository).execute(Action("commit", message="sha256 transaction"))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/rhizome/git.py:3264: in execute
+    return self._commit_reviewed(action, lambda: self._preflight_context(action))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/rhizome/git.py:1433: in _commit_reviewed
+    _raise_process_error(result, timeout=None, ok_codes=(0,), operation="commit")
+src/rhizome/git.py:266: in _raise_process_error
+    raise GitError(f"Git {operation} failed: {detail}")
+E   rhizome.git.GitError: Git commit failed: Author identity unknown
+E   
+E   *** Please tell me who you are.
+E   
+E   Run
+E   
+E     git config --global user.email "you@example.com"
+E     git config --global user.name "Your Name"
+E   
+E   to set your account's default identity.
+E   Omit --global to set the identity only in this repository.
+E   
+E   fatal: no email was given and auto-detection is disabled
+__ test_sparse_index_commit_matches_native_collapsed_and_skip_worktree_state ___
+tests/test_commit_representations.py:169: in test_sparse_index_commit_matches_native_collapsed_and_skip_worktree_state
+    result = Repository(public).execute(Action("commit", message="public sparse transaction"))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/rhizome/git.py:3264: in execute
+    return self._commit_reviewed(action, lambda: self._preflight_context(action))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/rhizome/git.py:1433: in _commit_reviewed
+    _raise_process_error(result, timeout=None, ok_codes=(0,), operation="commit")
+src/rhizome/git.py:266: in _raise_process_error
+    raise GitError(f"Git {operation} failed: {detail}")
+E   rhizome.git.GitError: Git commit failed: Author identity unknown
+E   
+E   *** Please tell me who you are.
+E   
+E   Run
+E   
+E     git config --global user.email "you@example.com"
+E     git config --global user.name "Your Name"
+E   
+E   to set your account's default identity.
+E   Omit --global to set the identity only in this repository.
+E   
+E   fatal: no email was given and auto-detection is disabled
+=========================== short test summary info ============================
+FAILED tests/test_commit_representations.py::test_sha256_commit_reports_and_verifies_full_native_oid
+FAILED tests/test_commit_representations.py::test_sparse_index_commit_matches_native_collapsed_and_skip_worktree_state
+2 failed, 5 passed in 12.45s

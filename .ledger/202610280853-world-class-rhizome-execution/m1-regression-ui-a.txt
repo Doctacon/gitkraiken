@@ -1,0 +1,13 @@
+Modules: tests/test_background_inspection.py tests/test_clipboard.py tests/test_commit_composer.py tests/test_commit_files.py tests/test_context_menu.py tests/test_diff_workspace.py tests/test_fetch_workspace.py tests/test_m1_controls.py tests/test_m1_visuals.py tests/test_operations_workspace.py tests/test_pane_splitter.py tests/test_plain_workspace.py
+........................................................................ [ 74%]
+................F........                                                [100%]
+=================================== FAILURES ===================================
+_______ test_activity_shows_real_stage_outcome_and_fits_narrow_terminal ________
+tests/test_operations_workspace.py:34: in test_activity_shows_real_stage_outcome_and_fits_narrow_terminal
+    assert len(app.screen_stack) == 1
+E   AssertionError: assert 2 == 1
+E    +  where 2 = len([Screen(id='_default'), ActivityDialog()])
+E    +    where [Screen(id='_default'), ActivityDialog()] = RhizomeApp(title='Rhizome', classes={'-light-mode'}, pseudo_classes={'light', 'focus'}).screen_stack
+=========================== short test summary info ============================
+FAILED tests/test_operations_workspace.py::test_activity_shows_real_stage_outcome_and_fits_narrow_terminal
+1 failed, 96 passed in 113.16s (0:01:53)

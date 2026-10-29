@@ -15,10 +15,10 @@ _LOCAL = TEAL
 _WORKTREE = "#28733a"
 _MUTED = MUTED
 _PROVIDERS = {
-    "GitHub": ("🐙", PROVIDER_COLORS["GitHub"]),
-    "Azure DevOps": ("☁", PROVIDER_COLORS["Azure DevOps"]),
-    "GitLab": ("🦊", PROVIDER_COLORS["GitLab"]),
-    "Git": ("↗", PROVIDER_COLORS["Git"]),
+    "GitHub": ("🐙", "[GH]", PROVIDER_COLORS["GitHub"]),
+    "Azure DevOps": ("☁", "[AZ]", PROVIDER_COLORS["Azure DevOps"]),
+    "GitLab": ("🦊", "[GL]", PROVIDER_COLORS["GitLab"]),
+    "Git": ("↗", "[R]", PROVIDER_COLORS["Git"]),
 }
 
 
@@ -28,7 +28,9 @@ class RefBadges:
     description: Text
 
 
-def build_ref_badges(snapshot: Snapshot, selected_ref: str = "") -> dict[str, RefBadges]:
+def build_ref_badges(
+    snapshot: Snapshot, selected_ref: str = "", *, plain_glyphs: bool = False
+) -> dict[str, RefBadges]:
     """Group actual typed pointers by OID, independent of history selection.
 
     Role markers precede names so local and remote pointers remain visible even
@@ -37,7 +39,8 @@ def build_ref_badges(snapshot: Snapshot, selected_ref: str = "") -> dict[str, Re
     Remote tips are local remote-tracking refs, not live server observations.
     Worktree pointers use linked HEADs, including detached and prunable entries.
     The primary checkout is not a linked worktree; bare and unborn entries also
-    do not add a worktree marker.
+    do not add a worktree marker. Plain mode changes generated markers and
+    separators only; reference names, paths, and subjects remain literal.
     """
     by_oid: dict[str, list[Ref]] = defaultdict(list)
     for ref in snapshot.refs:
@@ -58,28 +61,33 @@ def build_ref_badges(snapshot: Snapshot, selected_ref: str = "") -> dict[str, Re
     kind_order = {"local": 0, "remote": 1, "tag": 2}
     for oid, refs in by_oid.items():
         refs.sort(key=lambda ref: (not ref.current, kind_order[ref.kind], ref.name, ref.full_name))
-        text = Text(no_wrap=True, overflow="ellipsis")
+        text = Text(no_wrap=True, overflow="crop" if plain_glyphs else "ellipsis")
         description = Text()
         is_head = oid == snapshot.head
+        local_marker = "[L]" if plain_glyphs else "💻"
+        worktree_marker = "[WT]" if plain_glyphs else "🌳"
+        tag_marker = "[T]" if plain_glyphs else "◇"
+        stash_marker = "[S]" if plain_glyphs else "▣"
+        separator = " | " if plain_glyphs else " · "
         if is_head or any(ref.kind == "local" for ref in refs):
-            text.append("💻 ", style=f"bold {_LOCAL}")
+            text.append(local_marker + " ", style=f"bold {_LOCAL}")
         if worktrees[oid]:
             style = _WORKTREE
             if any(str(worktree.path) == selected_ref for worktree in worktrees[oid]):
                 style += " bold underline"
-            text.append("🌳 ", style=style)
+            text.append(worktree_marker + " ", style=style)
         providers = {
             remotes[ref.remote].provider if ref.remote in remotes else "Git"
             for ref in refs
             if ref.kind == "remote"
         }
-        for provider, (icon, color) in _PROVIDERS.items():
+        for provider, (icon, plain_marker, color) in _PROVIDERS.items():
             if provider in providers or (provider == "Git" and providers - _PROVIDERS.keys()):
-                text.append(icon + " ", style=color)
+                text.append((plain_marker if plain_glyphs else icon) + " ", style=color)
         if any(ref.kind == "tag" for ref in refs):
-            text.append("◇ ", style="#9a5a00")
+            text.append(tag_marker + " ", style="#9a5a00")
         if stashes[oid]:
-            text.append("▣ ", style="#7049a8")
+            text.append(stash_marker + " ", style="#7049a8")
 
         labels: list[tuple[str, str, str]] = []
         if is_head:
@@ -101,7 +109,7 @@ def build_ref_badges(snapshot: Snapshot, selected_ref: str = "") -> dict[str, Re
                     "prunable" + (f": {worktree.prune_reason}" if worktree.prune_reason else "")
                 )
             branch = "detached HEAD" if worktree.detached else worktree.branch or "HEAD"
-            description.append(f"🌳 Worktree: {worktree.path} · {branch}")
+            description.append(f"{worktree_marker} Worktree: {worktree.path}{separator}{branch}")
             if states:
                 description.append(f" ({'; '.join(states)})")
             description.append("\n")
@@ -111,21 +119,22 @@ def build_ref_badges(snapshot: Snapshot, selected_ref: str = "") -> dict[str, Re
                 style += " bold underline"
             labels.append((ref.name, style, ref.full_name))
             if ref.kind == "local":
-                description.append(f"💻 Local: {ref.full_name}")
+                description.append(f"{local_marker} Local: {ref.full_name}")
                 if ref.upstream:
-                    description.append(f" → {ref.upstream}")
+                    description.append((" -> " if plain_glyphs else " → ") + ref.upstream)
                 description.append("\n")
             elif ref.kind == "remote":
                 remote = remotes.get(ref.remote)
                 provider = remote.provider if remote else "Git"
-                icon = _PROVIDERS.get(provider, _PROVIDERS["Git"])[0]
-                description.append(f"{icon} {provider} remote: {ref.full_name}\n")
+                icon, plain_marker, _ = _PROVIDERS.get(provider, _PROVIDERS["Git"])
+                marker = plain_marker if plain_glyphs else icon
+                description.append(f"{marker} {provider} remote: {ref.full_name}\n")
             else:
-                description.append(f"◇ Tag: {ref.full_name}\n")
+                description.append(f"{tag_marker} Tag: {ref.full_name}\n")
         for stash in stashes[oid]:
             style = "#7049a8 bold underline" if stash.ref == selected_ref else "#7049a8"
             labels.append((stash.ref, style, ""))
-            description.append(f"▣ {stash.ref}: {stash.subject}\n")
+            description.append(f"{stash_marker} {stash.ref}: {stash.subject}\n")
         if not labels:
             # A detached linked worktree can be the only pointer at this commit.
             labels.extend(
@@ -140,7 +149,7 @@ def build_ref_badges(snapshot: Snapshot, selected_ref: str = "") -> dict[str, Re
             )
         for index, (name, style, full_ref) in enumerate(labels):
             if index:
-                text.append(" · ", style=_MUTED)
+                text.append(separator, style=_MUTED)
             label_style = Style.parse(style)
             if full_ref:
                 label_style += Style(meta={"context_ref": full_ref})
@@ -152,7 +161,11 @@ def build_ref_badges(snapshot: Snapshot, selected_ref: str = "") -> dict[str, Re
         tooltip_lines = description.plain.splitlines()
         tooltip = "\n".join(tooltip_lines[:20])
         if len(tooltip_lines) > 20:
-            tooltip += "\n… Full refs are listed in commit details."
+            tooltip += (
+                "\n... Full refs are listed in commit details."
+                if plain_glyphs
+                else "\n… Full refs are listed in commit details."
+            )
         text.stylize(Style(meta={"ref_description": tooltip}))
         badges[oid] = RefBadges(text, description)
     return badges

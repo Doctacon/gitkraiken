@@ -14,6 +14,23 @@ from .theme import GRAPH_PALETTE
 GraphStyle = Literal["smooth", "compact"]
 
 _TRANSLATION = str.maketrans({"*": "●", "|": "│", "/": "╱", "\\": "╲", "_": "─"})
+_PLAIN_GLYPHS = str.maketrans(
+    {
+        "●": "*",
+        "│": "|",
+        "┊": "|",
+        "├": "+",
+        "┤": "+",
+        "─": "-",
+        "╴": "-",
+        "╶": "-",
+        "╮": "\\",
+        "╭": "/",
+        "╰": "\\",
+        "╯": "/",
+        "↑": "^",
+    }
+)
 _PITCH = 4
 _INSET = 1
 _PALETTE = GRAPH_PALETTE
@@ -96,7 +113,7 @@ def _horizontal_route(
     _put(canvas, end, end_glyph, end_color or route_color)
 
 
-def _to_text(lines: list[_Canvas]) -> Text:
+def _to_text(lines: list[_Canvas], *, plain_glyphs: bool = False) -> Text:
     text = Text(no_wrap=True)
     for line_number, canvas in enumerate(lines):
         if line_number:
@@ -106,14 +123,22 @@ def _to_text(lines: list[_Canvas]) -> Text:
         final_x = max(canvas)
         for x in range(final_x + 1):
             glyph, color = canvas.get(x, (" ", None))
+            if plain_glyphs:
+                glyph = glyph.translate(_PLAIN_GLYPHS)
             text.append(glyph, style=color or "")
     return text
 
 
-def _compact(history: tuple[HistoryLine, ...]) -> tuple[GraphRow, ...]:
+def _compact(
+    history: tuple[HistoryLine, ...], *, plain_glyphs: bool = False
+) -> tuple[GraphRow, ...]:
     return tuple(
         GraphRow(
-            Text.from_ansi(line.graph.translate(_TRANSLATION), no_wrap=True, end=""),
+            Text.from_ansi(
+                line.graph if plain_glyphs else line.graph.translate(_TRANSLATION),
+                no_wrap=True,
+                end="",
+            ),
             line.commit,
         )
         for line in history
@@ -121,10 +146,11 @@ def _compact(history: tuple[HistoryLine, ...]) -> tuple[GraphRow, ...]:
 
 
 class _SmoothRenderer:
-    def __init__(self, *, spaced: bool = True) -> None:
+    def __init__(self, *, spaced: bool = True, plain_glyphs: bool = False) -> None:
         self.lanes: list[_Lane | None] = []
         self.color_index = 0
         self.spaced = spaced
+        self.plain_glyphs = plain_glyphs
         self.seen: set[str] = set()
 
     def _new_lane(self, target: str) -> _Lane:
@@ -297,11 +323,14 @@ class _SmoothRenderer:
             # the very next line would falsely connect two unrelated nodes.
             lines.append(_rails(self.lanes))
 
-        return GraphRow(_to_text(lines), commit)
+        return GraphRow(_to_text(lines, plain_glyphs=self.plain_glyphs), commit)
 
 
 def render_history(
-    history: tuple[HistoryLine, ...], style: GraphStyle = "smooth"
+    history: tuple[HistoryLine, ...],
+    style: GraphStyle = "smooth",
+    *,
+    plain_glyphs: bool = False,
 ) -> tuple[GraphRow, ...]:
     """Render history without I/O or mutation of the supplied model values.
 
@@ -310,18 +339,19 @@ def render_history(
     Smooth groups connector lines with their commit and adds breathing room.
     Compact omits optional spacers and gives each required line its own row.
     Legacy native graph input can still be displayed directly in Compact mode,
-    and is the fallback when no structured commits are available.
+    and is the fallback when no structured commits are available. Plain glyph
+    mode changes only generated graph marks; native graph input remains literal.
     """
     if style not in {"smooth", "compact"}:
         raise ValueError(f"Unknown graph style: {style}")
     if style == "compact" and any(line.graph for line in history):
-        return _compact(history)
+        return _compact(history, plain_glyphs=plain_glyphs)
 
     commits = tuple(line.commit for line in history if line.commit is not None)
     if not commits:
-        return _compact(history)
+        return _compact(history, plain_glyphs=plain_glyphs)
 
-    renderer = _SmoothRenderer(spaced=style == "smooth")
+    renderer = _SmoothRenderer(spaced=style == "smooth", plain_glyphs=plain_glyphs)
     rows = tuple(
         renderer.render(commit, final=index == len(commits) - 1)
         for index, commit in enumerate(commits)

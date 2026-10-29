@@ -1,0 +1,348 @@
+{
+  "brief": "V04 M1 performance and resource baseline",
+  "candidate_revision": "0a1ea6638846fb8ebed382b27ccdf066945e4700",
+  "command": "python3 scripts/benchmark_m1.py --smoke --samples 2 --warm-runs 1 --output .ledger/202610280853-world-class-rhizome-execution/m1-compatibility-git236-smoke-20261029.json",
+  "construction": {
+    "changing_history_files": 1,
+    "immutable_files": 499,
+    "immutable_tree_oid": "5509d115510322637ac34db9cdd0fc239f7ac3b1",
+    "orchestrator_cpu_seconds": 0.012987999999999993,
+    "topology": "linear; immutable tracked subtree reused; history/tick.txt changes per commit",
+    "wall_seconds": 0.18703437503427267
+  },
+  "dimensions_requested": {
+    "changed_files": 20,
+    "commits": 500,
+    "ordinary_diff_max_bytes": 65536,
+    "refs": 50,
+    "tracked_files": 500
+  },
+  "dimensions_verified": {
+    "changed_files": 20,
+    "commits": 500,
+    "ordinary_diff_bytes": 62359,
+    "ordinary_diff_kib": 60.8974609375,
+    "ordinary_diff_path": "tracked/f00000.txt",
+    "refs": 50,
+    "remotes": 0,
+    "tracked_files": 500
+  },
+  "environment": {
+    "architecture": "arm64",
+    "cpu": "arm",
+    "cpu_model": "Apple M2 Pro",
+    "filesystem": {
+      "device_location": "Internal",
+      "media_type": "Generic",
+      "protocol": "Apple Fabric",
+      "solid_state": "Yes",
+      "type": "APFS"
+    },
+    "git": "git version 2.36.0",
+    "logical_cpus": 10,
+    "memory_bytes": 17179869184,
+    "os": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "python": "3.13.0",
+    "python_executable": "python3",
+    "release": "25.6.0",
+    "storage_bytes": {
+      "free_at_measurement": 21191057408,
+      "total": 494384795648,
+      "used": 473193738240
+    },
+    "system": "Darwin",
+    "terminal": {
+      "dimensions": [
+        170,
+        48
+      ],
+      "invoking_COLORTERM": "truecolor",
+      "invoking_TERM": "xterm-ghostty",
+      "invoking_TMUX": false,
+      "measurement": "Textual headless driver"
+    },
+    "textual": "1.0.0"
+  },
+  "isolation": {
+    "credential_environment_removed": true,
+    "fixture": "temporary directory removed at exit",
+    "home_git_config_app_state_credentials": "temporary/minimal environment",
+    "network_remotes": 0,
+    "operator_checkout_mutated": false
+  },
+  "metrics": {
+    "app": {
+      "diff_proxy_cpu_seconds": {
+        "max": 0.15707399999999994,
+        "median": 0.14170499999999997,
+        "min": 0.126336,
+        "p95_nearest_rank": 0.15707399999999994,
+        "samples": 2
+      },
+      "diff_proxy_wall_seconds": {
+        "max": 0.20577141689136624,
+        "median": 0.18146024993620813,
+        "min": 0.15714908298105001,
+        "p95_nearest_rank": 0.20577141689136624,
+        "samples": 2
+      },
+      "feedback_proxy_wall_seconds": {
+        "max": 0.01193162496201694,
+        "median": 0.009460416971705854,
+        "min": 0.006989208981394768,
+        "p95_nearest_rank": 0.01193162496201694,
+        "samples": 2
+      },
+      "peak_rss_bytes": {
+        "max": 71090176,
+        "median": 71049216.0,
+        "min": 71008256,
+        "p95_nearest_rank": 71090176,
+        "samples": 2
+      },
+      "process_launch_to_usable_seconds": {
+        "max": 0.669901958,
+        "median": 0.6528499999999999,
+        "min": 0.635798042,
+        "p95_nearest_rank": 0.669901958,
+        "samples": 2
+      },
+      "rss_change_after_repeated_refreshes_bytes": {
+        "max": 540672,
+        "median": 540672.0,
+        "min": 540672,
+        "p95_nearest_rank": 540672,
+        "samples": 2
+      },
+      "startup_internal_cpu_seconds": {
+        "max": 0.374018,
+        "median": 0.3660435,
+        "min": 0.358069,
+        "p95_nearest_rank": 0.374018,
+        "samples": 2
+      },
+      "startup_internal_wall_seconds": {
+        "max": 0.5053149170707911,
+        "median": 0.49984775006305426,
+        "min": 0.4943805830553174,
+        "p95_nearest_rank": 0.5053149170707911,
+        "samples": 2
+      },
+      "warm_refresh_wall_seconds": {
+        "max": 0.27659920789301395,
+        "median": 0.2734916665358469,
+        "min": 0.2703841251786798,
+        "p95_nearest_rank": 0.27659920789301395,
+        "samples": 2
+      }
+    },
+    "repository": {
+      "diff_cpu_seconds": {
+        "max": 0.0035209999999999964,
+        "median": 0.0034704999999999944,
+        "min": 0.0034199999999999925,
+        "p95_nearest_rank": 0.0035209999999999964,
+        "samples": 2
+      },
+      "diff_wall_seconds": {
+        "max": 0.03336620912887156,
+        "median": 0.03334768756758422,
+        "min": 0.03332916600629687,
+        "p95_nearest_rank": 0.03336620912887156,
+        "samples": 2
+      },
+      "peak_rss_bytes": {
+        "max": 36896768,
+        "median": 36864000.0,
+        "min": 36831232,
+        "p95_nearest_rank": 36896768,
+        "samples": 2
+      },
+      "process_launch_to_snapshot_seconds": {
+        "max": 0.20878925,
+        "median": 0.203612958,
+        "min": 0.198436666,
+        "p95_nearest_rank": 0.20878925,
+        "samples": 2
+      },
+      "repository_constructor_wall_seconds": {
+        "max": 0.012258999980986118,
+        "median": 0.011402833508327603,
+        "min": 0.010546667035669088,
+        "p95_nearest_rank": 0.012258999980986118,
+        "samples": 2
+      },
+      "snapshot_cpu_seconds": {
+        "max": 0.018604999999999997,
+        "median": 0.0181805,
+        "min": 0.017756,
+        "p95_nearest_rank": 0.018604999999999997,
+        "samples": 2
+      },
+      "snapshot_wall_seconds": {
+        "max": 0.1030656669754535,
+        "median": 0.10090241697616875,
+        "min": 0.09873916697688401,
+        "p95_nearest_rank": 0.1030656669754535,
+        "samples": 2
+      }
+    }
+  },
+  "profile": "smoke (not acceptance)",
+  "raw_samples": {
+    "app": [
+      {
+        "diff_action_to_next_paint_proxy": {
+          "cpu_seconds": 0.15707399999999994,
+          "wall_seconds": 0.20577141689136624
+        },
+        "feedback_action_to_next_paint_proxy": {
+          "cpu_seconds": 0.006054000000000059,
+          "wall_seconds": 0.01193162496201694
+        },
+        "launch_to_usable_seconds": 0.669901958,
+        "observed": {
+          "changed_files": 20,
+          "diff_canonical_source_bytes": 62425,
+          "diff_lines": 773,
+          "diff_path": "tracked/f00000.txt",
+          "headless_size": [
+            170,
+            48
+          ],
+          "history_rows": 300,
+          "refs": 50
+        },
+        "rss_bytes": {
+          "after_diff": 71090176,
+          "after_repeated_refreshes": 67780608,
+          "after_startup": 67239936,
+          "peak": 71090176
+        },
+        "startup": {
+          "cpu_seconds": 0.358069,
+          "wall_seconds": 0.4943805830553174
+        },
+        "warm_refreshes": [
+          {
+            "cpu_seconds": 0.153713,
+            "wall_seconds": 0.27659920789301395
+          }
+        ]
+      },
+      {
+        "diff_action_to_next_paint_proxy": {
+          "cpu_seconds": 0.126336,
+          "wall_seconds": 0.15714908298105001
+        },
+        "feedback_action_to_next_paint_proxy": {
+          "cpu_seconds": 0.0065509999999999735,
+          "wall_seconds": 0.006989208981394768
+        },
+        "launch_to_usable_seconds": 0.635798042,
+        "observed": {
+          "changed_files": 20,
+          "diff_canonical_source_bytes": 62425,
+          "diff_lines": 773,
+          "diff_path": "tracked/f00000.txt",
+          "headless_size": [
+            170,
+            48
+          ],
+          "history_rows": 300,
+          "refs": 50
+        },
+        "rss_bytes": {
+          "after_diff": 71008256,
+          "after_repeated_refreshes": 67715072,
+          "after_startup": 67174400,
+          "peak": 71008256
+        },
+        "startup": {
+          "cpu_seconds": 0.374018,
+          "wall_seconds": 0.5053149170707911
+        },
+        "warm_refreshes": [
+          {
+            "cpu_seconds": 0.14917999999999998,
+            "wall_seconds": 0.2703841251786798
+          }
+        ]
+      }
+    ],
+    "repository": [
+      {
+        "constructor": {
+          "cpu_seconds": 0.003258999999999998,
+          "wall_seconds": 0.012258999980986118
+        },
+        "current_rss_bytes": 36896768,
+        "diff": {
+          "cpu_seconds": 0.0034199999999999925,
+          "wall_seconds": 0.03332916600629687
+        },
+        "launch_to_snapshot_seconds": 0.20878925,
+        "observed": {
+          "changed_files": 20,
+          "diff_bytes": 62359,
+          "history_rows": 300,
+          "refs": 50
+        },
+        "peak_rss_bytes": 36896768,
+        "snapshot": {
+          "cpu_seconds": 0.018604999999999997,
+          "wall_seconds": 0.1030656669754535
+        }
+      },
+      {
+        "constructor": {
+          "cpu_seconds": 0.002460999999999998,
+          "wall_seconds": 0.010546667035669088
+        },
+        "current_rss_bytes": 36831232,
+        "diff": {
+          "cpu_seconds": 0.0035209999999999964,
+          "wall_seconds": 0.03336620912887156
+        },
+        "launch_to_snapshot_seconds": 0.198436666,
+        "observed": {
+          "changed_files": 20,
+          "diff_bytes": 62359,
+          "history_rows": 300,
+          "refs": 50
+        },
+        "peak_rss_bytes": 36831232,
+        "snapshot": {
+          "cpu_seconds": 0.017756,
+          "wall_seconds": 0.09873916697688401
+        }
+      }
+    ]
+  },
+  "resource_units_and_limits": {
+    "cpu": "process CPU seconds (user+system via time.process_time); not host-wide utilization",
+    "limitations": "headless rendering only; no OS cache control, energy/storage-I/O counters, real-terminal paint timing, long soak, or concurrent system-load normalization",
+    "memory": "bytes; peak RSS from getrusage normalized to bytes, current RSS from ps where available"
+  },
+  "sampling": {
+    "app_timing": "actual RhizomeApp under Textual's headless driver; action-to-next-paint values are proxies, not real-terminal latency",
+    "cold_definition": "OS cache-cold was not measured: no cache drop was attempted or claimed",
+    "fresh_process_samples": 2,
+    "p95": "nearest-rank p95",
+    "pilot_sleep_overhead": "no deliberate sleeps; idle waits yield with asyncio.sleep(0), and paint completion uses Pilot.pause(0)",
+    "process_cold_definition": "new Python process for every repository/app sample",
+    "same_process_warm_refreshes_per_app_sample": 1,
+    "warm_definition": "samples after fixture verification with operating-system caches uncontrolled; same-process refreshes are reported separately"
+  },
+  "schema": 1,
+  "targets": {
+    "acceptance_assessment": "not applicable: smoke profile is below the approved envelope",
+    "targets_seconds": {
+      "app_feedback_p95": 0.1,
+      "diff_presentation_max": 0.5,
+      "workspace_cold_max": 2.0,
+      "workspace_warm_max": 1.0
+    }
+  },
+  "timestamp_utc": "2026-10-29T15:13:06Z"
+}

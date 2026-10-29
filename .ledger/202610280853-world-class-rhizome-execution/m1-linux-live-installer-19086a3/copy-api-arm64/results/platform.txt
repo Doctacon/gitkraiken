@@ -1,0 +1,3 @@
+Linux c953c8981ba6 6.8.0-100-generic #100-Ubuntu SMP PREEMPT_DYNAMIC Tue Jan 13 16:39:21 UTC 2026 aarch64 aarch64 aarch64 GNU/Linux
+Python 3.12.3
+git version 2.43.0

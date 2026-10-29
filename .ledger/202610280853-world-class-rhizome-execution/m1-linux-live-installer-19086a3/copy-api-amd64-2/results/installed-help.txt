@@ -1,0 +1,22 @@
+usage: rhizome [-h] [--version] [--tmux | --popup | --tmux-config |
+               --check-updates] [--demo] [--clone URL]
+               [path]
+
+A GitKraken-inspired Git workspace for your terminal and tmux.
+
+positional arguments:
+  path             repository or a directory inside it
+
+options:
+  -h, --help       show this help message and exit
+  --version        show program's version number and exit
+  --tmux           open/reuse a tmux window (session outside tmux)
+  --popup          open/reuse a persistent tmux popup
+  --tmux-config    print a prefix+g binding for this installation (does not
+                   edit tmux.conf)
+  --check-updates  query GitHub for the latest public release (does not
+                   install or restart)
+  --demo           explore a disposable real Git repository
+  --clone URL      clone URL into PATH, then open the workspace
+
+Private remotes use your existing Git credential helper or SSH agent.
