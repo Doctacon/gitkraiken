@@ -1,15 +1,14 @@
 # Rhizome: validation plan and bounded hand-offs
 
-> **Status: approved briefs, not executed validation.**
+> **Status: approved briefs; M1 full-release acceptance recorded separately.**
 >
-> This document accompanies the [approved future design](world-class-rhizome.md).
-> The operator authorized writing these two documents only. No prototype, benchmark,
-> test run, live-provider operation, installation experiment, or participant study
-> has been performed under that authorization. Every brief below is **not run**.
->
-> Inspected source baseline: `70005ce6dd23510d6f16af73ff5247fba32b81dc`.
-> Existing tests and source are evidence of implementation intent, not evidence that
-> the new design or release gates already pass.
+> The original writing-only authorization and starting queue used baseline
+> `70005ce6dd23510d6f16af73ff5247fba32b81dc`. Later authorized execution produced
+> candidate `19086a3`, passing hosted CI and real macOS/Linux installer lifecycles.
+> On 2026-10-29 the operator accepted full M1 readiness with explicitly named
+> validation deferrals. See the [acceptance record](../validation/m1-release-acceptance.md).
+> No human pilot or deferred platform/performance check is claimed as executed.
+> M2–M4 remain separate work; no merge, tag or publication follows from readiness.
 
 ## Execution and approval rules
 
@@ -37,7 +36,10 @@
 8. Prototype success establishes feasibility only. Actual release candidates must
    satisfy the relevant regression, compatibility, performance, and user gates.
 
-## Validation queue
+## Original validation queue
+
+The statuses in this starting queue are historical, not the current M1 verdict;
+use the acceptance record above for executed evidence and scoped deferrals.
 
 First-release-critical validation comes first. Later-feature investigations happen
 just before their milestones, rather than requiring a whole-roadmap research phase.
@@ -264,7 +266,9 @@ the proposed budgets are approved and tested.
 startup maximum on the recorded five-run local reference profile. This startup
 result is no longer an M1 blocker; original thresholds/raw results stay intact.
 See the [acceptance record](../validation/m1-performance.md#operator-acceptance--2026-10-29).
-Other V04 measurements and release gates remain unchanged.
+That startup-only decision did not waive other requirements. The subsequent
+full-M1 acceptance separately deferred the named missing validation, without
+changing these original targets or recording unrun checks as passed.
 
 **Stop/return.** A target cannot be met within the chosen behavior/support envelope,
 cache/fixture assumptions materially change its meaning, or the needed approach
@@ -615,6 +619,8 @@ marking a milestone complete because its code exists.
 | Privacy | Evidence collection/exports retain consent, redaction, and source/credential handling requirements |
 | Approval changes | Any changed scope, behavior, privacy, support promise, or target has an explicit operator decision |
 
-No row is currently marked passed. The immediate completed undertaking is writing
-the approved specification and these validation briefs; execution and implementation
-remain separate work requiring further authorization.
+This reconciliation table originated with the writing-only brief. Subsequent M1
+execution and the operator's full-release acceptance are recorded in
+[m1-release-acceptance.md](../validation/m1-release-acceptance.md). Named unrun
+coverage is explicitly deferred, not marked passed. Later milestones still require
+separate authorization; M1 readiness does not itself merge, tag or publish.

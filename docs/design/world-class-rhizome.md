@@ -442,6 +442,21 @@ fork hand-offs. Provider verification must use separately authorized environment
 
 The gates apply to the actual candidate, not just a successful prototype.
 
+### M1 acceptance decision — 2026-10-29
+
+The operator accepted **full M1 release readiness**, not a preview, on the evidence
+for implementation `19086a3`: seven passing hosted CI jobs and real macOS/Linux
+installer lifecycles. The operator explicitly deferred the still-unrun native
+Intel macOS, WSL/SSH/clipboard and human-visible terminal coverage, five-person
+pilot, and remaining cold-cache/slow-provider/resource measurements. These are
+unverified coverage, not passed checks. See the
+[full acceptance record](../validation/m1-release-acceptance.md).
+
+No M1 feature or integrity/core-workflow safeguard was removed. The original
+criteria below remain recorded; this scoped M1 decision neither changes general
+thresholds/version floors nor waives later milestones. It authorizes readiness,
+not merging, tagging or publishing a release.
+
 ### Integrity and core workflow
 
 M1 has zero known data-integrity, wrong-target, stale-action, or required-recovery

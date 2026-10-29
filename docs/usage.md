@@ -2,14 +2,16 @@
 
 [Quickstart](../README.md) · [Pinned installation](installation.md)
 
-Rhizome is a local-first, terminal-native Git workspace. This development checkout
-contains the precision-core upgrade in progress, not a certified release of the
-entire [roadmap](design/world-class-rhizome.md). Later investigation, integration,
-personalization, and captured hosted-review workflows remain incomplete.
-Ordinary staged commits are available through a reviewed-index transaction with
-native hooks/signing and a deliberate terminal handoff. Release and cross-platform
-acceptance remain outstanding. The installer crash/retry regression is repaired
-and passes isolated tests; live installer/platform validation is still pending.
+Rhizome is a local-first, terminal-native Git workspace. M1's precision core is
+complete and [accepted for a full release](validation/m1-release-acceptance.md),
+with explicit validation deferrals rather than a preview classification. Later
+investigation, integration, personalization and captured hosted-review milestones
+remain deferred; M1 acceptance does not complete the entire
+[roadmap](design/world-class-rhizome.md) or itself publish a release.
+Ordinary staged commits use a reviewed-index transaction, native hooks/signing and
+a deliberate terminal handoff. Candidate CI and real macOS/Linux installer
+lifecycles pass. The acceptance record distinguishes tested environments from
+still-unverified platform, terminal, performance and human-pilot coverage.
 
 ## Run
 

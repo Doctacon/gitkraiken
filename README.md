@@ -7,16 +7,17 @@ authentication.
 
 ![Rhizome's branches, commit graph, and changed files](docs/assets/workspace.png)
 
-## Development preview
+## M1 — Focused precision core
 
-This checkout is implementing the [approved roadmap](docs/design/world-class-rhizome.md).
-It is **not a published or release-certified upgrade**. Precision-core integration
-is in progress; later investigation, integration, and hosted-review milestones are
-not yet complete. Ordinary staged commits use a reviewed-index transaction and
-native Git hooks/signing. The workspace temporarily hands the terminal to Git
-and returns afterward; failures retain the draft. This does not establish release
-or cross-platform acceptance. The screenshot above predates the precision workspace;
-see the current [wide precision view](docs/assets/m1-precision-wide.png) and
+M1 is **complete and accepted for a full release**, with explicit validation
+[coverage and deferrals](docs/validation/m1-release-acceptance.md). This readiness
+record does not itself publish a GitHub release. Later investigation, integration,
+personalization and hosted-review milestones remain deferred.
+
+Ordinary staged commits use a reviewed-index transaction and native Git hooks/signing.
+The workspace temporarily hands the terminal to Git and returns afterward; failures
+retain the draft. The screenshot above predates the precision workspace; see the
+current [wide precision view](docs/assets/m1-precision-wide.png) and
 [80×24 composer](docs/assets/m1-composer-80x24.png).
 
 Run an inspected development checkout with Python 3.13+, Git 2.36+, and
@@ -76,9 +77,10 @@ non-force push remains deliberate. No force-push or telemetry is added.
 
 The inspectable bootstrap accepts **only a full Git commit**, provisions a private
 pinned uv/Python environment, and provides explicit update, rollback, and uninstall
-commands. It never edits shell, Git, or tmux configuration. **Live installation
-validation is still pending, and this uncommitted preview has no published installer
-revision.** See [installation and ownership boundaries](docs/installation.md).
+commands. It never edits shell, Git, or tmux configuration. Real lifecycle checks
+pass on macOS ARM64 and Linux ARM64/AMD64 (AMD64 under emulation); this is not a
+claim that every platform or network environment was tested. See
+[installation and ownership boundaries](docs/installation.md).
 
 Optional tmux integration: `rhizome --tmux /path/to/repository` with tmux 3.2+.
 The [tmux guide](docs/usage.md#tmux) explains the opt-in persistent pane hotkey.

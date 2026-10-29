@@ -1,0 +1,71 @@
+{
+  "candidate": "19086a362dd9ac48bdffdd461816add47ca7c6ed",
+  "previous_revision": "44cdd1641df92e4084690cbd7288ad9d34e38d92",
+  "sandbox": "/tmp/rhizome-m1-live-q0pu0hm2",
+  "steps": [
+    {
+      "name": "download-bootstrap",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_seconds": 0.27
+    },
+    {
+      "name": "install",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_seconds": 8.39
+    },
+    {
+      "name": "installed-help",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_seconds": 0.04
+    },
+    {
+      "name": "managed-python",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_seconds": 0.0
+    },
+    {
+      "name": "private-uv",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_seconds": 0.0
+    },
+    {
+      "name": "update",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_seconds": 6.67
+    },
+    {
+      "name": "updated-help",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_seconds": 0.04
+    },
+    {
+      "name": "rollback",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_seconds": 0.02
+    },
+    {
+      "name": "rolled-back-help",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_seconds": 0.03
+    },
+    {
+      "name": "uninstall",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_seconds": 0.21
+    }
+  ],
+  "passed": true,
+  "sandbox_removed": true,
+  "elapsed_seconds": 15.67,
+  "bootstrap_sha256": "8a8e14855e67f198652ee0ab842b57f12225d4dfcf570760ec323dc1a2e4e408"
+}

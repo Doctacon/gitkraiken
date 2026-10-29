@@ -1,8 +1,29 @@
 # M1 compatibility evidence (V05/V06)
 
-**Status:** partial local evidence; required platform/install matrix is not complete and is not waived.
+**Status:** M1 is accepted for a full release using the verified evidence below,
+with the remaining named coverage explicitly deferred—not marked passed. See the
+[operator acceptance record](m1-release-acceptance.md).
 
-## Local host and isolated checks
+## Latest candidate: 19086a3
+
+[All seven hosted CI jobs passed](https://github.com/Doctacon/rhizome/actions/runs/40954621009)
+on `19086a362dd9ac48bdffdd461816add47ca7c6ed`. Linux's complete suite reports
+**746 passed**; macOS ARM64 reports **709 non-installer cases passed**. Current
+Linux/macOS builds and tmux journeys, plus exact Git **2.36.0** / tmux **3.2**
+tests and full tmux journeys, pass. The hosted `macos-14` image is ARM64, not Intel.
+
+Actual downloaded-bootstrap install/update/rollback/uninstall passes on macOS
+26.6.2 ARM64, Ubuntu 24.04 ARM64 in the existing VM, and Ubuntu 24.04 AMD64 under
+existing emulation. These runs verify private uv 0.11.7, managed Python 3.13.13,
+exact revisions, paths with spaces and preservation of unrelated synthetic state
+and configuration. AMD64 emulation is not native x86_64 performance evidence.
+
+The earlier Docker attempt failed because the VM could not see a macOS bind-mount
+path. Docker's copy API resolved that harness transport issue without changing
+VM/daemon configuration. Failed attempts remain recorded; passing temporary
+installations and containers were removed. No live user installation changed.
+
+## Earlier local host and isolated checks
 
 Host: macOS 26.6.2, Darwin 25.6.0, arm64 Apple M2 Pro; Python 3.13.0; Ghostty invocation; current Git 2.50.1 (Apple Git-155); current tmux 3.5a. Every smoke used temporary homes/config/state, disposable repositories, and isolated tmux server names. No user installation, tmux server, repository, Git configuration, or credentials were used.
 
@@ -49,8 +70,9 @@ and explicitly checks that double-click inspection leaves HEAD detached. Latest 
 - [80×24 current-Git commit](../../.ledger/202610280853-world-class-rhizome-execution/m1-terminal-commit.txt)
 - [80×24 Git 2.36 commit](../../.ledger/202610280853-world-class-rhizome-execution/m1-terminal-commit-git236.txt)
 
-The earlier tmux 3.2 startup result predates the delimiter change; fresh full journeys
-on that minimum remain a hosted-CI cell, not an inferred local pass.
+The earlier tmux 3.2 startup result predates the delimiter change. Fresh full
+minimum-tool journeys now pass in the exact-candidate hosted CI run above; this is
+actual hosted evidence, not an inferred local pass.
 
 Earlier current-tmux characterization (superseded by the updated runs above):
 
@@ -77,10 +99,10 @@ retryable. The fence does not automatically expire; manual inspection is require
 No test expectations, skip or xfail changed. These are disposable, boundary-double
 checks on the local macOS host, not live downloads or a Linux/platform certification.
 See [repair evidence](../../.ledger/202610280853-world-class-rhizome-execution/m1-installer-repair.md).
-The required complete-suite CI job remains enabled; a fresh full-suite/hosted run
-has not been performed.
+Those repair-follow-up results predate the fresh, passing complete-suite and hosted
+run on `19086a3` reported above. The complete-suite CI job remains enabled.
 
-## Current local regression and packaging evidence
+## Earlier local regression and packaging evidence
 
 The earlier 746-case bounded partition evidence recorded **745 passes and one
 installer failure**. That failure is superseded by the repair checks above, not
@@ -103,7 +125,7 @@ failure in 265.33 s**. No new failures appeared in this affected-test run.
 The earlier [static summary](../../.ledger/202610280853-world-class-rhizome-execution/m1-static-summary.txt)
 retains the historical formatting failures; those are superseded, not erased.
 
-## CI changes (not executed locally)
+## CI coverage (executed on 19086a3)
 
 `.github/workflows/ci.yml` now separates:
 
@@ -119,22 +141,27 @@ Pinned sources:
 - tmux 3.2: `https://github.com/tmux/tmux/releases/download/3.2/tmux-3.2.tar.gz`, SHA-256 `664d345338c11cbe429d7ff939b92a5191e231a7c1ef42f381cebacb1e08a399`.
 
 The corrected popup/pane journeys are included in CI after their local runs passed.
-The workflow has not been pushed or triggered; hosted-runner results remain pending.
+The workflow was pushed and all seven jobs passed on `19086a3`. Minimum Git uses
+its supported C dialect to avoid GCC 15's C23 macro collision; no version floor or
+verified source checksum changed.
 
-## Required matrix still pending
+## Reconciled matrix and explicit M1 deferrals
 
-| Required cell | Status |
+| Cell | Status |
 | --- | --- |
-| Hosted Linux current/minimum jobs | Pending CI execution |
-| Hosted macOS current jobs | Pending CI execution |
-| macOS ARM64 install/runtime | Pending; live installation not authorized/performed |
-| macOS x86_64 install/runtime | Pending; environment unavailable locally |
-| Named real macOS terminal human-visible smoke | Pending; headless/PTY capture is not a substitute |
-| Named real Linux terminal | Pending; environment unavailable locally |
-| WSL2 + Windows Terminal | Pending; environment unavailable locally |
-| Real SSH path | Pending; no authorized remote host |
-| Full popup/pane containment, resize, pause/resume, clipboard fallback | Current-tmux automated journeys pass locally; broader terminal/clipboard matrix remains pending |
-| 80×24 and wide keyboard/mouse core journeys | Pending human/real-terminal coverage; see usability template |
-| Clean install/update/rollback/uninstall lifecycle | Isolated boundary-double tests pass; live installation/platform checks remain pending |
+| Hosted Linux current/minimum jobs | Pass on `19086a3` |
+| Hosted macOS ARM64 current jobs | Pass on `19086a3` |
+| macOS ARM64 install/runtime | Real lifecycle passes |
+| Linux ARM64 install/runtime | Real lifecycle passes in Ubuntu 24.04 VM/container |
+| Linux AMD64 install/runtime | Real lifecycle passes under existing emulation |
+| Native macOS x86_64 install/runtime | Unverified; explicitly deferred for M1 |
+| Named human-visible macOS/Linux terminal and clipboard checks | Unverified; explicitly deferred for M1 |
+| WSL2 + Windows Terminal | Unverified; explicitly deferred for M1 |
+| Real SSH path | Unverified; explicitly deferred for M1 |
+| Popup/pane containment, resize and pause/resume | Current/minimum automated CI journeys pass; broader manual coverage deferred |
+| 80×24 and wide keyboard/mouse core journeys | Automated coverage passes; human-pilot coverage explicitly deferred |
+| Clean install/update/rollback/uninstall lifecycle | Real macOS/Linux runs pass with the architecture qualifications above |
 
-No pending architecture, WSL, SSH, terminal, clipboard, or installer cell is waived or advertised as verified.
+The operator explicitly accepted full M1 readiness with the named missing coverage
+deferred. No unrun cell is advertised as verified, and intended platform support
+has not been silently narrowed. See the acceptance record for the exact decision.

@@ -1,7 +1,9 @@
 # M1 performance evidence (V04)
 
-**Status:** the measured **1.51 s startup is accepted for M1 by the operator**;
-other V04 evidence remains incomplete.
+**Status:** the measured **1.51 s startup is accepted for M1 by the operator**.
+The remaining V04 evidence is incomplete and was subsequently **explicitly deferred
+for full M1 release acceptance**, not marked passed; see the
+[acceptance decision](m1-release-acceptance.md).
 The measurements below used `0a1ea6638846fb8ebed382b27ccdf066945e4700` plus the
 then-uncommitted M1 changes. They are local measurements, not hosted-CI or full release acceptance.
 
@@ -12,8 +14,10 @@ remaining formatting cleanup. The **1.509 s maximum** on the recorded five-run
 reference profile is therefore no longer an M1 blocker. This is a scoped acceptance
 of the measured candidate, not a new general latency threshold. The original 1 s
 target, raw measurements and benchmark failure flags remain unchanged for traceability.
-Cache-cold startup, resource/slow-provider evidence and other release gates are not
-waived by this decision.
+That initial startup decision did not waive cache-cold startup, resource/slow-provider
+evidence or other release gates. The later full-M1 acceptance explicitly deferred
+the named missing measurements; it did not change the original raw results,
+thresholds or proposed resource budgets.
 
 ## Latest local follow-up (17:08 UTC)
 
@@ -47,7 +51,8 @@ Peak RSS was 98.1 MiB; startup used at most 0.727 process CPU seconds and diff a
 for all workers to become idle before its paint barrier, so background polling can inflate
 these endpoints; it does not isolate first useful paint from unrelated background work.
 Real-terminal latency, slow-provider responsiveness and long-running resource behavior
-still need separate acceptance evidence.
+are not established by these measurements; further validation is explicitly deferred
+for M1 under the later acceptance decision.
 
 ## Original baseline protocol and evidence
 
@@ -115,4 +120,5 @@ The direct snapshot max was 0.830 s, while internal app startup was 2.053–2.09
 
 The large diff's public Git read was 0.114–0.118 s and full app parse/presentation 0.292–0.316 s. The app layer added roughly 0.18 s but remained within target in all five samples.
 
-This run does not establish real-terminal paint latency, OS-cache-cold startup, slow/stalled remotes, hook/signer responsiveness, background idle usage, long-run memory growth, merge/skew-date stress, binary/truncation stress, or loaded-system behavior. Those remain required V04 cells; no target or envelope was lowered.
+This run does not establish real-terminal paint latency, OS-cache-cold startup, slow/stalled remotes, hook/signer responsiveness, background idle usage, long-run memory growth, merge/skew-date stress, binary/truncation stress, or loaded-system behavior. Those remain unverified V04 cells, explicitly deferred for M1; no target or envelope
+was lowered.

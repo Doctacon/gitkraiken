@@ -1,12 +1,14 @@
 # M1 five-user pilot task sheet and results template (V07)
 
-**Status: not run. No participants or usability results are claimed.**
+**Status: not run; explicitly deferred for full M1 release acceptance.** No
+participants or usability results are claimed. The operator accepted M1 using
+candidate CI and real macOS/Linux installer evidence; see the
+[scoped acceptance decision](m1-release-acceptance.md). This remains the protocol
+for a later actual pilot, not a completed study.
 
-Run only with a usable M1 candidate after major V01–V06 blockers are resolved.
-The installer crash/retry regression now passes isolated tests, but live installer
-lifecycle validation remains pending. Do not bypass an activity lock during this
-pilot. Use a synthetic disposable repository, isolated application state, and no
-private source or credentials.
+Run only with a usable candidate after major correctness blockers are resolved.
+Do not bypass an activity lock during the pilot. Use a synthetic disposable
+repository, isolated application state, and no private source or credentials.
 
 ## Moderator setup
 

@@ -1,0 +1,15 @@
+2026-10-29T21:09:41.2595700Z ##[group]Runner Image Provisioner
+2026-10-29T21:09:41.2601510Z ##[group]Runner Image
+2026-10-29T21:09:41.2603450Z Image: macos-14-arm64
+2026-10-29T21:09:41.2607400Z Included Software: https://github.com/actions/runner-images/blob/macos-14-arm64/20260831.0302/images/macos/macos-14-arm64-Readme.md
+2026-10-29T21:09:41.2608670Z Image Release: https://github.com/actions/runner-images/releases/tag/macos-14-arm64%2F20260831.0302
+2026-10-29T21:09:43.2721870Z [command]/opt/homebrew/bin/git version
+2026-10-29T21:09:43.2993530Z git version 2.55.0
+2026-10-29T21:09:46.8357780Z Using CPython 3.13.15 interpreter at: /usr/local/bin/python3.13
+2026-10-29T21:09:47.9665030Z Darwin sat12-bq164-687215c3-ec90-4871-a033-e4d05c530fa1-E6B01F63D45E.local 23.6.0 Darwin Kernel Version 23.6.0: Tue Jul 21 21:56:54 PDT 2026; root:xnu-10063.141.1.713.39~1/RELEASE_ARM64_VMAPPLE arm64
+2026-10-29T21:09:47.9713640Z git version 2.55.0
+2026-10-29T21:09:48.0376690Z Python 3.13.15
+2026-10-29T21:12:30.5048050Z platform darwin -- Python 3.13.15, pytest-9.1.1, pluggy-1.7.0
+2026-10-29T21:21:14.3943140Z ======================= 709 passed in 684.93s (0:11:24) ========================
+2026-10-29T21:21:16.9502310Z [command]/opt/homebrew/bin/git version
+2026-10-29T21:21:16.9578830Z git version 2.55.0

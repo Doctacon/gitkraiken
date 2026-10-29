@@ -188,7 +188,7 @@ One mistaken nonexistent test-module command ran no tests; its error log remains
 preserved. See `m1-installer-repair.md` for exact scope, evidence and limitations.
 No live installation, hosted run, publication or M2 work occurred.
 
-## Local implementation/evidence checklist — not release acceptance
+## Local implementation/evidence checklist — historical implementation checkpoint
 
 - [x] Integrated narrow/wide UI and plain-glyph mode; screenshots regenerated/reviewed.
 - [x] Core controls, reset/clear/exclusion, durable navigation/layout.
@@ -201,17 +201,28 @@ No live installation, hosted run, publication or M2 work occurred.
 - [x] Reference-scale benchmark; measured 1.509 s startup accepted by the operator.
 - [x] Compatibility automation and local-versus-pending matrix.
 - [x] Docs/help/screenshots and acceptance record reconciled.
-- [ ] Finish the remaining V04 measurements; the measured startup time is accepted.
+- [ ] Remaining V04 measurements are unrun; explicitly deferred for M1 at the later acceptance decision below.
 - [x] Clear whole-tree formatting debt: 21 additional files, all with unchanged ASTs.
 
 Local root lint and whole-tree formatting pass; prior offline wheel/sdist build
 checks also pass. All 24 earlier formatted M1-owned files and the 21 follow-up files
-retained identical ASTs. Broader acceptance still depends on the gates below.
+retained identical ASTs. That checkpoint predated the hosted/lifecycle evidence and
+explicit acceptance decision below.
 
-## Nonlocal / explicitly blocked gates
+## Full M1 acceptance — 2026-10-29
 
-- Installer crash/retry regression is repaired locally; live install lifecycle validation remains pending.
-- Hosted CI requires separately publishing/running the workflow.
-- Actual other-OS/architecture/WSL/SSH terminal cells require those environments.
-- Five-person usability pilot requires real participants; prepare but do not invent.
-- These gates prevent claiming release acceptance even after local implementation.
+- Validated implementation: `19086a362dd9ac48bdffdd461816add47ca7c6ed`.
+- All seven hosted CI jobs pass, including the 746-case Linux full suite and
+  current/minimum Git/tmux journeys.
+- Real install/update/rollback/uninstall passes on macOS ARM64, Ubuntu ARM64 in the
+  existing VM, and Ubuntu AMD64 under existing emulation. Docker copy transport
+  resolved the host-path problem without changing daemon/VM configuration.
+- The operator explicitly selected **“Accept full M1 readiness”**, not a preview,
+  using this evidence and deferring native Intel macOS, WSL/SSH/clipboard and
+  human-visible terminal coverage, the five-person pilot, and remaining
+  cold-cache/slow-provider/resource measurements. No unrun result is marked passed.
+- M1 features and integrity/refusal safeguards remain intact. M2 has not started;
+  no merge, tag or publication occurred.
+
+See `m1-full-release-19086a3/README.md` for execution evidence and preserved failures,
+and `docs/validation/m1-release-acceptance.md` for the precise acceptance boundary.

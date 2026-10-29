@@ -2,13 +2,15 @@
 
 [Usage](usage.md) · [README](../README.md)
 
-## Preview status
+## M1 validation status
 
-The managed bootstrap is under validation. This worktree has **not** been
-published, and no new installer revision or release is implied by these examples.
-Focused subprocess tests use boundary doubles; they do not certify live uv,
-managed Python, package downloads, TLS/proxies, or every target platform. Use the
-[development checkout](#development-checkout) while that work remains incomplete.
+M1 is [accepted for a full release](validation/m1-release-acceptance.md). Actual
+pinned downloads and install/update/rollback/uninstall pass in disposable homes
+on macOS ARM64, Linux ARM64 and Linux AMD64 under emulation, including paths with
+spaces and preservation of unrelated state/configuration. Candidate CI also passes.
+This does not certify every platform, proxy, interruption or terminal combination;
+the acceptance record lists explicit validation deferrals. Acceptance itself does
+not create a tag or GitHub release.
 
 The distribution contract is: an inspected full Git commit, a private managed
 runtime, explicit updates, rollback and uninstall, and no automatic changes to
@@ -96,9 +98,10 @@ sh rhizome-install.sh --rollback
 
 Rollback selects the prior completed revision. It does not undo Git changes,
 restore repository content, or change application state. Interrupted installation
-and rollback handling are tested with boundary doubles; live interruption and
-platform validation remain release gates. Install, rollback, and uninstall share one
-lock beside the root in its canonical parent, including first-root publication. An
+and rollback handling have isolated subprocess-test coverage; successful real
+lifecycles do not establish every live failure/interruption scenario. Install,
+rollback, and uninstall share one lock beside the root in its canonical parent,
+including first-root publication. An
 interruption that leaves unverifiable lock ownership fails closed for manual
 inspection; never blindly delete a lock while an installer might still be running.
 If a guarded command dies with a signal-style exit status (greater than 128), its
