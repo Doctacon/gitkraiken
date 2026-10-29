@@ -1,0 +1,8 @@
+
+[stderr]
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+100 45829  100 45829    0     0   111k      0 --:--:-- --:--:-- --:--:--  112k

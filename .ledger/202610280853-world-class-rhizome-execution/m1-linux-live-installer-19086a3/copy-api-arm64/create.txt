@@ -1,0 +1,9 @@
+c953c8981ba6953ff7442f25d1a078ee3c6fcf5e44184621b79b6c67aa4f0bbe
+Unable to find image 'ubuntu:24.04' locally
+24.04: Pulling from library/ubuntu
+e2d2bb84d022: Pulling fs layer
+2238dc1b4376: Download complete
+e2d2bb84d022: Download complete
+e2d2bb84d022: Pull complete
+Digest: sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
+Status: Downloaded newer image for ubuntu:24.04

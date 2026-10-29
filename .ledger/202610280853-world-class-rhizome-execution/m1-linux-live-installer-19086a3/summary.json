@@ -1,0 +1,10 @@
+{
+  "candidate": "19086a362dd9ac48bdffdd461816add47ca7c6ed",
+  "platform_requested": "linux/arm64",
+  "container": "rhizome-m1-install-3a0248057499",
+  "staging": "/private/tmp/rhizome-linux-validation-d3ux8wr_",
+  "passed": false,
+  "removed": false,
+  "error": "AssertionError: Container creation failed",
+  "elapsed_seconds": 0.62
+}

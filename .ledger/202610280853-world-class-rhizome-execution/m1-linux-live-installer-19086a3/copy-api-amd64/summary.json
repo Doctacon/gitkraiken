@@ -1,0 +1,17 @@
+{
+  "candidate": "19086a362dd9ac48bdffdd461816add47ca7c6ed",
+  "platform_requested": "linux/amd64",
+  "transport": "Docker copy API; no bind mounts or daemon configuration changes",
+  "container": "rhizome-m1-install-1c66bce050d3",
+  "staging": "/private/tmp/rhizome-linux-copy-t0ilyr32",
+  "passed": false,
+  "removed": false,
+  "reviewed_bootstrap_sha256": "8a8e14855e67f198652ee0ab842b57f12225d4dfcf570760ec323dc1a2e4e408",
+  "container_id": "d06796cadeb8ce16ce9a941d777d0fb7e8d53c05f98558a712155fecb82e6aca",
+  "image_id": "sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852",
+  "execution_exit_code": 1,
+  "error": "AssertionError: Linux lifecycle failed; see execution/results logs",
+  "stop_exit_code": 0,
+  "stopped": true,
+  "elapsed_seconds": 81.2
+}

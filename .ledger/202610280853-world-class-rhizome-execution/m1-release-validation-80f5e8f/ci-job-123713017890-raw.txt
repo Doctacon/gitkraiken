@@ -1,0 +1,482 @@
+﻿2026-10-29T20:28:34.5162740Z Current runner version: '2.338.0'
+2026-10-29T20:28:34.5188885Z ##[group]Runner Image Provisioner
+2026-10-29T20:28:34.5189830Z Hosted Compute Agent
+2026-10-29T20:28:34.5190522Z Version: 20261021.618
+2026-10-29T20:28:34.5191297Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-10-29T20:28:34.5192490Z Build Date: 2026-10-21T00:45:21Z
+2026-10-29T20:28:34.5193695Z Worker ID: {b270b60a-6cc7-4a2c-b023-8fcb79a927fe}
+2026-10-29T20:28:34.5194537Z Region: eastus
+2026-10-29T20:28:34.5195182Z Cloud: Azure
+2026-10-29T20:28:34.5195824Z ##[endgroup]
+2026-10-29T20:28:34.5197486Z ##[group]Operating System
+2026-10-29T20:28:34.5198233Z Ubuntu
+2026-10-29T20:28:34.5198806Z 26.04.1
+2026-10-29T20:28:34.5199385Z LTS
+2026-10-29T20:28:34.5199984Z ##[endgroup]
+2026-10-29T20:28:34.5200572Z ##[group]Runner Image
+2026-10-29T20:28:34.5201188Z Image: ubuntu-26.04
+2026-10-29T20:28:34.5202218Z Version: 20261025.179.1
+2026-10-29T20:28:34.5203899Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261025.179/images/ubuntu/Ubuntu2604-Readme.md
+2026-10-29T20:28:34.5205776Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261025.179
+2026-10-29T20:28:34.5206789Z ##[endgroup]
+2026-10-29T20:28:34.5208046Z ##[group]GITHUB_TOKEN Permissions
+2026-10-29T20:28:34.5210586Z Contents: read
+2026-10-29T20:28:34.5211270Z Metadata: read
+2026-10-29T20:28:34.5211834Z ##[endgroup]
+2026-10-29T20:28:34.5215088Z Secret source: Actions
+2026-10-29T20:28:34.5216132Z Cache mode: write
+2026-10-29T20:28:34.5217346Z Prepare workflow directory
+2026-10-29T20:28:34.5560107Z Prepare all required actions
+2026-10-29T20:28:34.5608387Z Getting action download info
+2026-10-29T20:28:34.7353247Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-29T20:28:34.8276329Z Download action repository 'astral-sh/setup-uv@v6' (SHA:d0cc045d04ccac9d8b7881df0226f9e82c39688e)
+2026-10-29T20:28:35.1349819Z Complete job name: Linux · current Git · non-installer checks
+2026-10-29T20:28:35.2297387Z ##[group]Run actions/checkout@v4
+2026-10-29T20:28:35.2298265Z with:
+2026-10-29T20:28:35.2298714Z   repository: Doctacon/rhizome
+2026-10-29T20:28:35.2302641Z   token: ***
+2026-10-29T20:28:35.2303080Z   ssh-strict: true
+2026-10-29T20:28:35.2303508Z   ssh-user: git
+2026-10-29T20:28:35.2303990Z   persist-credentials: true
+2026-10-29T20:28:35.2304467Z   clean: true
+2026-10-29T20:28:35.2304911Z   sparse-checkout-cone-mode: true
+2026-10-29T20:28:35.2305422Z   fetch-depth: 1
+2026-10-29T20:28:35.2305849Z   fetch-tags: false
+2026-10-29T20:28:35.2306291Z   show-progress: true
+2026-10-29T20:28:35.2306734Z   lfs: false
+2026-10-29T20:28:35.2307137Z   submodules: false
+2026-10-29T20:28:35.2307578Z   set-safe-directory: true
+2026-10-29T20:28:35.2308078Z   allow-unsafe-pr-checkout: false
+2026-10-29T20:28:35.2309005Z ##[endgroup]
+2026-10-29T20:28:35.5097586Z Syncing repository: Doctacon/rhizome
+2026-10-29T20:28:35.5100747Z ##[group]Getting Git version info
+2026-10-29T20:28:35.5102680Z Working directory is '/home/runner/work/rhizome/rhizome'
+2026-10-29T20:28:35.5105098Z [command]/usr/bin/git version
+2026-10-29T20:28:35.5106244Z git version 2.56.0
+2026-10-29T20:28:35.5129345Z ##[endgroup]
+2026-10-29T20:28:35.5146263Z Temporarily overriding HOME='/home/runner/work/_temp/978440b5-fe54-4b2f-84bf-cb6fbd5aa2ef' before making global git config changes
+2026-10-29T20:28:35.5149571Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-29T20:28:35.5154286Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/rhizome/rhizome
+2026-10-29T20:28:35.5240398Z Deleting the contents of '/home/runner/work/rhizome/rhizome'
+2026-10-29T20:28:35.5246693Z ##[group]Initializing the repository
+2026-10-29T20:28:35.5253811Z [command]/usr/bin/git init /home/runner/work/rhizome/rhizome
+2026-10-29T20:28:35.5416954Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-29T20:28:35.5419697Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-29T20:28:35.5422839Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-29T20:28:35.5424895Z hint: call:
+2026-10-29T20:28:35.5425975Z hint:
+2026-10-29T20:28:35.5427164Z hint: 	git config --global init.defaultBranch <name>
+2026-10-29T20:28:35.5428758Z hint:
+2026-10-29T20:28:35.5430442Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-29T20:28:35.5433245Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-29T20:28:35.5435337Z hint:
+2026-10-29T20:28:35.5437668Z hint: 	git branch -m <name>
+2026-10-29T20:28:35.5439197Z hint:
+2026-10-29T20:28:35.5440949Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-29T20:28:35.5444158Z Initialized empty Git repository in /home/runner/work/rhizome/rhizome/.git/
+2026-10-29T20:28:35.5449320Z [command]/usr/bin/git remote add origin https://github.com/Doctacon/rhizome
+2026-10-29T20:28:35.5523090Z ##[endgroup]
+2026-10-29T20:28:35.5525397Z ##[group]Disabling automatic garbage collection
+2026-10-29T20:28:35.5527435Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-29T20:28:35.5574728Z ##[endgroup]
+2026-10-29T20:28:35.5576676Z ##[group]Setting up auth
+2026-10-29T20:28:35.5584019Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-29T20:28:35.5630641Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-29T20:28:35.6176786Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-29T20:28:35.6214597Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-29T20:28:35.6514987Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-29T20:28:35.6556078Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-29T20:28:35.6842955Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-29T20:28:35.6885360Z ##[endgroup]
+2026-10-29T20:28:35.6886882Z ##[group]Fetching the repository
+2026-10-29T20:28:35.6898487Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +80f5e8f7586ee7e3630b0dbc43aeef00b26eed95:refs/remotes/origin/feat/hardening-pass
+2026-10-29T20:28:37.1026549Z From https://github.com/Doctacon/rhizome
+2026-10-29T20:28:37.1031401Z  * [new ref]         80f5e8f7586ee7e3630b0dbc43aeef00b26eed95 -> origin/feat/hardening-pass
+2026-10-29T20:28:37.1040832Z ##[endgroup]
+2026-10-29T20:28:37.1044270Z ##[group]Determining the checkout info
+2026-10-29T20:28:37.1047961Z ##[endgroup]
+2026-10-29T20:28:37.1049952Z [command]/usr/bin/git sparse-checkout disable
+2026-10-29T20:28:37.1102391Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-29T20:28:37.1137572Z ##[group]Checking out the ref
+2026-10-29T20:28:37.1151796Z [command]/usr/bin/git checkout --progress --force -B feat/hardening-pass refs/remotes/origin/feat/hardening-pass
+2026-10-29T20:28:37.1628885Z Switched to a new branch 'feat/hardening-pass'
+2026-10-29T20:28:37.1634081Z branch 'feat/hardening-pass' set up to track 'origin/feat/hardening-pass'.
+2026-10-29T20:28:37.1646423Z ##[endgroup]
+2026-10-29T20:28:37.1695805Z [command]/usr/bin/git log -1 --format=%H
+2026-10-29T20:28:37.1725676Z 80f5e8f7586ee7e3630b0dbc43aeef00b26eed95
+2026-10-29T20:28:37.2217634Z ##[group]Run astral-sh/setup-uv@v6
+2026-10-29T20:28:37.2218973Z with:
+2026-10-29T20:28:37.2220039Z   python-version: 3.13
+2026-10-29T20:28:37.2221148Z   enable-cache: true
+2026-10-29T20:28:37.2222636Z   activate-environment: false
+2026-10-29T20:28:37.2224209Z   working-directory: /home/runner/work/rhizome/rhizome
+2026-10-29T20:28:37.2226004Z   server-url: https://github.com
+2026-10-29T20:28:37.2236196Z   github-token: ***
+2026-10-29T20:28:37.2238813Z   cache-dependency-glob: **/*requirements*.txt
+**/*requirements*.in
+**/*constraints*.txt
+**/*constraints*.in
+**/pyproject.toml
+**/uv.lock
+**/*.py.lock
+
+2026-10-29T20:28:37.2241782Z   restore-cache: true
+2026-10-29T20:28:37.2243100Z   save-cache: true
+2026-10-29T20:28:37.2244126Z   prune-cache: true
+2026-10-29T20:28:37.2245306Z   ignore-nothing-to-cache: false
+2026-10-29T20:28:37.2246591Z   ignore-empty-workdir: false
+2026-10-29T20:28:37.2320691Z   add-problem-matchers: true
+2026-10-29T20:28:37.2323212Z ##[endgroup]
+2026-10-29T20:28:37.4407263Z (node:2364) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-29T20:28:37.4411331Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-29T20:28:37.4523567Z Trying to find version for uv in: /home/runner/work/rhizome/rhizome/uv.toml
+2026-10-29T20:28:37.4527019Z Could not find file: /home/runner/work/rhizome/rhizome/uv.toml
+2026-10-29T20:28:37.4530521Z Trying to find version for uv in: /home/runner/work/rhizome/rhizome/pyproject.toml
+2026-10-29T20:28:37.4545368Z Could not determine uv version from uv.toml or pyproject.toml. Falling back to latest.
+2026-10-29T20:28:37.4549834Z Getting latest version from GitHub API...
+2026-10-29T20:28:37.6745316Z manifest-file not provided, reading from local file.
+2026-10-29T20:28:37.6800528Z manifest-file does not contain version 0.13.6, arch x86_64, platform unknown-linux-gnu. Falling back to GitHub releases.
+2026-10-29T20:28:37.6803902Z Downloading uv from "https://github.com/astral-sh/uv/releases/download/0.13.6/uv-x86_64-unknown-linux-gnu.tar.gz" ...
+2026-10-29T20:28:37.9028520Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/a04de74d-302e-422e-8034-94a371bae5aa -f /home/runner/work/_temp/04877eae-e5f8-4697-9e37-5f93d13e8aa5
+2026-10-29T20:28:38.1316648Z Added /home/runner/.local/bin to the path
+2026-10-29T20:28:38.1320471Z Added /opt/hostedtoolcache/uv/0.13.6/x86_64 to the path
+2026-10-29T20:28:38.1322608Z Set UV_PYTHON to 3.13
+2026-10-29T20:28:38.1350924Z Set UV_CACHE_DIR to /home/runner/work/_temp/setup-uv-cache
+2026-10-29T20:28:38.1351633Z Successfully installed uv version 0.13.6
+2026-10-29T20:28:38.1355335Z Searching files using cache dependency glob: /home/runner/work/rhizome/rhizome/**/*requirements*.txt,/home/runner/work/rhizome/rhizome/**/*requirements*.in,/home/runner/work/rhizome/rhizome/**/*constraints*.txt,/home/runner/work/rhizome/rhizome/**/*constraints*.in,/home/runner/work/rhizome/rhizome/**/pyproject.toml,/home/runner/work/rhizome/rhizome/**/uv.lock,/home/runner/work/rhizome/rhizome/**/*.py.lock
+2026-10-29T20:28:38.1835860Z /home/runner/work/rhizome/rhizome/pyproject.toml
+2026-10-29T20:28:38.1864227Z /home/runner/work/rhizome/rhizome/scripts/install-build-constraints.txt
+2026-10-29T20:28:38.1882246Z /home/runner/work/rhizome/rhizome/scripts/install-runtime-constraints.txt
+2026-10-29T20:28:38.1970631Z /home/runner/work/rhizome/rhizome/uv.lock
+2026-10-29T20:28:38.1977943Z Found 4 files to hash.
+2026-10-29T20:28:38.2062385Z Trying to restore uv cache from GitHub Actions cache with key: setup-uv-1-x86_64-unknown-linux-gnu-3.13-pruned-483d509f653afe5a4a3a7bb341848fb7f35f4a0e3aa2b81bb16801f5bb081bba
+2026-10-29T20:28:38.2527831Z No GitHub Actions cache found for key: setup-uv-1-x86_64-unknown-linux-gnu-3.13-pruned-483d509f653afe5a4a3a7bb341848fb7f35f4a0e3aa2b81bb16801f5bb081bba
+2026-10-29T20:28:38.2716987Z ##[group]Run uv sync --locked
+2026-10-29T20:28:38.2717400Z [36;1muv sync --locked[0m
+2026-10-29T20:28:38.2754339Z shell: /usr/bin/bash -e {0}
+2026-10-29T20:28:38.2754679Z env:
+2026-10-29T20:28:38.2754930Z   UV_PYTHON: 3.13
+2026-10-29T20:28:38.2755291Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-10-29T20:28:38.2755706Z ##[endgroup]
+2026-10-29T20:28:38.4733799Z Downloading cpython-3.13.18-linux-x86_64-gnu (download) (33.8MiB)
+2026-10-29T20:28:39.0641535Z  Downloaded cpython-3.13.18-linux-x86_64-gnu (download)
+2026-10-29T20:28:39.2185642Z Using CPython 3.13.18
+2026-10-29T20:28:39.2186454Z Creating virtual environment at: .venv
+2026-10-29T20:28:39.2205461Z Resolved 17 packages in 0.68ms
+2026-10-29T20:28:39.2232902Z    Building rhizome @ file:///home/runner/work/rhizome/rhizome
+2026-10-29T20:28:39.2433108Z Downloading ruff (9.9MiB)
+2026-10-29T20:28:39.2453882Z Downloading pygments (1.2MiB)
+2026-10-29T20:28:39.3154823Z  Downloaded pygments
+2026-10-29T20:28:39.3521710Z  Downloaded ruff
+2026-10-29T20:28:39.9448642Z       Built rhizome @ file:///home/runner/work/rhizome/rhizome
+2026-10-29T20:28:39.9460914Z Prepared 16 packages in 725ms
+2026-10-29T20:28:39.9588266Z Installed 16 packages in 12ms
+2026-10-29T20:28:39.9588956Z  + iniconfig==2.3.1
+2026-10-29T20:28:39.9589510Z  + linkify-it-py==2.2.0
+2026-10-29T20:28:39.9590079Z  + markdown-it-py==4.2.0
+2026-10-29T20:28:39.9590655Z  + mdit-py-plugins==0.6.1
+2026-10-29T20:28:39.9591211Z  + mdurl==0.1.2
+2026-10-29T20:28:39.9591753Z  + packaging==26.3
+2026-10-29T20:28:39.9592535Z  + platformdirs==4.13.5
+2026-10-29T20:28:39.9593075Z  + pluggy==1.7.0
+2026-10-29T20:28:39.9593566Z  + pygments==2.21.0
+2026-10-29T20:28:39.9594007Z  + pytest==9.1.1
+2026-10-29T20:28:39.9594379Z  + pytest-asyncio==1.4.0
+2026-10-29T20:28:39.9594942Z  + rhizome==0.1.0 (from file:///home/runner/work/rhizome/rhizome)
+2026-10-29T20:28:39.9595634Z  + rich==15.0.0
+2026-10-29T20:28:39.9596070Z  + ruff==0.17.1
+2026-10-29T20:28:39.9596513Z  + textual==1.0.0
+2026-10-29T20:28:39.9596967Z  + typing-extensions==4.16.0
+2026-10-29T20:28:39.9745505Z ##[group]Run uname -a
+2026-10-29T20:28:39.9745879Z [36;1muname -a[0m
+2026-10-29T20:28:39.9746178Z [36;1mgit --version[0m
+2026-10-29T20:28:39.9746493Z [36;1muv --version[0m
+2026-10-29T20:28:39.9746812Z [36;1muv run python --version[0m
+2026-10-29T20:28:39.9747182Z [36;1muv run python - <<'PY'[0m
+2026-10-29T20:28:39.9747602Z [36;1mimport re, subprocess[0m
+2026-10-29T20:28:39.9748136Z [36;1mtext = subprocess.check_output(["git", "--version"], text=True)[0m
+2026-10-29T20:28:39.9748872Z [36;1mfound = tuple(map(int, re.search(r"(\d+)\.(\d+)", text).groups()))[0m
+2026-10-29T20:28:39.9749427Z [36;1massert found >= (2, 36), text[0m
+2026-10-29T20:28:39.9749794Z [36;1mPY[0m
+2026-10-29T20:28:39.9781678Z shell: /usr/bin/bash -e {0}
+2026-10-29T20:28:39.9782293Z env:
+2026-10-29T20:28:39.9782554Z   UV_PYTHON: 3.13
+2026-10-29T20:28:39.9782912Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-10-29T20:28:39.9783344Z ##[endgroup]
+2026-10-29T20:28:39.9866507Z Linux runnervmnwato 7.0.0-1017-azure #17-Ubuntu SMP PREEMPT Thu Sep 24 15:54:51 UTC 2026 x86_64 GNU/Linux
+2026-10-29T20:28:39.9882825Z git version 2.56.0
+2026-10-29T20:28:39.9932748Z uv 0.13.6 (x86_64-unknown-linux-gnu)
+2026-10-29T20:28:40.0501034Z Python 3.13.18
+2026-10-29T20:28:40.0943039Z ##[group]Run uv run ruff check .
+2026-10-29T20:28:40.0943417Z [36;1muv run ruff check .[0m
+2026-10-29T20:28:40.0976084Z shell: /usr/bin/bash -e {0}
+2026-10-29T20:28:40.0976445Z env:
+2026-10-29T20:28:40.0976706Z   UV_PYTHON: 3.13
+2026-10-29T20:28:40.0977078Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-10-29T20:28:40.0977521Z ##[endgroup]
+2026-10-29T20:28:40.1469182Z All checks passed!
+2026-10-29T20:28:40.1530080Z ##[group]Run uv run ruff format --check .
+2026-10-29T20:28:40.1530451Z [36;1muv run ruff format --check .[0m
+2026-10-29T20:28:40.1562625Z shell: /usr/bin/bash -e {0}
+2026-10-29T20:28:40.1562909Z env:
+2026-10-29T20:28:40.1563130Z   UV_PYTHON: 3.13
+2026-10-29T20:28:40.1563448Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-10-29T20:28:40.1563815Z ##[endgroup]
+2026-10-29T20:28:40.2233953Z 103 files already formatted
+2026-10-29T20:28:40.2306364Z ##[group]Run uv run pytest --ignore=tests/test_install.py
+2026-10-29T20:28:40.2306895Z [36;1muv run pytest --ignore=tests/test_install.py[0m
+2026-10-29T20:28:40.2338587Z shell: /usr/bin/bash -e {0}
+2026-10-29T20:28:40.2338959Z env:
+2026-10-29T20:28:40.2339226Z   UV_PYTHON: 3.13
+2026-10-29T20:28:40.2339822Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-10-29T20:28:40.2340275Z ##[endgroup]
+2026-10-29T20:28:43.1603295Z ============================= test session starts ==============================
+2026-10-29T20:28:43.1604158Z platform linux -- Python 3.13.18, pytest-9.1.1, pluggy-1.7.0
+2026-10-29T20:28:43.1604896Z rootdir: /home/runner/work/rhizome/rhizome
+2026-10-29T20:28:43.1605454Z configfile: pyproject.toml
+2026-10-29T20:28:43.1605903Z testpaths: tests
+2026-10-29T20:28:43.1606508Z plugins: platformdirs-4.13.5, asyncio-1.4.0
+2026-10-29T20:28:43.1607588Z asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+2026-10-29T20:28:43.1608541Z collected 709 items
+2026-10-29T20:28:43.1608766Z 
+2026-10-29T20:30:20.7784631Z tests/test_app.py ...................................................... [  7%]
+2026-10-29T20:31:20.9208552Z ..............................                                           [ 11%]
+2026-10-29T20:31:23.0893013Z tests/test_background_inspection.py ..                                   [ 12%]
+2026-10-29T20:31:23.1364704Z tests/test_cli.py ........                                               [ 13%]
+2026-10-29T20:31:23.4462680Z tests/test_cli_tmux.py ...................................               [ 18%]
+2026-10-29T20:31:23.5255139Z tests/test_clipboard.py ........................                         [ 21%]
+2026-10-29T20:31:44.5377066Z tests/test_commit_composer.py ...........................                [ 25%]
+2026-10-29T20:31:45.5318405Z tests/test_commit_faults.py .........                                    [ 26%]
+2026-10-29T20:31:46.7501085Z tests/test_commit_files.py ....                                          [ 27%]
+2026-10-29T20:31:47.3971299Z tests/test_commit_processes.py ....                                      [ 27%]
+2026-10-29T20:31:48.0792212Z tests/test_commit_publication.py .......                                 [ 28%]
+2026-10-29T20:31:49.2344155Z tests/test_commit_representations.py ..F.F..                             [ 29%]
+2026-10-29T20:31:50.4976723Z tests/test_commit_terminal.py ...                                        [ 30%]
+2026-10-29T20:31:51.4517505Z tests/test_commit_transactions.py ..........                             [ 31%]
+2026-10-29T20:31:51.4787410Z tests/test_context_actions.py ...............                            [ 33%]
+2026-10-29T20:31:54.1832323Z tests/test_context_menu.py ........                                      [ 34%]
+2026-10-29T20:31:54.2077775Z tests/test_dates.py ........                                             [ 35%]
+2026-10-29T20:31:54.2708202Z tests/test_diagnostics.py .......                                        [ 36%]
+2026-10-29T20:31:54.2940715Z tests/test_diff.py .............                                         [ 38%]
+2026-10-29T20:32:08.9258966Z tests/test_diff_workspace.py .........                                   [ 40%]
+2026-10-29T20:32:12.3919273Z tests/test_fetch_safety.py .....................................         [ 45%]
+2026-10-29T20:32:13.8203982Z tests/test_fetch_workspace.py .                                          [ 45%]
+2026-10-29T20:32:21.4308504Z tests/test_git.py ................................................       [ 52%]
+2026-10-29T20:32:22.9043069Z tests/test_git_context_actions.py .......................                [ 55%]
+2026-10-29T20:32:25.6295294Z tests/test_git_pull_requests.py .................                        [ 57%]
+2026-10-29T20:32:26.7841827Z tests/test_graph.py .........................                            [ 61%]
+2026-10-29T20:32:43.0349560Z tests/test_m1_controls.py .........                                      [ 62%]
+2026-10-29T20:32:50.4497229Z tests/test_m1_visuals.py ....                                            [ 63%]
+2026-10-29T20:32:50.5056412Z tests/test_open_pull_requests.py .........                               [ 64%]
+2026-10-29T20:32:56.1295818Z tests/test_operations.py ...................................             [ 69%]
+2026-10-29T20:32:59.6114152Z tests/test_operations_workspace.py ..                                    [ 69%]
+2026-10-29T20:33:00.5453315Z tests/test_pane_splitter.py ...                                          [ 70%]
+2026-10-29T20:33:03.0175348Z tests/test_patches.py .............................                      [ 74%]
+2026-10-29T20:33:03.1026590Z tests/test_persistence.py .................                              [ 76%]
+2026-10-29T20:33:03.3475794Z tests/test_plain_workspace.py ....                                       [ 77%]
+2026-10-29T20:33:12.7610937Z tests/test_precision_workspace.py ....                                   [ 77%]
+2026-10-29T20:33:14.1453287Z tests/test_pull_request_details.py ....                                  [ 78%]
+2026-10-29T20:33:17.5604187Z tests/test_pull_request_dialog.py ......                                 [ 79%]
+2026-10-29T20:33:17.6297252Z tests/test_pull_requests.py ................................             [ 83%]
+2026-10-29T20:33:17.7192733Z tests/test_read_only_index.py ..                                         [ 83%]
+2026-10-29T20:33:18.2283909Z tests/test_recovery.py .........                                         [ 85%]
+2026-10-29T20:33:18.6214440Z tests/test_ref_badges.py ..................                              [ 87%]
+2026-10-29T20:33:32.8627939Z tests/test_refresh.py ............                                       [ 89%]
+2026-10-29T20:33:40.1261563Z tests/test_refresh_workspace.py .....                                    [ 90%]
+2026-10-29T20:33:41.2292433Z tests/test_resizable_table.py ....                                       [ 90%]
+2026-10-29T20:33:47.8417467Z tests/test_responsive_workspace.py ..                                    [ 90%]
+2026-10-29T20:33:58.9882226Z tests/test_sidebar.py ........................                           [ 94%]
+2026-10-29T20:34:13.8495311Z tests/test_sidebar_integration.py ..........                             [ 95%]
+2026-10-29T20:34:17.2255305Z tests/test_theme.py ..                                                   [ 96%]
+2026-10-29T20:34:35.0076865Z tests/test_working_directory_graph.py .............                      [ 97%]
+2026-10-29T20:35:06.1750925Z tests/test_workspace_state.py ...........                                [ 99%]
+2026-10-29T20:35:06.3879115Z tests/test_worktrees.py ....                                             [100%]
+2026-10-29T20:35:06.3880857Z 
+2026-10-29T20:35:06.3881706Z =================================== FAILURES ===================================
+2026-10-29T20:35:06.3883333Z ___________ test_sha256_commit_reports_and_verifies_full_native_oid ____________
+2026-10-29T20:35:06.3884345Z 
+2026-10-29T20:35:06.3885197Z tmp_path = PosixPath('/tmp/pytest-of-runner/pytest-0/test_sha256_commit_reports_and0')
+2026-10-29T20:35:06.3886588Z git_run = <function git_run.<locals>.run at 0x708b66cc1f80>
+2026-10-29T20:35:06.3887031Z 
+2026-10-29T20:35:06.3887448Z     def test_sha256_commit_reports_and_verifies_full_native_oid(tmp_path, git_run):
+2026-10-29T20:35:06.3888260Z         repository = tmp_path / "sha256-worktree"
+2026-10-29T20:35:06.3888820Z         repository.mkdir()
+2026-10-29T20:35:06.3889421Z         git_run(repository, "init", "--object-format=sha256", "-b", "main")
+2026-10-29T20:35:06.3890414Z         assert git_run(repository, "rev-parse", "--show-object-format").stdout.strip() == "sha256"
+2026-10-29T20:35:06.3891286Z         source = repository / "sha256.txt"
+2026-10-29T20:35:06.3891815Z         source.write_text("base\n")
+2026-10-29T20:35:06.3892764Z         git_run(repository, "add", source.name)
+2026-10-29T20:35:06.3893482Z         git_run(repository, "commit", "-m", "base")
+2026-10-29T20:35:06.3894433Z         parent = git_run(repository, "rev-parse", "HEAD").stdout.strip()
+2026-10-29T20:35:06.3895971Z         source.write_text("reviewed sha256 content\n")
+2026-10-29T20:35:06.3896780Z         git_run(repository, "add", source.name)
+2026-10-29T20:35:06.3897300Z     
+2026-10-29T20:35:06.3897959Z >       result = Repository(repository).execute(Action("commit", message="sha256 transaction"))
+2026-10-29T20:35:06.3899051Z                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-29T20:35:06.3899379Z 
+2026-10-29T20:35:06.3899536Z tests/test_commit_representations.py:104: 
+2026-10-29T20:35:06.3899980Z _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+2026-10-29T20:35:06.3900429Z src/rhizome/git.py:3264: in execute
+2026-10-29T20:35:06.3900939Z     return self._commit_reviewed(action, lambda: self._preflight_context(action))
+2026-10-29T20:35:06.3901510Z            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-29T20:35:06.3902252Z src/rhizome/git.py:1433: in _commit_reviewed
+2026-10-29T20:35:06.3902858Z     _raise_process_error(result, timeout=None, ok_codes=(0,), operation="commit")
+2026-10-29T20:35:06.3903518Z _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+2026-10-29T20:35:06.3903842Z 
+2026-10-29T20:35:06.3904916Z result = CompletedProcess(args=['git', '-c', 'core.abbrev=no', '-c', 'color.ui=false', '-c', 'color.diff=false', '-c', 'splitIn...atal: empty ident name (for <runner@runnervmnwato.o4rkz4kttnne5pilomdco21qwa.bx.internal.cloudapp.net>) not allowed\n')
+2026-10-29T20:35:06.3906416Z timeout = None, ok_codes = (0,), operation = 'commit'
+2026-10-29T20:35:06.3906707Z 
+2026-10-29T20:35:06.3906834Z     def _raise_process_error(
+2026-10-29T20:35:06.3907203Z         result: subprocess.CompletedProcess[bytes],
+2026-10-29T20:35:06.3907589Z         *,
+2026-10-29T20:35:06.3907846Z         timeout: float | None,
+2026-10-29T20:35:06.3908175Z         ok_codes: tuple[int, ...] | None,
+2026-10-29T20:35:06.3908535Z         operation: str,
+2026-10-29T20:35:06.3908849Z     ) -> None:
+2026-10-29T20:35:06.3909153Z         if ok_codes is None or result.returncode in ok_codes:
+2026-10-29T20:35:06.3909530Z             return
+2026-10-29T20:35:06.3909808Z         raw_detail = result.stderr or result.stdout
+2026-10-29T20:35:06.3910178Z         clipped = raw_detail[:_MAX_ERROR_BYTES]
+2026-10-29T20:35:06.3910530Z         detail = _decode(clipped).strip()
+2026-10-29T20:35:06.3910863Z         if len(raw_detail) > _MAX_ERROR_BYTES:
+2026-10-29T20:35:06.3911248Z             detail += "\n[Git error output truncated by Rhizome]"
+2026-10-29T20:35:06.3911617Z         if not detail:
+2026-10-29T20:35:06.3912210Z             detail = f"Git exited with status {result.returncode}."
+2026-10-29T20:35:06.3912635Z         if timeout == _NETWORK_TIMEOUT:
+2026-10-29T20:35:06.3912944Z             detail += (
+2026-10-29T20:35:06.3913360Z                 "\nGit was run noninteractively. Configure a credential helper or SSH agent "
+2026-10-29T20:35:06.3913842Z                 "and try again."
+2026-10-29T20:35:06.3914117Z             )
+2026-10-29T20:35:06.3914405Z >       raise GitError(f"Git {operation} failed: {detail}")
+2026-10-29T20:35:06.3914888Z E       rhizome.git.GitError: Git commit failed: Author identity unknown
+2026-10-29T20:35:06.3915304Z E       
+2026-10-29T20:35:06.3915539Z E       *** Please tell me who you are.
+2026-10-29T20:35:06.3915843Z E       
+2026-10-29T20:35:06.3916051Z E       Run
+2026-10-29T20:35:06.3916261Z E       
+2026-10-29T20:35:06.3916537Z E         git config --global user.email "you@example.com"
+2026-10-29T20:35:06.3916941Z E         git config --global user.name "Your Name"
+2026-10-29T20:35:06.3917266Z E       
+2026-10-29T20:35:06.3917509Z E       to set your account's default identity.
+2026-10-29T20:35:06.3917918Z E       Omit --global to set the identity only in this repository.
+2026-10-29T20:35:06.3918296Z E       
+2026-10-29T20:35:06.3918867Z E       fatal: empty ident name (for <runner@runnervmnwato.o4rkz4kttnne5pilomdco21qwa.bx.internal.cloudapp.net>) not allowed
+2026-10-29T20:35:06.3919816Z 
+2026-10-29T20:35:06.3920019Z src/rhizome/git.py:266: GitError
+2026-10-29T20:35:06.3920808Z __ test_sparse_index_commit_matches_native_collapsed_and_skip_worktree_state ___
+2026-10-29T20:35:06.3921372Z 
+2026-10-29T20:35:06.3921812Z tmp_path = PosixPath('/tmp/pytest-of-runner/pytest-0/test_sparse_index_commit_match0')
+2026-10-29T20:35:06.3923273Z git_run = <function git_run.<locals>.run at 0x708b66cc25c0>
+2026-10-29T20:35:06.3923716Z 
+2026-10-29T20:35:06.3924218Z     def test_sparse_index_commit_matches_native_collapsed_and_skip_worktree_state(tmp_path, git_run):
+2026-10-29T20:35:06.3924976Z         native = tmp_path / "native-sparse"
+2026-10-29T20:35:06.3925314Z         public = tmp_path / "public-sparse"
+2026-10-29T20:35:06.3925638Z         _prepare_sparse_index(native, git_run)
+2026-10-29T20:35:06.3925970Z         _prepare_sparse_index(public, git_run)
+2026-10-29T20:35:06.3926282Z     
+2026-10-29T20:35:06.3926651Z         expected_before = git_run(native, "ls-files", "--sparse", "--stage", "-z").stdout
+2026-10-29T20:35:06.3927205Z         tags_before = git_run(native, "ls-files", "--sparse", "-t", "-z").stdout
+2026-10-29T20:35:06.3927786Z         assert expected_before == git_run(public, "ls-files", "--sparse", "--stage", "-z").stdout
+2026-10-29T20:35:06.3928390Z         assert tags_before == git_run(public, "ls-files", "--sparse", "-t", "-z").stdout
+2026-10-29T20:35:06.3928943Z         assert "040000 " in expected_before and "\toutside/\0" in expected_before
+2026-10-29T20:35:06.3929965Z         assert tags_before.split("\0")[:2] == ["S outside/", "H visible/file.txt"]
+2026-10-29T20:35:06.3930821Z         assert not (public / "outside").exists()
+2026-10-29T20:35:06.3931330Z     
+2026-10-29T20:35:06.3931806Z         git_run(native, "commit", "-m", "native sparse transaction")
+2026-10-29T20:35:06.3932695Z >       result = Repository(public).execute(Action("commit", message="public sparse transaction"))
+2026-10-29T20:35:06.3933229Z                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-29T20:35:06.3933481Z 
+2026-10-29T20:35:06.3933607Z tests/test_commit_representations.py:169: 
+2026-10-29T20:35:06.3933960Z _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+2026-10-29T20:35:06.3934304Z src/rhizome/git.py:3264: in execute
+2026-10-29T20:35:06.3934716Z     return self._commit_reviewed(action, lambda: self._preflight_context(action))
+2026-10-29T20:35:06.3935157Z            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-29T20:35:06.3935488Z src/rhizome/git.py:1433: in _commit_reviewed
+2026-10-29T20:35:06.3935897Z     _raise_process_error(result, timeout=None, ok_codes=(0,), operation="commit")
+2026-10-29T20:35:06.3936345Z _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+2026-10-29T20:35:06.3936585Z 
+2026-10-29T20:35:06.3937373Z result = CompletedProcess(args=['git', '-c', 'core.abbrev=no', '-c', 'color.ui=false', '-c', 'color.diff=false', '-c', 'splitIn...atal: empty ident name (for <runner@runnervmnwato.o4rkz4kttnne5pilomdco21qwa.bx.internal.cloudapp.net>) not allowed\n')
+2026-10-29T20:35:06.3938386Z timeout = None, ok_codes = (0,), operation = 'commit'
+2026-10-29T20:35:06.3938617Z 
+2026-10-29T20:35:06.3938727Z     def _raise_process_error(
+2026-10-29T20:35:06.3939021Z         result: subprocess.CompletedProcess[bytes],
+2026-10-29T20:35:06.3939328Z         *,
+2026-10-29T20:35:06.3939537Z         timeout: float | None,
+2026-10-29T20:35:06.3939793Z         ok_codes: tuple[int, ...] | None,
+2026-10-29T20:35:06.3940071Z         operation: str,
+2026-10-29T20:35:06.3940292Z     ) -> None:
+2026-10-29T20:35:06.3940553Z         if ok_codes is None or result.returncode in ok_codes:
+2026-10-29T20:35:06.3940869Z             return
+2026-10-29T20:35:06.3941121Z         raw_detail = result.stderr or result.stdout
+2026-10-29T20:35:06.3941444Z         clipped = raw_detail[:_MAX_ERROR_BYTES]
+2026-10-29T20:35:06.3941750Z         detail = _decode(clipped).strip()
+2026-10-29T20:35:06.3942384Z         if len(raw_detail) > _MAX_ERROR_BYTES:
+2026-10-29T20:35:06.3942740Z             detail += "\n[Git error output truncated by Rhizome]"
+2026-10-29T20:35:06.3943065Z         if not detail:
+2026-10-29T20:35:06.3943356Z             detail = f"Git exited with status {result.returncode}."
+2026-10-29T20:35:06.3943846Z         if timeout == _NETWORK_TIMEOUT:
+2026-10-29T20:35:06.3944111Z             detail += (
+2026-10-29T20:35:06.3944478Z                 "\nGit was run noninteractively. Configure a credential helper or SSH agent "
+2026-10-29T20:35:06.3944909Z                 "and try again."
+2026-10-29T20:35:06.3945144Z             )
+2026-10-29T20:35:06.3945401Z >       raise GitError(f"Git {operation} failed: {detail}")
+2026-10-29T20:35:06.3945834Z E       rhizome.git.GitError: Git commit failed: Author identity unknown
+2026-10-29T20:35:06.3946200Z E       
+2026-10-29T20:35:06.3946409Z E       *** Please tell me who you are.
+2026-10-29T20:35:06.3946664Z E       
+2026-10-29T20:35:06.3946849Z E       Run
+2026-10-29T20:35:06.3947040Z E       
+2026-10-29T20:35:06.3947285Z E         git config --global user.email "you@example.com"
+2026-10-29T20:35:06.3947640Z E         git config --global user.name "Your Name"
+2026-10-29T20:35:06.3947932Z E       
+2026-10-29T20:35:06.3948145Z E       to set your account's default identity.
+2026-10-29T20:35:06.3948522Z E       Omit --global to set the identity only in this repository.
+2026-10-29T20:35:06.3948860Z E       
+2026-10-29T20:35:06.3949372Z E       fatal: empty ident name (for <runner@runnervmnwato.o4rkz4kttnne5pilomdco21qwa.bx.internal.cloudapp.net>) not allowed
+2026-10-29T20:35:06.3949879Z 
+2026-10-29T20:35:06.3949977Z src/rhizome/git.py:266: GitError
+2026-10-29T20:35:06.3950300Z =========================== short test summary info ============================
+2026-10-29T20:35:06.3951190Z FAILED tests/test_commit_representations.py::test_sha256_commit_reports_and_verifies_full_native_oid - rhizome.git.GitError: Git commit failed: Author identity unknown
+2026-10-29T20:35:06.3951820Z 
+2026-10-29T20:35:06.3952093Z *** Please tell me who you are.
+2026-10-29T20:35:06.3952261Z 
+2026-10-29T20:35:06.3952347Z Run
+2026-10-29T20:35:06.3952446Z 
+2026-10-29T20:35:06.3952584Z   git config --global user.email "you@example.com"
+2026-10-29T20:35:06.3952917Z   git config --global user.name "Your Name"
+2026-10-29T20:35:06.3953122Z 
+2026-10-29T20:35:06.3953226Z to set your account's default identity.
+2026-10-29T20:35:06.3953569Z Omit --global to set the identity only in this repository.
+2026-10-29T20:35:06.3953818Z 
+2026-10-29T20:35:06.3954207Z fatal: empty ident name (for <runner@runnervmnwato.o4rkz4kttnne5pilomdco21qwa.bx.internal.cloudapp.net>) not allowed
+2026-10-29T20:35:06.3955286Z FAILED tests/test_commit_representations.py::test_sparse_index_commit_matches_native_collapsed_and_skip_worktree_state - rhizome.git.GitError: Git commit failed: Author identity unknown
+2026-10-29T20:35:06.3955966Z 
+2026-10-29T20:35:06.3956067Z *** Please tell me who you are.
+2026-10-29T20:35:06.3956231Z 
+2026-10-29T20:35:06.3956309Z Run
+2026-10-29T20:35:06.3956414Z 
+2026-10-29T20:35:06.3956542Z   git config --global user.email "you@example.com"
+2026-10-29T20:35:06.3956866Z   git config --global user.name "Your Name"
+2026-10-29T20:35:06.3957064Z 
+2026-10-29T20:35:06.3957168Z to set your account's default identity.
+2026-10-29T20:35:06.3957512Z Omit --global to set the identity only in this repository.
+2026-10-29T20:35:06.3957752Z 
+2026-10-29T20:35:06.6956114Z fatal: empty ident name (for <runner@runnervmnwato.o4rkz4kttnne5pilomdco21qwa.bx.internal.cloudapp.net>) not allowed
+2026-10-29T20:35:06.6958200Z ================== 2 failed, 707 passed in 385.49s (0:06:25) ===================
+2026-10-29T20:35:07.0614193Z ##[error]Process completed with exit code 1.
+2026-10-29T20:35:07.0766833Z Post job cleanup.
+2026-10-29T20:35:07.1706437Z [command]/usr/bin/git version
+2026-10-29T20:35:07.1760879Z git version 2.56.0
+2026-10-29T20:35:07.1805159Z Temporarily overriding HOME='/home/runner/work/_temp/96d2d882-8024-4906-b3ce-acbdc790017a' before making global git config changes
+2026-10-29T20:35:07.1806595Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-29T20:35:07.1810814Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/rhizome/rhizome
+2026-10-29T20:35:07.1862472Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-29T20:35:07.1911227Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-29T20:35:07.2269030Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-29T20:35:07.2317697Z http.https://github.com/.extraheader
+2026-10-29T20:35:07.2322128Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-29T20:35:07.2374829Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-29T20:35:07.2748228Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-29T20:35:07.2807202Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-29T20:35:07.3314840Z Cleaning up orphan processes
+2026-10-29T20:35:07.3706508Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, astral-sh/setup-uv@v6. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

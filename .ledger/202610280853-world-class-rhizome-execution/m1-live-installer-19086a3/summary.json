@@ -1,0 +1,30 @@
+{
+  "candidate": "19086a362dd9ac48bdffdd461816add47ca7c6ed",
+  "previous_revision": "44cdd1641df92e4084690cbd7288ad9d34e38d92",
+  "sandbox": "/private/tmp/rhizome-m1-live-yfb_ynto",
+  "steps": [
+    {
+      "name": "download-bootstrap",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_seconds": 0.94
+    },
+    {
+      "name": "install",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_seconds": 8.66
+    },
+    {
+      "name": "installed-help",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_seconds": 0.47
+    }
+  ],
+  "passed": false,
+  "sandbox_removed": false,
+  "elapsed_seconds": 10.1,
+  "bootstrap_sha256": "8a8e14855e67f198652ee0ab842b57f12225d4dfcf570760ec323dc1a2e4e408",
+  "error": "AssertionError: Expected one private managed Python"
+}

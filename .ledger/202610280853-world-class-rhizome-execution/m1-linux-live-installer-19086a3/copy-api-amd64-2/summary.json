@@ -1,0 +1,16 @@
+{
+  "candidate": "19086a362dd9ac48bdffdd461816add47ca7c6ed",
+  "platform_requested": "linux/amd64",
+  "transport": "Docker copy API; no bind mounts or daemon configuration changes",
+  "container": "rhizome-m1-install-0ed87b67518f",
+  "staging": "/private/tmp/rhizome-linux-copy-z2cikpyl",
+  "passed": true,
+  "removed": true,
+  "reviewed_bootstrap_sha256": "8a8e14855e67f198652ee0ab842b57f12225d4dfcf570760ec323dc1a2e4e408",
+  "container_id": "46303c090050e3eaa76ab1cb73096a6407c648dc06266bdf214b41e76837e805",
+  "image_id": "sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852",
+  "execution_exit_code": 0,
+  "stop_exit_code": 0,
+  "stopped": true,
+  "elapsed_seconds": 99.61
+}

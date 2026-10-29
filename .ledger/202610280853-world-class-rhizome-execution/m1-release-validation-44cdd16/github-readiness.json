@@ -1,0 +1,34 @@
+{
+  "hosted_runs": {
+    "command": [
+      "gh",
+      "run",
+      "list",
+      "--repo",
+      "github.com/Doctacon/rhizome",
+      "--commit",
+      "44cdd1641df92e4084690cbd7288ad9d34e38d92",
+      "--limit",
+      "20",
+      "--json",
+      "databaseId,headSha,workflowName,status,conclusion,url,event,createdAt"
+    ],
+    "exit_code": 0,
+    "stdout": "[]\n",
+    "stderr": ""
+  },
+  "remote_commit": {
+    "command": [
+      "gh",
+      "api",
+      "--hostname",
+      "github.com",
+      "repos/Doctacon/rhizome/commits/44cdd1641df92e4084690cbd7288ad9d34e38d92",
+      "--jq",
+      ".sha"
+    ],
+    "exit_code": 1,
+    "stdout": "{\"message\":\"No commit found for SHA: 44cdd1641df92e4084690cbd7288ad9d34e38d92\",\"documentation_url\":\"https://docs.github.com/rest/commits/commits#get-a-commit\",\"status\":\"422\"}",
+    "stderr": "gh: No commit found for SHA: 44cdd1641df92e4084690cbd7288ad9d34e38d92 (HTTP 422)\n"
+  }
+}

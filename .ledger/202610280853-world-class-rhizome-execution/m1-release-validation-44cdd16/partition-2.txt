@@ -1,0 +1,15 @@
+......................................F................................. [ 36%]
+........................................................................ [ 72%]
+.......................................................                  [100%]
+=================================== FAILURES ===================================
+________ test_remote_change_during_automatic_read_discards_and_retries _________
+tests/test_refresh.py:366: in test_remote_change_during_automatic_read_discards_and_retries
+    assert "Remotes changed" in app.query_one("#status-line", Static).renderable.plain
+E   assert 'Remotes changed' in "Local state refreshed · remote updates run automatically · Background refresh: Command '['git', '-c', 'user.name=Test...ple.invalid', '-c', 'commit.gpgsign=false', 'remote', 'rename', 'origin', 'renamed']' returned non-zero exit status 2."
+E    +  where "Local state refreshed · remote updates run automatically · Background refresh: Command '['git', '-c', 'user.name=Test...ple.invalid', '-c', 'commit.gpgsign=false', 'remote', 'rename', 'origin', 'renamed']' returned non-zero exit status 2." = <text "Local state refreshed · remote updates run automatically · Background refresh: Command '['git', '-c', 'user.nam...alid', '-c', 'commit.gpgsign=false', 'remote', 'rename', 'origin', 'renamed']' returned non-zero exit status 2." [] ''>.plain
+E    +    where <text "Local state refreshed · remote updates run automatically · Background refresh: Command '['git', '-c', 'user.nam...alid', '-c', 'commit.gpgsign=false', 'remote', 'rename', 'origin', 'renamed']' returned non-zero exit status 2." [] ''> = Static(id='status-line').renderable
+E    +      where Static(id='status-line') = query_one('#status-line', Static)
+E    +        where query_one = RhizomeApp(title='Rhizome', classes={'-light-mode'}, pseudo_classes={'focus', 'light'}).query_one
+=========================== short test summary info ============================
+FAILED tests/test_refresh.py::test_remote_change_during_automatic_read_discards_and_retries
+1 failed, 198 passed in 200.72s (0:03:20)

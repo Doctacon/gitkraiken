@@ -1,0 +1,316 @@
+﻿2026-10-29T20:48:26.8838796Z Current runner version: '2.338.0'
+2026-10-29T20:48:26.8858873Z ##[group]Runner Image Provisioner
+2026-10-29T20:48:26.8859679Z Hosted Compute Agent
+2026-10-29T20:48:26.8860161Z Version: 20261021.618
+2026-10-29T20:48:26.8860745Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-10-29T20:48:26.8861395Z Build Date: 2026-10-21T00:45:21Z
+2026-10-29T20:48:26.8861991Z Worker ID: {bc33e7f2-0290-47bb-90c8-a1f225814037}
+2026-10-29T20:48:26.8862609Z Region: westus
+2026-10-29T20:48:26.8863066Z Cloud: Azure
+2026-10-29T20:48:26.8863492Z ##[endgroup]
+2026-10-29T20:48:26.8864571Z ##[group]Operating System
+2026-10-29T20:48:26.8865387Z Ubuntu
+2026-10-29T20:48:26.8865907Z 26.04.1
+2026-10-29T20:48:26.8866345Z LTS
+2026-10-29T20:48:26.8866776Z ##[endgroup]
+2026-10-29T20:48:26.8867305Z ##[group]Runner Image
+2026-10-29T20:48:26.8867821Z Image: ubuntu-26.04
+2026-10-29T20:48:26.8868316Z Version: 20261025.179.1
+2026-10-29T20:48:26.8869374Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261025.179/images/ubuntu/Ubuntu2604-Readme.md
+2026-10-29T20:48:26.8870682Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261025.179
+2026-10-29T20:48:26.8871487Z ##[endgroup]
+2026-10-29T20:48:26.8872723Z ##[group]GITHUB_TOKEN Permissions
+2026-10-29T20:48:26.8874302Z Contents: read
+2026-10-29T20:48:26.8875050Z Metadata: read
+2026-10-29T20:48:26.8875569Z ##[endgroup]
+2026-10-29T20:48:26.8877635Z Secret source: Actions
+2026-10-29T20:48:26.8878485Z Cache mode: write
+2026-10-29T20:48:26.8879186Z Prepare workflow directory
+2026-10-29T20:48:26.9181807Z Prepare all required actions
+2026-10-29T20:48:26.9220648Z Getting action download info
+2026-10-29T20:48:27.2435422Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-29T20:48:27.3369741Z Download action repository 'astral-sh/setup-uv@v6' (SHA:d0cc045d04ccac9d8b7881df0226f9e82c39688e)
+2026-10-29T20:48:27.8741193Z Complete job name: Linux · current Git/tmux integration
+2026-10-29T20:48:27.9406765Z ##[group]Run actions/checkout@v4
+2026-10-29T20:48:27.9407419Z with:
+2026-10-29T20:48:27.9407774Z   repository: Doctacon/rhizome
+2026-10-29T20:48:27.9411041Z   token: ***
+2026-10-29T20:48:27.9411389Z   ssh-strict: true
+2026-10-29T20:48:27.9411739Z   ssh-user: git
+2026-10-29T20:48:27.9412094Z   persist-credentials: true
+2026-10-29T20:48:27.9412484Z   clean: true
+2026-10-29T20:48:27.9412837Z   sparse-checkout-cone-mode: true
+2026-10-29T20:48:27.9413247Z   fetch-depth: 1
+2026-10-29T20:48:27.9413584Z   fetch-tags: false
+2026-10-29T20:48:27.9413934Z   show-progress: true
+2026-10-29T20:48:27.9414284Z   lfs: false
+2026-10-29T20:48:27.9414612Z   submodules: false
+2026-10-29T20:48:27.9415278Z   set-safe-directory: true
+2026-10-29T20:48:27.9415701Z   allow-unsafe-pr-checkout: false
+2026-10-29T20:48:27.9416307Z env:
+2026-10-29T20:48:27.9416632Z   LANG: en_US.UTF-8
+2026-10-29T20:48:27.9416984Z   LC_ALL: en_US.UTF-8
+2026-10-29T20:48:27.9417338Z ##[endgroup]
+2026-10-29T20:48:28.1803535Z Syncing repository: Doctacon/rhizome
+2026-10-29T20:48:28.1805270Z ##[group]Getting Git version info
+2026-10-29T20:48:28.1806063Z Working directory is '/home/runner/work/rhizome/rhizome'
+2026-10-29T20:48:28.1807171Z [command]/usr/bin/git version
+2026-10-29T20:48:28.1834133Z git version 2.56.0
+2026-10-29T20:48:28.1849431Z ##[endgroup]
+2026-10-29T20:48:28.1866115Z Temporarily overriding HOME='/home/runner/work/_temp/2492398c-2c25-4886-a57c-85b9ad0f8d28' before making global git config changes
+2026-10-29T20:48:28.1885995Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-29T20:48:28.1896073Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/rhizome/rhizome
+2026-10-29T20:48:28.1922765Z Deleting the contents of '/home/runner/work/rhizome/rhizome'
+2026-10-29T20:48:28.1925673Z ##[group]Initializing the repository
+2026-10-29T20:48:28.1929657Z [command]/usr/bin/git init /home/runner/work/rhizome/rhizome
+2026-10-29T20:48:28.2036516Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-29T20:48:28.2038093Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-29T20:48:28.2038932Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-29T20:48:28.2039567Z hint: call:
+2026-10-29T20:48:28.2039948Z hint:
+2026-10-29T20:48:28.2040409Z hint: 	git config --global init.defaultBranch <name>
+2026-10-29T20:48:28.2040948Z hint:
+2026-10-29T20:48:28.2041444Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-29T20:48:28.2042225Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-29T20:48:28.2042851Z hint:
+2026-10-29T20:48:28.2043231Z hint: 	git branch -m <name>
+2026-10-29T20:48:28.2043646Z hint:
+2026-10-29T20:48:28.2044179Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-29T20:48:28.2057228Z Initialized empty Git repository in /home/runner/work/rhizome/rhizome/.git/
+2026-10-29T20:48:28.2066240Z [command]/usr/bin/git remote add origin https://github.com/Doctacon/rhizome
+2026-10-29T20:48:28.2114495Z ##[endgroup]
+2026-10-29T20:48:28.2115987Z ##[group]Disabling automatic garbage collection
+2026-10-29T20:48:28.2118923Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-29T20:48:28.2149531Z ##[endgroup]
+2026-10-29T20:48:28.2150441Z ##[group]Setting up auth
+2026-10-29T20:48:28.2155127Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-29T20:48:28.2185526Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-29T20:48:28.2572659Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-29T20:48:28.2603566Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-29T20:48:28.2825531Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-29T20:48:28.2853406Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-29T20:48:28.3074518Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-29T20:48:28.3108884Z ##[endgroup]
+2026-10-29T20:48:28.3115990Z ##[group]Fetching the repository
+2026-10-29T20:48:28.3117193Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +0a2805f35a45bec51cad6f277d3f0e40f914e084:refs/remotes/origin/feat/hardening-pass
+2026-10-29T20:48:28.8839488Z From https://github.com/Doctacon/rhizome
+2026-10-29T20:48:28.8840562Z  * [new ref]         0a2805f35a45bec51cad6f277d3f0e40f914e084 -> origin/feat/hardening-pass
+2026-10-29T20:48:28.8844112Z ##[endgroup]
+2026-10-29T20:48:28.8845341Z ##[group]Determining the checkout info
+2026-10-29T20:48:28.8846754Z ##[endgroup]
+2026-10-29T20:48:28.8851602Z [command]/usr/bin/git sparse-checkout disable
+2026-10-29T20:48:28.8897339Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-29T20:48:28.8923950Z ##[group]Checking out the ref
+2026-10-29T20:48:28.8927357Z [command]/usr/bin/git checkout --progress --force -B feat/hardening-pass refs/remotes/origin/feat/hardening-pass
+2026-10-29T20:48:28.9315718Z Switched to a new branch 'feat/hardening-pass'
+2026-10-29T20:48:28.9320248Z branch 'feat/hardening-pass' set up to track 'origin/feat/hardening-pass'.
+2026-10-29T20:48:28.9363407Z ##[endgroup]
+2026-10-29T20:48:28.9366239Z [command]/usr/bin/git log -1 --format=%H
+2026-10-29T20:48:28.9386879Z 0a2805f35a45bec51cad6f277d3f0e40f914e084
+2026-10-29T20:48:28.9747869Z ##[group]Run astral-sh/setup-uv@v6
+2026-10-29T20:48:28.9748834Z with:
+2026-10-29T20:48:28.9749618Z   python-version: 3.13
+2026-10-29T20:48:28.9750433Z   enable-cache: true
+2026-10-29T20:48:28.9751409Z   activate-environment: false
+2026-10-29T20:48:28.9752515Z   working-directory: /home/runner/work/rhizome/rhizome
+2026-10-29T20:48:28.9753660Z   server-url: https://github.com
+2026-10-29T20:48:28.9762179Z   github-token: ***
+2026-10-29T20:48:28.9764061Z   cache-dependency-glob: **/*requirements*.txt
+**/*requirements*.in
+**/*constraints*.txt
+**/*constraints*.in
+**/pyproject.toml
+**/uv.lock
+**/*.py.lock
+
+2026-10-29T20:48:28.9766225Z   restore-cache: true
+2026-10-29T20:48:28.9767135Z   save-cache: true
+2026-10-29T20:48:28.9767899Z   prune-cache: true
+2026-10-29T20:48:28.9768695Z   ignore-nothing-to-cache: false
+2026-10-29T20:48:28.9769687Z   ignore-empty-workdir: false
+2026-10-29T20:48:28.9770611Z   add-problem-matchers: true
+2026-10-29T20:48:28.9771605Z env:
+2026-10-29T20:48:28.9772416Z   LANG: en_US.UTF-8
+2026-10-29T20:48:28.9773202Z   LC_ALL: en_US.UTF-8
+2026-10-29T20:48:28.9774020Z ##[endgroup]
+2026-10-29T20:48:29.1413772Z (node:2149) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-29T20:48:29.1417749Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-29T20:48:29.1511367Z Trying to find version for uv in: /home/runner/work/rhizome/rhizome/uv.toml
+2026-10-29T20:48:29.1515170Z Could not find file: /home/runner/work/rhizome/rhizome/uv.toml
+2026-10-29T20:48:29.1518812Z Trying to find version for uv in: /home/runner/work/rhizome/rhizome/pyproject.toml
+2026-10-29T20:48:29.1531299Z Could not determine uv version from uv.toml or pyproject.toml. Falling back to latest.
+2026-10-29T20:48:29.1624684Z Getting latest version from GitHub API...
+2026-10-29T20:48:29.5415450Z manifest-file not provided, reading from local file.
+2026-10-29T20:48:29.5444682Z manifest-file does not contain version 0.13.6, arch x86_64, platform unknown-linux-gnu. Falling back to GitHub releases.
+2026-10-29T20:48:29.5446477Z Downloading uv from "https://github.com/astral-sh/uv/releases/download/0.13.6/uv-x86_64-unknown-linux-gnu.tar.gz" ...
+2026-10-29T20:48:29.8505109Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/504426d2-717f-46f1-895a-240723a4e811 -f /home/runner/work/_temp/1c8eb2f1-2cb5-4724-8d42-698d8d6b5c8b
+2026-10-29T20:48:30.1491659Z Added /home/runner/.local/bin to the path
+2026-10-29T20:48:30.1493670Z Added /opt/hostedtoolcache/uv/0.13.6/x86_64 to the path
+2026-10-29T20:48:30.1494771Z Set UV_PYTHON to 3.13
+2026-10-29T20:48:30.1514262Z Set UV_CACHE_DIR to /home/runner/work/_temp/setup-uv-cache
+2026-10-29T20:48:30.1515031Z Successfully installed uv version 0.13.6
+2026-10-29T20:48:30.1516919Z Searching files using cache dependency glob: /home/runner/work/rhizome/rhizome/**/*requirements*.txt,/home/runner/work/rhizome/rhizome/**/*requirements*.in,/home/runner/work/rhizome/rhizome/**/*constraints*.txt,/home/runner/work/rhizome/rhizome/**/*constraints*.in,/home/runner/work/rhizome/rhizome/**/pyproject.toml,/home/runner/work/rhizome/rhizome/**/uv.lock,/home/runner/work/rhizome/rhizome/**/*.py.lock
+2026-10-29T20:48:30.1801265Z /home/runner/work/rhizome/rhizome/pyproject.toml
+2026-10-29T20:48:30.1818407Z /home/runner/work/rhizome/rhizome/scripts/install-build-constraints.txt
+2026-10-29T20:48:30.1826324Z /home/runner/work/rhizome/rhizome/scripts/install-runtime-constraints.txt
+2026-10-29T20:48:30.1885479Z /home/runner/work/rhizome/rhizome/uv.lock
+2026-10-29T20:48:30.1890178Z Found 4 files to hash.
+2026-10-29T20:48:30.1947836Z Trying to restore uv cache from GitHub Actions cache with key: setup-uv-1-x86_64-unknown-linux-gnu-3.13-pruned-483d509f653afe5a4a3a7bb341848fb7f35f4a0e3aa2b81bb16801f5bb081bba
+2026-10-29T20:48:30.4300507Z Cache hit for: setup-uv-1-x86_64-unknown-linux-gnu-3.13-pruned-483d509f653afe5a4a3a7bb341848fb7f35f4a0e3aa2b81bb16801f5bb081bba
+2026-10-29T20:48:30.4414620Z (node:2149) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-29T20:48:30.9187264Z Received 101860 of 101860 (100.0%), 0.5 MBs/sec
+2026-10-29T20:48:30.9187787Z Cache Size: ~0 MB (101860 B)
+2026-10-29T20:48:30.9206445Z [command]/usr/bin/tar -xf /home/runner/work/_temp/e4d1ad3d-2016-4a47-8a11-d99f0727c19e/cache.tzst -P -C /home/runner/work/rhizome/rhizome --use-compress-program unzstd
+2026-10-29T20:48:30.9271155Z Cache restored successfully
+2026-10-29T20:48:30.9275064Z uv cache restored from GitHub Actions cache with key: setup-uv-1-x86_64-unknown-linux-gnu-3.13-pruned-483d509f653afe5a4a3a7bb341848fb7f35f4a0e3aa2b81bb16801f5bb081bba
+2026-10-29T20:48:30.9413071Z ##[group]Run uv sync --locked
+2026-10-29T20:48:30.9413362Z [36;1muv sync --locked[0m
+2026-10-29T20:48:30.9446014Z shell: /usr/bin/bash -e {0}
+2026-10-29T20:48:30.9446261Z env:
+2026-10-29T20:48:30.9446431Z   LANG: en_US.UTF-8
+2026-10-29T20:48:30.9446630Z   LC_ALL: en_US.UTF-8
+2026-10-29T20:48:30.9446821Z   UV_PYTHON: 3.13
+2026-10-29T20:48:30.9447039Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-10-29T20:48:30.9447325Z ##[endgroup]
+2026-10-29T20:48:31.0404278Z Downloading cpython-3.13.18-linux-x86_64-gnu (download) (33.8MiB)
+2026-10-29T20:48:31.4785758Z  Downloaded cpython-3.13.18-linux-x86_64-gnu (download)
+2026-10-29T20:48:31.5944308Z Using CPython 3.13.18
+2026-10-29T20:48:31.5944586Z Creating virtual environment at: .venv
+2026-10-29T20:48:31.5959651Z Resolved 17 packages in 0.57ms
+2026-10-29T20:48:31.5993970Z    Building rhizome @ file:///home/runner/work/rhizome/rhizome
+2026-10-29T20:48:31.6127483Z Downloading pygments (1.2MiB)
+2026-10-29T20:48:31.6311168Z Downloading ruff (9.9MiB)
+2026-10-29T20:48:31.6601467Z  Downloaded pygments
+2026-10-29T20:48:31.6941814Z  Downloaded ruff
+2026-10-29T20:48:32.0914690Z       Built rhizome @ file:///home/runner/work/rhizome/rhizome
+2026-10-29T20:48:32.0923095Z Prepared 16 packages in 495ms
+2026-10-29T20:48:32.1042866Z Installed 16 packages in 11ms
+2026-10-29T20:48:32.1043324Z  + iniconfig==2.3.1
+2026-10-29T20:48:32.1043692Z  + linkify-it-py==2.2.0
+2026-10-29T20:48:32.1044077Z  + markdown-it-py==4.2.0
+2026-10-29T20:48:32.1044426Z  + mdit-py-plugins==0.6.1
+2026-10-29T20:48:32.1044770Z  + mdurl==0.1.2
+2026-10-29T20:48:32.1045190Z  + packaging==26.3
+2026-10-29T20:48:32.1045504Z  + platformdirs==4.13.5
+2026-10-29T20:48:32.1045872Z  + pluggy==1.7.0
+2026-10-29T20:48:32.1046184Z  + pygments==2.21.0
+2026-10-29T20:48:32.1046523Z  + pytest==9.1.1
+2026-10-29T20:48:32.1046816Z  + pytest-asyncio==1.4.0
+2026-10-29T20:48:32.1047238Z  + rhizome==0.1.0 (from file:///home/runner/work/rhizome/rhizome)
+2026-10-29T20:48:32.1047687Z  + rich==15.0.0
+2026-10-29T20:48:32.1047997Z  + ruff==0.17.1
+2026-10-29T20:48:32.1048301Z  + textual==1.0.0
+2026-10-29T20:48:32.1048620Z  + typing-extensions==4.16.0
+2026-10-29T20:48:32.1172549Z ##[group]Run sudo apt-get update && sudo apt-get install -y tmux
+2026-10-29T20:48:32.1172934Z [36;1msudo apt-get update && sudo apt-get install -y tmux[0m
+2026-10-29T20:48:32.1200218Z shell: /usr/bin/bash -e {0}
+2026-10-29T20:48:32.1200425Z env:
+2026-10-29T20:48:32.1200608Z   LANG: en_US.UTF-8
+2026-10-29T20:48:32.1200789Z   LC_ALL: en_US.UTF-8
+2026-10-29T20:48:32.1200974Z   UV_PYTHON: 3.13
+2026-10-29T20:48:32.1201200Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-10-29T20:48:32.1201458Z ##[endgroup]
+2026-10-29T20:48:32.2022242Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-10-29T20:48:32.2277969Z Get:6 https://packages.microsoft.com/ubuntu/26.04/prod resolute InRelease [3,964 B]
+2026-10-29T20:48:32.2491786Z Get:7 https://packages.microsoft.com/ubuntu/26.04/prod resolute/main amd64 Packages [127 kB]
+2026-10-29T20:48:32.2620000Z Get:8 https://packages.microsoft.com/ubuntu/26.04/prod resolute/main arm64 Packages [116 kB]
+2026-10-29T20:48:32.3549073Z Hit:2 http://azure.archive.ubuntu.com/ubuntu resolute InRelease
+2026-10-29T20:48:32.3579016Z Get:3 http://azure.archive.ubuntu.com/ubuntu resolute-updates InRelease [137 kB]
+2026-10-29T20:48:32.3598584Z Get:4 http://azure.archive.ubuntu.com/ubuntu resolute-backports InRelease [137 kB]
+2026-10-29T20:48:32.3608725Z Get:5 http://azure.archive.ubuntu.com/ubuntu resolute-security InRelease [137 kB]
+2026-10-29T20:48:32.3758775Z Get:9 http://azure.archive.ubuntu.com/ubuntu resolute-updates/main amd64v3 Packages [804 kB]
+2026-10-29T20:48:32.3829708Z Get:10 http://azure.archive.ubuntu.com/ubuntu resolute-updates/main Translation-en [184 kB]
+2026-10-29T20:48:32.4039645Z Get:11 http://azure.archive.ubuntu.com/ubuntu resolute-updates/universe amd64v3 Packages [375 kB]
+2026-10-29T20:48:32.4040898Z Get:12 http://azure.archive.ubuntu.com/ubuntu resolute-updates/universe Translation-en [118 kB]
+2026-10-29T20:48:32.4041994Z Get:13 http://azure.archive.ubuntu.com/ubuntu resolute-updates/restricted amd64v3 Packages [543 kB]
+2026-10-29T20:48:32.4046600Z Get:14 http://azure.archive.ubuntu.com/ubuntu resolute-updates/restricted Translation-en [112 kB]
+2026-10-29T20:48:32.4057599Z Get:15 http://azure.archive.ubuntu.com/ubuntu resolute-security/main amd64v3 Packages [608 kB]
+2026-10-29T20:48:32.4086279Z Get:16 http://azure.archive.ubuntu.com/ubuntu resolute-security/main Translation-en [141 kB]
+2026-10-29T20:48:32.4098147Z Get:17 http://azure.archive.ubuntu.com/ubuntu resolute-security/universe amd64v3 Packages [206 kB]
+2026-10-29T20:48:32.4111342Z Get:18 http://azure.archive.ubuntu.com/ubuntu resolute-security/universe Translation-en [67.9 kB]
+2026-10-29T20:48:34.6780385Z Fetched 3,817 kB in 0s (10.4 MB/s)
+2026-10-29T20:48:35.1975995Z Reading package lists...
+2026-10-29T20:48:35.2260706Z Reading package lists...
+2026-10-29T20:48:35.3524608Z Building dependency tree...
+2026-10-29T20:48:35.3531948Z Reading state information...
+2026-10-29T20:48:35.3800044Z tmux is already the newest version (3.6a-2ubuntu0.2).
+2026-10-29T20:48:35.3800524Z tmux set to manually installed.
+2026-10-29T20:48:35.4265185Z Solving dependencies...
+2026-10-29T20:48:35.6077789Z 0 upgraded, 0 newly installed, 0 to remove and 15 not upgraded.
+2026-10-29T20:48:35.6802093Z ##[group]Run uname -a
+2026-10-29T20:48:35.6802344Z [36;1muname -a[0m
+2026-10-29T20:48:35.6802554Z [36;1mgit --version[0m
+2026-10-29T20:48:35.6802742Z [36;1mtmux -V[0m
+2026-10-29T20:48:35.6802938Z [36;1muv run python - <<'PY'[0m
+2026-10-29T20:48:35.6803171Z [36;1mimport re, subprocess[0m
+2026-10-29T20:48:35.6803498Z [36;1mfor command, floor in [(["git", "--version"], (2, 36)), (["tmux", "-V"], (3, 2))]:[0m
+2026-10-29T20:48:35.6803876Z [36;1m    text = subprocess.check_output(command, text=True)[0m
+2026-10-29T20:48:35.6804221Z [36;1m    found = tuple(map(int, re.search(r"(\d+)\.(\d+)", text).groups()))[0m
+2026-10-29T20:48:35.6804520Z [36;1m    assert found >= floor, text[0m
+2026-10-29T20:48:35.6804739Z [36;1mPY[0m
+2026-10-29T20:48:35.6831825Z shell: /usr/bin/bash -e {0}
+2026-10-29T20:48:35.6832032Z env:
+2026-10-29T20:48:35.6832195Z   LANG: en_US.UTF-8
+2026-10-29T20:48:35.6832379Z   LC_ALL: en_US.UTF-8
+2026-10-29T20:48:35.6832558Z   UV_PYTHON: 3.13
+2026-10-29T20:48:35.6832821Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-10-29T20:48:35.6833075Z ##[endgroup]
+2026-10-29T20:48:35.6897730Z Linux runnervmnwato 7.0.0-1017-azure #17-Ubuntu SMP PREEMPT Thu Sep 24 15:54:51 UTC 2026 x86_64 GNU/Linux
+2026-10-29T20:48:35.6910541Z git version 2.56.0
+2026-10-29T20:48:35.7578755Z tmux 3.6
+2026-10-29T20:48:35.8291453Z ##[group]Run uv run python scripts/tmux_smoke.py
+2026-10-29T20:48:35.8291953Z [36;1muv run python scripts/tmux_smoke.py[0m
+2026-10-29T20:48:35.8292383Z [36;1muv run python scripts/popup_smoke.py[0m
+2026-10-29T20:48:35.8292832Z [36;1muv run python scripts/popup_smoke.py --hotkey[0m
+2026-10-29T20:48:35.8293271Z [36;1muv run python scripts/pane_smoke.py[0m
+2026-10-29T20:48:35.8331237Z shell: /usr/bin/bash -e {0}
+2026-10-29T20:48:35.8331570Z env:
+2026-10-29T20:48:35.8331820Z   LANG: en_US.UTF-8
+2026-10-29T20:48:35.8332097Z   LC_ALL: en_US.UTF-8
+2026-10-29T20:48:35.8332389Z   UV_PYTHON: 3.13
+2026-10-29T20:48:35.8332730Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-10-29T20:48:35.8333122Z ##[endgroup]
+2026-10-29T20:48:37.1886114Z PASS: real tmux window starts, renders repository, and reuses its window
+2026-10-29T20:48:37.1892972Z Traceback (most recent call last):
+2026-10-29T20:48:37.1917509Z   File "/home/runner/work/rhizome/rhizome/scripts/tmux_smoke.py", line 69, in <module>
+2026-10-29T20:48:37.1917932Z     main()
+2026-10-29T20:48:37.1918103Z     ~~~~^^
+2026-10-29T20:48:37.1918432Z   File "/home/runner/work/rhizome/rhizome/scripts/tmux_smoke.py", line 30, in main
+2026-10-29T20:48:37.1918857Z     with tempfile.TemporaryDirectory(prefix="rhizome-smoke-") as temp:
+2026-10-29T20:48:37.1919193Z          ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-29T20:48:37.1919687Z   File "/home/runner/.local/share/uv/python/cpython-3.13.18-linux-x86_64-gnu/lib/python3.13/tempfile.py", line 1031, in __exit__
+2026-10-29T20:48:37.1920119Z     self.cleanup()
+2026-10-29T20:48:37.1920290Z     ~~~~~~~~~~~~^^
+2026-10-29T20:48:37.1920694Z   File "/home/runner/.local/share/uv/python/cpython-3.13.18-linux-x86_64-gnu/lib/python3.13/tempfile.py", line 1035, in cleanup
+2026-10-29T20:48:37.1921207Z     self._rmtree(self.name, ignore_errors=self._ignore_cleanup_errors)
+2026-10-29T20:48:37.1921526Z     ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-29T20:48:37.1922000Z   File "/home/runner/.local/share/uv/python/cpython-3.13.18-linux-x86_64-gnu/lib/python3.13/tempfile.py", line 1015, in _rmtree
+2026-10-29T20:48:37.1922496Z     _shutil.rmtree(name, onexc=onexc, dir_fd=dir_fd, _onexc_kwargs=True)
+2026-10-29T20:48:37.1922820Z     ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-29T20:48:37.1923310Z   File "/home/runner/.local/share/uv/python/cpython-3.13.18-linux-x86_64-gnu/lib/python3.13/shutil.py", line 770, in rmtree
+2026-10-29T20:48:37.1923740Z     _rmtree_safe_fd(stack, onexc)
+2026-10-29T20:48:37.1923945Z     ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+2026-10-29T20:48:37.1924378Z   File "/home/runner/.local/share/uv/python/cpython-3.13.18-linux-x86_64-gnu/lib/python3.13/shutil.py", line 708, in _rmtree_safe_fd
+2026-10-29T20:48:37.1926278Z     onexc(func, path, err, direntry=orig_entry, dir_fd=parent_fd)
+2026-10-29T20:48:37.1926614Z     ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-29T20:48:37.1927170Z   File "/home/runner/.local/share/uv/python/cpython-3.13.18-linux-x86_64-gnu/lib/python3.13/shutil.py", line 659, in _rmtree_safe_fd
+2026-10-29T20:48:37.1927638Z     os.rmdir(name, dir_fd=dirfd)
+2026-10-29T20:48:37.1927845Z     ~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+2026-10-29T20:48:37.1928194Z OSError: [Errno 39] Directory not empty: "/tmp/rhizome-smoke-_jbwvfcj/a repo's directory/tidal/.git"
+2026-10-29T20:48:37.2011060Z ##[error]Process completed with exit code 1.
+2026-10-29T20:48:37.2148644Z Post job cleanup.
+2026-10-29T20:48:37.2840193Z [command]/usr/bin/git version
+2026-10-29T20:48:37.2877084Z git version 2.56.0
+2026-10-29T20:48:37.2915846Z Temporarily overriding HOME='/home/runner/work/_temp/1db528c6-663d-44ff-9202-1e4a5655daf4' before making global git config changes
+2026-10-29T20:48:37.2917222Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-29T20:48:37.2920753Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/rhizome/rhizome
+2026-10-29T20:48:37.2946816Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-29T20:48:37.2978299Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-29T20:48:37.3238060Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-29T20:48:37.3265507Z http.https://github.com/.extraheader
+2026-10-29T20:48:37.3273845Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-29T20:48:37.3306107Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-29T20:48:37.3560988Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-29T20:48:37.3598992Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-29T20:48:37.3952267Z Cleaning up orphan processes
+2026-10-29T20:48:37.4286091Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, astral-sh/setup-uv@v6. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

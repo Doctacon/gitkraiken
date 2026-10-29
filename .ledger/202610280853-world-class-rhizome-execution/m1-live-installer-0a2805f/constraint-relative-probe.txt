@@ -1,0 +1,12 @@
+warning: Requirements file `runtime.txt` does not contain any dependencies
+warning: Requirements file `build.txt` does not contain any dependencies
+  × No solution found when resolving dependencies:
+  ╰─▶ Because rhizome-no-such-fixture was not found in the provided package
+      locations and you require rhizome-no-such-fixture==0, we can conclude
+      that your requirements are unsatisfiable.
+
+      hint: Packages were unavailable because index lookups were disabled
+      and no additional package locations were provided (try: `--find-links
+      <uri>`)
+
+PASS: both relative constraint paths resolved in a spaced payload directory; offline resolution reached the intentionally nonexistent package.
