@@ -442,29 +442,52 @@ async def test_local_namespaces_and_branch_labels_with_children_remain_distinct(
         assert sidebar._tree_nodes[key].is_expanded
 
 
-async def test_compact_footer_keeps_worktree_actions_and_pr_loading_explicit():
+async def test_sidebar_is_only_filter_and_full_height_horizontally_scrollable_tree():
     app = SidebarApp()
     async with app.run_test(size=(15, 20)) as pilot:
         sidebar = app.query_one(ReferenceSidebar)
-        worktree = Worktree(Path("/repo/linked"), "a" * 40, "topic")
+        path = Path("/repo/a-very-long-linked-worktree-path-tail")
+        worktree = Worktree(path, "a" * 40, "topic")
         data = Snapshot(Path("/repo"), "main", head="a" * 40, worktrees=(worktree,))
         sidebar.update_snapshot(data, None)
         await pilot.pause()
-        assert "/repo/linked" in sidebar._tree_nodes
-        assert not sidebar.query_one("#sidebar-worktree-new").disabled
-        tree, point = await hit_point(sidebar, pilot, "/repo/linked")
-        await click(pilot, tree, point)
-        await pilot.click("#sidebar-worktree-open")
-        await pilot.click("#sidebar-worktree-new")
-        assert app.worktree_opens[-1].selection.target == "/repo/linked"
-        assert app.worktree_creates[-1].root == Path("/repo")
 
-        assert sidebar.query_one("#sidebar-prs-load").label.plain == "Refresh PRs"
-        await pilot.click("#sidebar-prs-load")
-        assert app.pr_loads[-1].root == Path("/repo")
-        sidebar.update_pull_requests((), loading=False)
-        assert sidebar._tree_nodes["group:prs"].children[0].data.key == "group:prs-unsupported"
-        assert "GitHub.com and Azure DevOps" in sidebar.query_one("#sidebar-state").renderable.plain
+        assert len(sidebar.children) == 2
+        assert isinstance(sidebar.children[0], Input)
+        assert isinstance(sidebar.children[1], Tree)
+        for width in (13, 15, 18, 23, 25):
+            await pilot.resize_terminal(width, 20)
+            await pilot.pause()
+            assert sidebar._tree.region.bottom == sidebar.region.bottom
+
+        tree = sidebar.query_one(Tree)
+        assert tree.max_scroll_x > 0
+        tree.scroll_to(x=tree.max_scroll_x, animate=False)
+        await pilot.pause()
+        visible = "\n".join(
+            strip.text
+            for strip in app.screen._compositor.render_strips()[tree.region.y : tree.region.bottom]
+        )
+        assert "path-tail" in visible
+
+        unsupported = (
+            "PR listing supports GitHub.com and Azure DevOps. No supported remote is configured."
+        )
+        sidebar.update_pull_requests(())
+        await pilot.pause()
+        unsupported_node = sidebar._tree_nodes["group:prs"].children[0]
+        assert unsupported_node.label.plain == unsupported
+
+        message = "GitHub CLI [gh] is required; run gh auth login for github.com."
+        sidebar.update_pull_requests((pr_listing(error=message),))
+        await pilot.pause()
+        tree.scroll_to(x=tree.max_scroll_x, animate=False)
+        await pilot.pause()
+        visible = "\n".join(
+            strip.text
+            for strip in app.screen._compositor.render_strips()[tree.region.y : tree.region.bottom]
+        )
+        assert "github.com." in visible
 
 
 async def test_worktree_double_click_keeps_the_target_under_the_pointer():
@@ -494,7 +517,7 @@ def pr_listing(*requests: PullRequest, error: str = "") -> PullRequestListing:
     )
 
 
-async def test_unified_tree_has_ordered_coexisting_groups_and_compact_actions():
+async def test_unified_tree_has_ordered_coexisting_groups_and_independent_folds():
     app = SidebarApp()
     async with app.run_test(size=(15, 20)) as pilot:
         sidebar = app.query_one(ReferenceSidebar)
@@ -510,20 +533,9 @@ async def test_unified_tree_has_ordered_coexisting_groups_and_compact_actions():
             "group:tags",
             "group:stashes",
         ]
-        assert not list(sidebar.query("#sidebar-views, .view-tab"))
-        for width in (13, 15, 18, 23, 25):
-            await pilot.resize_terminal(width, 20)
-            await pilot.pause()
-            for ident, label in (
-                ("sidebar-worktree-new", "New"),
-                ("sidebar-worktree-open", "Open"),
-                ("sidebar-prs-load", "Refresh PRs"),
-            ):
-                button = sidebar.query_one(f"#{ident}")
-                assert button.render_line(0).text.strip() == label, (width, ident)
-            assert sidebar._tree.region.bottom <= sidebar.query_one("#sidebar-actions").region.y
+        assert not list(sidebar.query("#sidebar-actions, #sidebar-state-scroll, Button"))
 
-        # Real caret/label clicks fold only their own section and never load PRs.
+        # Real caret/label clicks fold only their own section.
         for key in ("group:local", "group:worktrees", "group:prs"):
             tree, point = await hit_point(sidebar, pilot, key, caret=True)
             await click(pilot, tree, point)
@@ -543,16 +555,9 @@ async def test_unified_tree_has_ordered_coexisting_groups_and_compact_actions():
         assert sidebar._tree_nodes["group:local"].is_collapsed
         assert sidebar._tree_nodes["group:worktrees"].is_collapsed
         assert sidebar._tree_nodes["group:prs"].is_expanded
-        assert sidebar.query_one("#sidebar-prs-load").label.plain == "Refresh PRs"
-        await pilot.resize_terminal(13, 20)
-        await pilot.pause()
-        assert sidebar.query_one("#sidebar-prs-load").render_line(0).text.strip() == "Refresh PRs"
-        assert not app.pr_loads
-        await pilot.click("#sidebar-prs-load")
-        assert app.pr_loads[-1].root == Path("/repo")
 
 
-async def test_sidebar_error_details_really_scroll_and_remain_scrollable_after_refresh():
+async def test_sidebar_error_is_literal_and_horizontally_scrollable_after_refresh():
     app = SidebarApp()
     async with app.run_test(size=(16, 20)) as pilot:
         sidebar = app.query_one(ReferenceSidebar)
@@ -561,24 +566,30 @@ async def test_sidebar_error_details_really_scroll_and_remain_scrollable_after_r
         message = "GitHub CLI [gh] is required. Install gh and run gh auth login for github.com."
         sidebar.update_pull_requests((pr_listing(error=message),))
         await pilot.pause()
-        assert sidebar.query_one("#sidebar-state").renderable.plain == f"origin: {message}"
-        details = sidebar.query_one("#sidebar-state-scroll")
-        assert details.max_scroll_y > 0
-        assert details.show_vertical_scrollbar
-        details.focus()
-        await pilot.press("end")
+        tree = sidebar.query_one(Tree)
+        error_node = sidebar._tree_nodes["group:prs:origin"].children[0]
+        assert error_node.label.plain == f"origin: {message}"
+        assert tree.max_scroll_x > 0
+        tree.scroll_to(x=tree.max_scroll_x, animate=False)
         await pilot.pause()
-        assert details.scroll_y == details.max_scroll_y
-        strips = app.screen._compositor.render_strips()
-        visible = "".join(strip.text for strip in strips[details.region.y : details.region.bottom])
-        assert "github.com" in visible
-        sidebar.set_busy(False)
-        sidebar.update_snapshot(snapshot(), None)
+        visible = "".join(
+            strip.text
+            for strip in app.screen._compositor.render_strips()[tree.region.y : tree.region.bottom]
+        )
+        assert "github.com." in visible
+
+        sidebar.update_snapshot(replace(snapshot(), stashes=()), None)
         await pilot.pause()
-        assert details.scroll_y == details.max_scroll_y
+        assert tree.max_scroll_x > 0
+        assert tree.scroll_x == tree.max_scroll_x
+        visible = "".join(
+            strip.text
+            for strip in app.screen._compositor.render_strips()[tree.region.y : tree.region.bottom]
+        )
+        assert "github.com." in visible
 
 
-async def test_selected_worktree_details_stay_readable_after_a_pr_error():
+async def test_selected_worktree_path_and_pr_error_stay_in_tree_and_tooltip():
     app = SidebarApp()
     async with app.run_test(size=(23, 20)) as pilot:
         sidebar = app.query_one(ReferenceSidebar)
@@ -587,12 +598,14 @@ async def test_selected_worktree_details_stay_readable_after_a_pr_error():
         sidebar.update_pull_requests((pr_listing(error="Install gh and run gh auth login."),))
         tree, point = await hit_point(sidebar, pilot, str(worktree.path))
         region = tree.region
+        node = sidebar._tree_nodes[str(worktree.path)]
+        assert str(worktree.path) in node.label.plain
+        await pilot.hover(tree, offset=point)
+        assert tree.tooltip.plain == str(worktree.path)
         await click(pilot, tree, point)
-        details = sidebar.query_one("#sidebar-state").renderable.plain
-        assert details.startswith(sidebar.get_selection(str(worktree.path)).label)
-        assert str(worktree.path) in details
-        assert "origin: Install gh" in details
-        assert sidebar.query_one("#sidebar-state-scroll").max_scroll_y > 0
+        assert sidebar.get_selection(str(worktree.path)).target == str(worktree.path)
+        error_node = sidebar._tree_nodes["group:prs:origin"].children[0]
+        assert error_node.label.plain == "origin: Install gh and run gh auth login."
         assert tree.region == region
 
 
@@ -651,7 +664,7 @@ async def test_typed_worktree_and_pr_filters_preserve_hidden_selection_and_state
         assert "bare repository" in sidebar._tree_nodes[str(bare.path)].data.label
         tree, point = await hit_point(sidebar, pilot, str(linked.path))
         await click(pilot, tree, point)
-        assert not sidebar.query_one("#sidebar-worktree-open").disabled
+        assert sidebar._active_key == str(linked.path)
         search = sidebar.query_one("#ref-filter", Input)
         search.value = "feature tree"
         await pilot.pause()
@@ -659,6 +672,7 @@ async def test_typed_worktree_and_pr_filters_preserve_hidden_selection_and_state
         assert str(detached.path) not in sidebar._tree_nodes
         selected = sidebar.get_selection(str(linked.path))
         assert selected and selected.kind == "linked-worktree"
+        assert selected.target == str(linked.path)
         await pilot.pause()
         search.value = "octocat"
         await pilot.pause()
@@ -670,22 +684,31 @@ async def test_typed_worktree_and_pr_filters_preserve_hidden_selection_and_state
             assert pr.url in sidebar._tree_nodes
 
 
-async def test_pr_remote_reset_and_busy_state_disable_sidebar_actions():
+async def test_pr_remote_reset_and_busy_state_block_only_worktree_open():
     app = SidebarApp()
-    data = replace(snapshot(), worktrees=(Worktree(Path("/repo/linked"), "a" * 40, "topic"),))
+    worktree = Worktree(Path("/repo/linked"), "a" * 40, "topic")
+    data = replace(snapshot(), worktrees=(worktree,))
     pr = PullRequest(7, "Title", "https://example.test/pr/7", "topic", "main")
     async with app.run_test(size=(30, 20)) as pilot:
         sidebar = app.query_one(ReferenceSidebar)
         sidebar.update_snapshot(data, None)
         sidebar.update_pull_requests((pr_listing(pr),))
         assert sidebar.get_pull_request(pr.url) == pr
+
         sidebar.set_busy(True)
-        await pilot.pause()
-        assert sidebar.query_one("#sidebar-worktree-new").disabled
-        assert sidebar.query_one("#sidebar-worktree-open").disabled
-        await pilot.pause()
-        assert sidebar.query_one("#sidebar-prs-load").disabled
+        tree, point = await hit_point(sidebar, pilot, str(worktree.path))
+        await click(pilot, tree, point, times=2)
+        assert app.selections[-1].selection.target == str(worktree.path)
+        assert not app.worktree_opens
+        tree, point = await hit_point(sidebar, pilot, "local:refs/heads/main")
+        await click(pilot, tree, point)
+        assert app.selections[-1].selection.target == "refs/heads/main"
+        assert not app.worktree_opens
+
         sidebar.set_busy(False)
+        tree, point = await hit_point(sidebar, pilot, str(worktree.path))
+        await click(pilot, tree, point, times=2)
+        assert app.worktree_opens[-1].selection.target == str(worktree.path)
         sidebar.update_snapshot(
             replace(data, remotes=(Remote("other", "https://example.test/other"),)), None
         )

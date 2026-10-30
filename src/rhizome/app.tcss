@@ -263,7 +263,7 @@ TabPane { padding: 1; }
 #commit-file-tree > .tree--cursor, #commit-file-tree:focus > .tree--cursor {
     background: $primary-muted;
     color: $text;
-    text-style: bold underline;
+    text-style: none;
 }
 /* Working copy keeps its staging controls and composer in the inspector. */
 .wip-actions { height: 2; }
@@ -301,7 +301,7 @@ TabPane { padding: 1; }
 #wip-table > .datatable--cursor {
     background: $primary-muted;
     color: $text;
-    text-style: bold underline;
+    text-style: none;
 }
 #staged-summary { height: 2; color: $foreground-muted; }
 #composer-guidance {

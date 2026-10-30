@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from test_app import choose_option, settle
 from test_sidebar import hit_point
-from textual.widgets import Button, Input, Static, TextArea
+from textual.widgets import Input, Static, TextArea
 from ui_helpers import click
 
 from rhizome.app import RhizomeApp
@@ -48,8 +48,9 @@ def listing():
 
 
 @pytest.mark.parametrize("directory", ["another tree", "trailing newline\n"])
+@pytest.mark.parametrize("method", ["double-click", "actions"])
 async def test_open_linked_worktree_without_modifying_either_checkout(
-    workspace, git_run, tmp_path, directory
+    workspace, git_run, tmp_path, directory, method
 ):
     linked = tmp_path / directory
     git_run(workspace, "worktree", "add", "-b", "feature/linked", str(linked))
@@ -60,8 +61,10 @@ async def test_open_linked_worktree_without_modifying_either_checkout(
         sidebar = app.query_one(ReferenceSidebar)
         item = selected(sidebar, "linked-worktree", str(linked))
         tree, point = await hit_point(sidebar, pilot, item.key)
-        await click(pilot, tree, point)
-        assert await pilot.click("#sidebar-worktree-open")
+        await click(pilot, tree, point, times=2 if method == "double-click" else 1)
+        if method == "actions":
+            await pilot.press("ctrl+p")
+            await choose_option(app, pilot, "open-worktree")
         await settle(app, pilot)
         assert app.repo.root == linked
         assert app.snapshot_data.branch == "feature/linked"
@@ -101,13 +104,13 @@ async def test_removed_worktree_cannot_open_an_obsolete_path(workspace, git_run,
         assert "no longer available" in app._last_error
 
 
-async def test_create_worktree_from_sidebar_uses_guarded_head_flow(workspace, git_run, tmp_path):
+async def test_create_worktree_from_actions_uses_guarded_head_flow(workspace, git_run, tmp_path):
     destination = tmp_path / "new tree"
     app = RhizomeApp(workspace)
     async with app.run_test(size=(120, 40)) as pilot:
         await settle(app, pilot)
-        assert await pilot.click("#sidebar-worktree-new")
-        await pilot.pause()
+        await pilot.press("ctrl+p")
+        await choose_option(app, pilot, "create-worktree")
         assert isinstance(app.screen, ActionPicker)
         await choose_option(app, pilot, "new-branch")
         assert isinstance(app.screen, PromptDialog)
@@ -149,7 +152,8 @@ async def test_pull_requests_load_automatically_and_open_read_only_details(
         await click(pilot, tree, point)
         assert sidebar._tree_nodes["group:prs"].is_expanded
         assert calls == [workspace]
-        assert await pilot.click("#sidebar-prs-load")
+        await pilot.press("ctrl+p")
+        await choose_option(app, pilot, "refresh-prs")
         await settle(app, pilot)
         assert calls == [workspace, workspace]
         pr = listing().requests[0]
@@ -170,6 +174,39 @@ async def test_pull_requests_load_automatically_and_open_read_only_details(
         assert calls == [workspace, workspace]
         assert selected(sidebar, "pull-request", pr.url) == item
         assert git_run(workspace, "branch", "--show-current").stdout.strip() == "main"
+
+
+async def test_moved_sidebar_actions_remain_blocked_while_busy(
+    workspace, git_run, tmp_path, monkeypatch
+):
+    linked = tmp_path / "linked"
+    git_run(workspace, "worktree", "add", "--detach", str(linked))
+    calls = []
+
+    def load(repo):
+        calls.append(repo.root)
+        return ()
+
+    monkeypatch.setattr(Repository, "open_pull_requests", load)
+    app = RhizomeApp(workspace)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await settle(app, pilot)
+        sidebar = app.query_one(ReferenceSidebar)
+        tree, point = await hit_point(sidebar, pilot, str(linked))
+        await click(pilot, tree, point)
+        before = list(calls)
+        app.set_busy(True)
+        await pilot.press("ctrl+p")
+        assert len(app.screen_stack) == 1
+        # Also reject requests already queued before the picker was dismissed.
+        for operation in ("create-worktree", "open-worktree", "refresh-prs"):
+            app.handle_picked_action(operation)
+            await pilot.pause()
+            assert len(app.screen_stack) == 1
+            assert app.repo.root == workspace
+            assert calls == before
+            assert not sidebar._pull_requests_loading
+        app.set_busy(False)
 
 
 async def test_pr_loading_rejects_duplicates_and_survives_help_modal(
@@ -194,7 +231,7 @@ async def test_pr_loading_rejects_duplicates_and_survives_help_modal(
             sidebar.post_message(ReferenceSidebar.PullRequestsRequested(workspace))
             await pilot.pause()
             assert not app.busy  # A hosted read must not freeze local inspection.
-            assert sidebar.query_one("#sidebar-prs-load", Button).disabled
+            assert sidebar._pull_requests_loading
             sidebar.post_message(ReferenceSidebar.PullRequestsRequested(workspace))
             app.action_help()
             await pilot.pause()

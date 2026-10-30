@@ -13,12 +13,13 @@ in the provider's web UI; selecting a PR never checks it out.
 
 Lists refresh on opening/resuming the workspace and on the configurable 60-second
 automatic cadence, while active and network access is enabled. Offline settings
-pause automatic requests. Use **Refresh PRs** to reload sooner when network access
-is enabled. Existing results stay visible during automatic
+pause automatic requests. Choose **Refresh PRs** in **Actions / Ctrl+P** to reload
+sooner when network access is enabled. Existing results stay visible during automatic
 refreshes; expanding/collapsing sections does not trigger extra requests. Lists are
 session-local, reset when the repository or remotes change, and refreshed after
 creating a PR. Each remote has its own
-empty/error state, so one unavailable provider does not hide successful results.
+empty/error state in the tree, so one unavailable provider does not hide successful
+results. Use the tree's horizontal scrollbar to read long diagnostics.
 Unsupported remotes show a setup explanation rather than an empty-looking success.
 Provider listings are paginated; oversized or malformed responses produce an explicit
 error rather than silently presenting a partial list.

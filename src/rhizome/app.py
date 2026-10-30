@@ -1689,7 +1689,9 @@ class RhizomeApp(App[None]):
         if selection.kind == "worktree":
             self.jump_to("wip")
         elif selection.kind == "linked-worktree":
-            self.status(f"{selection.target} · double-click or Open to switch worktrees")
+            self.status(
+                f"{selection.target} · double-click or use Open selected worktree in Actions"
+            )
         elif selection.kind == "pull-request":
             self.status(f"Selected {selection.label}")
         elif selection.kind == "all":
@@ -3250,6 +3252,23 @@ class RhizomeApp(App[None]):
             ("refresh", "Refresh local repository"),
             ("create-branch", "Create and check out a branch"),
         ]
+        snapshot = self.snapshot_data
+        if snapshot and self.repo:
+            actions.append(("refresh-prs", "Refresh PRs"))
+            if snapshot.head and not snapshot.operation and not snapshot.conflicts:
+                actions.append(("create-worktree", "Create worktree at HEAD…"))
+            selection = self._sidebar_selection
+            if (
+                selection
+                and selection.kind == "linked-worktree"
+                and any(
+                    str(worktree.path) == selection.target
+                    and not worktree.bare
+                    and not worktree.prunable
+                    for worktree in snapshot.worktrees
+                )
+            ):
+                actions.append(("open-worktree", "Open selected worktree"))
         if self._history_scope:
             actions.extend(
                 [
@@ -3343,6 +3362,18 @@ class RhizomeApp(App[None]):
             self.action_open_repository()
         elif operation == "refresh":
             self.action_refresh()
+        elif operation in {"create-worktree", "open-worktree", "refresh-prs"}:
+            if self.repo is None:
+                return
+            sidebar = self.query_one(ReferenceSidebar)
+            if operation == "create-worktree":
+                sidebar.post_message(ReferenceSidebar.WorktreeCreateRequested(self.repo.root))
+            elif operation == "refresh-prs":
+                sidebar.post_message(ReferenceSidebar.PullRequestsRequested(self.repo.root))
+            elif self._sidebar_selection:
+                sidebar.post_message(
+                    ReferenceSidebar.WorktreeOpenRequested(self._sidebar_selection, self.repo.root)
+                )
         elif operation == "all":
             self.action_clear_filter()
         elif operation == "locate-ref":

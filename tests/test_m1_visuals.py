@@ -1,6 +1,7 @@
 """Focused M1 visual affordance checks using the real application workspace."""
 
 import pytest
+from rich.console import Console
 from textual.widgets import Button, DataTable, Select, Static, Switch
 
 from rhizome.app import RhizomeApp
@@ -24,12 +25,17 @@ async def test_narrow_toolbar_labels_and_workspace_shortcut_are_not_clipped(git_
         assert isinstance(app.screen, WorkspaceControlsDialog)
 
 
-async def test_precision_range_has_explicit_textual_selection_feedback(git_repo, git_run):
+@pytest.mark.parametrize("preference", ["light", "dark", "high-contrast"])
+async def test_precision_diff_uses_colors_and_selection_without_text_decoration(
+    git_repo, git_run, preference
+):
+    WorkspaceStateStore().save("global", {"theme": preference})
     path = git_repo / "notes.txt"
-    path.write_text("one\ntwo\nthree\n")
+    path.write_text("one\nvalue = 'old'\nremove this\nthree\n")
     git_run(git_repo, "add", "notes.txt")
     git_run(git_repo, "commit", "-m", "base")
-    path.write_text("one\nTWO\nthree\n")
+    edited = "one\nvalue = 'new'\nthree\nadded alone\n"
+    path.write_text(edited)
 
     app = RhizomeApp(git_repo)
     async with app.run_test(size=(80, 24)) as pilot:
@@ -38,12 +44,56 @@ async def test_precision_range_has_explicit_textual_selection_feedback(git_repo,
         app.query_one("#wip-table", DataTable).focus()
         await pilot.press("enter")
         await app.workers.wait_for_complete()
-        await pilot.press("v", "down")
-
-        status = app.query_one("#precision-status", Static)
-        assert "SELECTION:" in str(status.renderable)
+        await pilot.pause()
         lines = app.query_one("#precision-lines", DataTable)
-        assert lines.get_component_styles("datatable--cursor").text_style.underline
+        document = app._patch_document
+        assert document is not None
+        console = Console()
+        colors = {"add": app._palette.addition, "delete": app._palette.deletion}
+        source = [lines.get_row_at(row)[0].plain for row in range(lines.row_count)]
+
+        for marked in (False, True):
+            if marked:
+                await pilot.press("v", "down")
+                status = app.query_one("#precision-status", Static)
+                assert "SELECTION: 2 diff rows" in str(status.renderable)
+            for row, line in enumerate(document.lines):
+                text = lines.get_row_at(row)[0]
+                for offset in range(len(text)):
+                    style = text.get_style_at_offset(console, offset)
+                    assert not style.bold and not style.underline
+                if line.kind in colors:
+                    style = text.get_style_at_offset(console, len(text) - 1)
+                    assert style.color.get_truecolor().hex == colors[line.kind]
+            # Inspect terminal segments too: cursor CSS must not reintroduce
+            # decoration over otherwise plain Rich text.
+            for y in range(lines.size.height):
+                for segment in lines.render_line(y):
+                    if segment.text.strip() and segment.style:
+                        assert not segment.style.bold and not segment.style.underline
+                        row = segment.style.meta.get("row", -1)
+                        if 0 <= row < len(document.lines) and document.lines[row].kind in colors:
+                            expected = colors[document.lines[row].kind]
+                            assert segment.style.color.get_truecolor().hex == expected
+            assert [lines.get_row_at(row)[0].plain for row in range(lines.row_count)] == source
+
+        selected = app.query_one("#precision-diff")._painted_selection
+        assert len(selected) == 2
+        for line_id in selected:
+            text = lines.get_cell(str(line_id), "line")
+            style = text.get_style_at_offset(console, 0)
+            assert style.bgcolor.get_truecolor().hex == app._palette.selection
+        for selector, component in (
+            ("#precision-lines", "datatable--cursor"),
+            ("#wip-table", "datatable--cursor"),
+            ("#commit-file-tree", "tree--cursor"),
+        ):
+            cursor = app.query_one(selector).get_component_rich_style(component)
+            assert cursor.bgcolor is not None
+            assert not cursor.bold and not cursor.underline
+        assert app._patch_document is document
+        assert path.read_text() == edited
+        assert not git_run(git_repo, "diff", "--cached").stdout
 
 
 async def test_f4_controls_expose_all_actions_and_diagnostics_by_keyboard(git_repo):

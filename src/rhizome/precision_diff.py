@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from difflib import SequenceMatcher
 
 from rich.text import Text
 from textual import events, on
@@ -130,7 +129,7 @@ class PrecisionDiff(Vertical):
     PrecisionDiff #precision-lines > .datatable--cursor {
         background: $primary-muted;
         color: $text;
-        text-style: bold underline;
+        text-style: none;
     }
     PrecisionDiff #precision-lines > .datatable--hover { background: $panel; }
     PrecisionDiff #precision-note {
@@ -189,7 +188,6 @@ class PrecisionDiff(Vertical):
         self._search_index = -1
         self._base_lines: dict[int, Text] = {}
         self._painted_selection: set[int] = set()
-        self._word_pairs: dict[int, str] = {}
 
     def compose(self):
         yield Static("PRECISION DIFF", classes="precision-heading")
@@ -200,6 +198,7 @@ class PrecisionDiff(Vertical):
         yield _PatchTable(
             id="precision-lines",
             cursor_type="row",
+            cursor_foreground_priority="renderable",
             zebra_stripes=False,
             show_header=False,
         )
@@ -224,25 +223,6 @@ class PrecisionDiff(Vertical):
     def set_document(self, document: PatchDocument, *, context: int = 3) -> None:
         """Render *document* while retaining that exact immutable object for apply."""
         self._document = document
-        self._word_pairs = {}
-        deleted: list[PatchLine] = []
-        added: list[PatchLine] = []
-
-        def pair_block() -> None:
-            for old, new in zip(deleted, added, strict=False):
-                self._word_pairs[old.id] = new.text[1:]
-                self._word_pairs[new.id] = old.text[1:]
-            deleted.clear()
-            added.clear()
-
-        for line in document.lines:
-            if line.kind == "delete":
-                deleted.append(line)
-            elif line.kind == "add":
-                added.append(line)
-            else:
-                pair_block()
-        pair_block()
         self._diff_context = context
         self._stale = False
         self._anchor = None
@@ -344,24 +324,7 @@ class PrecisionDiff(Vertical):
             "context": LIGHT.text,
         }[line.kind]
         text = Text(prefix + display, style=color, no_wrap=True, overflow="ellipsis")
-        if line.kind in {"add", "delete"} and not self._show_whitespace:
-            for start, end in self._changed_words(line):
-                text.stylize("bold underline", len(prefix) + start, len(prefix) + end)
         return theme_text(text, self._palette)
-
-    def _changed_words(self, line: PatchLine) -> list[tuple[int, int]]:
-        """Emphasize changed token spans within an addition/deletion, cosmetically."""
-        if not self._document:
-            return []
-        source, other = line.text[1:], self._word_pairs.get(line.id)
-        if other is None or max(len(source), len(other)) > 1000:
-            return [(0, len(source))]
-        matcher = SequenceMatcher(a=source, b=other)
-        spans: list[tuple[int, int]] = []
-        for tag, start, end, _, _ in matcher.get_opcodes():
-            if tag != "equal" and start != end:
-                spans.append((start, end))
-        return spans or [(0, len(source))]
 
     @on(DataTable.RowSelected)
     def _line_selected(self, event: DataTable.RowSelected) -> None:
@@ -423,11 +386,9 @@ class PrecisionDiff(Vertical):
         for line_id in marked ^ self._painted_selection:
             rendered = self._base_lines[line_id].copy()
             if line_id in marked:
-                # The fill makes scanning quick; the underline/bold marker keeps
-                # a selected range legible on monochrome or low-saturation terminals.
-                rendered.stylize(
-                    f"bold underline {self._palette.text} on {self._palette.selection}"
-                )
+                # Keep source text quiet and its add/remove colors intact.
+                # The fill and explicit SELECTION status identify the marked range.
+                rendered.stylize(f"on {self._palette.selection}")
             table.update_cell(str(line_id), "line", rendered)
         self._painted_selection = marked
         status = self.query_one("#precision-status", Static)

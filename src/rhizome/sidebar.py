@@ -13,10 +13,9 @@ from typing import Literal
 from rich.text import Text
 from textual import events, on
 from textual.app import ComposeResult
-from textual.containers import Container, Horizontal, VerticalScroll
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import Button, Input, Static, Tree
+from textual.widgets import Input, Tree
 from textual.widgets._tree import TreeNode
 
 from .models import Ref, Snapshot, Stash, Worktree
@@ -52,17 +51,6 @@ class _Group:
     key: str
     label: str
     tooltip: str = ""
-
-
-class _SidebarButton(Button):
-    """Textual's Button adds two cells of padding even when CSS padding is zero."""
-
-    def render(self) -> Text:
-        label = self.label.copy()
-        label.stylize_before(self.rich_style)
-        label.justify = "center"
-        label.no_wrap = True
-        return label
 
 
 class _ReferenceTree(Tree[SidebarSelection | _Group]):
@@ -135,26 +123,6 @@ class ReferenceSidebar(Widget):
         background: $panel;
         layout: vertical;
     }
-    ReferenceSidebar > #sidebar-actions {
-        height: 2;
-        layout: vertical;
-        padding: 0 1;
-        background: $panel;
-    }
-    ReferenceSidebar > #sidebar-actions .worktree-actions {
-        height: 1;
-        layout: horizontal;
-    }
-    ReferenceSidebar > #sidebar-actions Button {
-        width: 1fr;
-        min-width: 0;
-        height: 1;
-        min-height: 1;
-        padding: 0;
-        border: none;
-        background: $primary-muted;
-        color: $text;
-    }
     ReferenceSidebar > Input {
         height: 1;
         min-height: 1;
@@ -165,21 +133,6 @@ class ReferenceSidebar(Widget):
         color: $text;
     }
     ReferenceSidebar > Input:focus { background: $surface; border: none; }
-    ReferenceSidebar > #sidebar-state-scroll {
-        /* Fixed detail space keeps the tree still between physical clicks. */
-        height: 4;
-        min-height: 4;
-        max-height: 4;
-        margin: 0 1;
-        padding: 0 1;
-        background: $warning-muted;
-        color: $text;
-        scrollbar-size-vertical: 1;
-    }
-    ReferenceSidebar #sidebar-state {
-        height: auto;
-        color: $text;
-    }
     ReferenceSidebar > Tree {
         height: 1fr;
         margin: 1 0 0 0;
@@ -278,15 +231,6 @@ class ReferenceSidebar(Widget):
         placeholder = "Filter refs..." if self._plain_glyphs else "Filter refs…"
         yield Input(placeholder=placeholder, id="ref-filter")
         yield self._tree
-        # Footer controls are intentionally below the tree: they stay visible
-        # and do not make a worktree move after its first physical click.
-        with Container(id="sidebar-actions"):
-            with Horizontal(classes="worktree-actions"):
-                yield _SidebarButton("New", id="sidebar-worktree-new")
-                yield _SidebarButton("Open", id="sidebar-worktree-open")
-            yield _SidebarButton("Refresh PRs", id="sidebar-prs-load")
-        with VerticalScroll(id="sidebar-state-scroll", can_focus=True):
-            yield Static("", id="sidebar-state")
 
     def set_plain_glyphs(self, enabled: bool) -> None:
         """Switch generated UI marks without changing reference or path text."""
@@ -301,7 +245,6 @@ class ReferenceSidebar(Widget):
             )
         if self._snapshot is not None:
             self._rebuild(self._snapshot)
-        self._sync_controls()
 
     def get_selection(self, key: str) -> SidebarSelection | None:
         return self._leaves.get(key)
@@ -312,7 +255,6 @@ class ReferenceSidebar(Widget):
 
     def set_busy(self, busy: bool) -> None:
         self._busy = busy
-        self._sync_controls()
 
     def update_pull_requests(
         self, listings: tuple[PullRequestListing, ...] | None, *, loading: bool = False
@@ -329,63 +271,10 @@ class ReferenceSidebar(Widget):
                     self._pull_requests[request.url] = request
         if self._snapshot is not None and (changed or (listings is None and loading_changed)):
             self._rebuild(self._snapshot)
-        self._sync_controls()
 
     def set_pull_requests_loading(self, loading: bool) -> None:
         """Keep existing PRs visible while refreshing them in the background."""
         self.update_pull_requests(self._pull_request_listings, loading=loading)
-
-    def _sync_controls(self) -> None:
-        if not self.is_mounted:
-            return
-        snapshot = self._snapshot
-        selected = self._leaves.get(self._active_key or "")
-        can_open = bool(
-            selected and selected.kind == "linked-worktree" and self._worktree_openable(selected)
-        )
-        can_new = bool(
-            snapshot and snapshot.head and not snapshot.operation and not snapshot.conflicts
-        )
-        self.query_one("#sidebar-worktree-open", Button).disabled = self._busy or not can_open
-        self.query_one("#sidebar-worktree-new", Button).disabled = self._busy or not can_new
-        self.query_one("#sidebar-prs-load", Button).disabled = (
-            self._busy or self._pull_requests_loading or not snapshot
-        )
-        load = self.query_one("#sidebar-prs-load", Button)
-        # A dedicated footer row keeps the network action named in full at
-        # every supported width; it is an action, never PR navigation.
-        load.label = "Refresh PRs"
-        state = self.query_one("#sidebar-state", Static)
-        details: list[str] = []
-        if selected and selected.kind == "linked-worktree":
-            # Keep this first: a PR diagnostic must not hide the selected path.
-            details.append(selected.label)
-        if self._pull_requests_loading and self._pull_request_listings is None:
-            details.append(
-                "Loading open pull requests..."
-                if self._plain_glyphs
-                else "Loading open pull requests…"
-            )
-        elif self._pull_request_listings is not None:
-            if not self._pull_request_listings:
-                details.append(
-                    "PR listing supports GitHub.com and Azure DevOps. "
-                    "No supported remote is configured."
-                )
-            details.extend(
-                f"{listing.remote}: {listing.error}"
-                for listing in self._pull_request_listings
-                if listing.error
-            )
-        if not details:
-            details.append("Select a worktree to see its full path.")
-        message = "\n".join(details)
-        if state.renderable != Text(message):
-            state.update(Text(message))
-            self.query_one("#sidebar-state-scroll", VerticalScroll).scroll_home(animate=False)
-        # This region deliberately remains mounted and sized even when it has
-        # only its prompt, so selecting a worktree cannot move its row.
-        self.query_one("#sidebar-state-scroll").display = True
 
     def set_active(self, selection: SidebarSelection | None) -> None:
         """Style a selection in-place; this intentionally doesn't alter scroll."""
@@ -395,7 +284,6 @@ class ReferenceSidebar(Widget):
             node = self._tree_nodes.get(key) if key else None
             if node is not None and isinstance(node.data, SidebarSelection):
                 self._set_leaf_label(node, node.data, key == self._active_key)
-        self._sync_controls()
 
     def update_snapshot(
         self, snapshot: Snapshot, active: SidebarSelection | None
@@ -430,7 +318,6 @@ class ReferenceSidebar(Widget):
             self._signature = signature
         reconciled = self._reconcile(active)
         self.set_active(reconciled)
-        self._sync_controls()
         return reconciled
 
     def _reconcile(self, active: SidebarSelection | None) -> SidebarSelection | None:
@@ -447,33 +334,6 @@ class ReferenceSidebar(Widget):
                 None,
             )
         return self._leaves.get(active.key)
-
-    @on(Button.Pressed, "#sidebar-worktree-new")
-    def _new_worktree(self, event: Button.Pressed) -> None:
-        event.stop()
-        if self._snapshot is not None and not event.button.disabled:
-            self.post_message(self.WorktreeCreateRequested(self._snapshot.root))
-
-    @on(Button.Pressed, "#sidebar-worktree-open")
-    def _open_worktree(self, event: Button.Pressed) -> None:
-        event.stop()
-        selection = self._leaves.get(self._active_key or "")
-        if (
-            self._root is not None
-            and selection
-            and self._worktree_openable(selection)
-            and not event.button.disabled
-        ):
-            self.post_message(self.WorktreeOpenRequested(selection, self._root))
-
-    @on(Button.Pressed, "#sidebar-prs-load")
-    def _load_prs(self, event: Button.Pressed) -> None:
-        event.stop()
-        if self._root is not None and not event.button.disabled:
-            self.post_message(self.PullRequestsRequested(self._root))
-
-    def on_resize(self, event: events.Resize) -> None:
-        self._sync_controls()
 
     @on(Input.Changed, "#ref-filter")
     def _filter_changed(self, event: Input.Changed) -> None:
@@ -532,7 +392,11 @@ class ReferenceSidebar(Widget):
             ):
                 # Browsing a ref never checks it out. Checkout is an explicit
                 # command; opening another registered worktree is navigation.
-                if data.kind == "linked-worktree" and self._worktree_openable(data):
+                if (
+                    data.kind == "linked-worktree"
+                    and not self._busy
+                    and self._worktree_openable(data)
+                ):
                     self.post_message(self.WorktreeOpenRequested(data, self._root))
             return
         self._click_latch = (data.key, label_hit) if isinstance(data, SidebarSelection) else None
@@ -845,9 +709,13 @@ class ReferenceSidebar(Widget):
             )
             return
         if not self._pull_request_listings:
+            diagnostic = (
+                "PR listing supports GitHub.com and Azure DevOps. "
+                "No supported remote is configured."
+            )
             root.add(
-                Text("No supported remotes", no_wrap=True),
-                _Group("group:prs-unsupported", "No supported remotes"),
+                Text(diagnostic, no_wrap=True, overflow=self._overflow),
+                _Group("group:prs-unsupported", diagnostic),
                 allow_expand=False,
             )
             return
@@ -861,14 +729,10 @@ class ReferenceSidebar(Widget):
             error = listing.error
             if error:
                 # Text is intentionally literal: remote diagnostics may contain brackets.
+                diagnostic = f"{remote}: {error}"
                 group.add_leaf(
-                    Text(
-                        "Could not load - see details below"
-                        if self._plain_glyphs
-                        else "Could not load — see details below",
-                        no_wrap=True,
-                    ),
-                    _Group(f"group:prs-error:{remote}", error),
+                    Text(diagnostic, no_wrap=True, overflow=self._overflow),
+                    _Group(f"group:prs-error:{remote}", diagnostic),
                 )
             elif not requests:
                 group.add_leaf(

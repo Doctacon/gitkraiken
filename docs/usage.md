@@ -44,9 +44,13 @@ and Back summon one primary task rather than squeezing all panels together.
   for exact commit actions, or its branch-name badge for branch-specific actions.
 - **Details:** activate a changed file to open its diff. Back/Esc restores the
   graph; merely selecting a commit does not open a file diff.
-- **Worktrees:** opening a registered worktree is navigation to another checkout,
-  not a checkout operation in the current tree. New worktree creation leaves the
-  current checkout intact and asks for an explicit branch/detached choice and path.
+- **Worktrees:** double-click a registered worktree, or select it and choose
+  **Open selected worktree** in **Actions / Ctrl+P**. This navigates to another
+  checkout without changing the current one. **Create worktree at HEAD** in Actions
+  asks for an explicit branch/detached choice and path, leaving this checkout intact.
+- **Sidebar scrolling:** the tree fills the sidebar below its filter. Long paths
+  and PR diagnostics are available through its horizontal scrollbar; there is no
+  fixed action or detail footer.
 
 Only an explicit **Checkout** command changes the checkout. Remote checkout uses
 exact remote-ref identity: an unrelated same-named local branch is not silently
@@ -88,8 +92,10 @@ suppressed in the workspace.
 3. Press **v** to anchor a contiguous range, extend it with arrows, then **s** to
    stage or **u** to unstage. Mouse click/Shift-click select ranges. Hunk controls
    operate on the current hunk. File and all-file staging remain available.
-4. Search, expand context, show whitespace and inspect word emphasis as reading
-   aids. These controls never reconstruct the Git patch from displayed text.
+4. Search, expand context, or show whitespace as reading aids. Added/removed lines
+   use colors and +/- markers; selections use a background highlight and an explicit
+   row count, without bold or underlined code. These controls never reconstruct the
+   Git patch from displayed text.
 5. Choose **Commit / F3** and write a summary and optional body. The composer shows
    staged-file scope. Choose **Commit** to run native Git against the reviewed index.
    The workspace temporarily hands over the terminal so hooks/signing can prompt,

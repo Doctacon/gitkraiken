@@ -6,7 +6,7 @@ import shlex
 import subprocess
 import threading
 
-from test_app import settle
+from test_app import choose_option, settle
 from textual import events
 from textual.widgets import DataTable, Static, Tree
 
@@ -55,7 +55,8 @@ async def test_slow_explicit_hosted_read_keeps_local_inspection_available(
     async with app.run_test(size=(170, 48)) as pilot:
         try:
             await settle(app, pilot)
-            await pilot.click("#sidebar-prs-load")
+            await pilot.press("ctrl+p")
+            await choose_option(app, pilot, "refresh-prs")
             for _ in range(200):
                 await pilot.pause(0.01)
                 if started.exists():
@@ -119,7 +120,8 @@ async def test_pr_results_are_bound_to_the_captured_remote_even_after_an_aba_cha
             return run(command, *args, **kwargs)
 
         monkeypatch.setattr(subprocess, "run", transport)
-        await pilot.click("#sidebar-prs-load")
+        await pilot.press("ctrl+p")
+        await choose_option(app, pilot, "refresh-prs")
         await app.workers.wait_for_complete()
         await pilot.pause()
         assert changed and len(api_calls) == 1
