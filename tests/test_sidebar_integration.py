@@ -6,12 +6,13 @@ from pathlib import Path
 import pytest
 from test_app import choose_option, settle
 from test_sidebar import hit_point
-from textual.widgets import Input, Static, TextArea
+from textual.widgets import Input, Static, TextArea, Tree
 from ui_helpers import click
 
 from rhizome.app import RhizomeApp
 from rhizome.dialogs import ActionPicker, PromptDialog
 from rhizome.git import Repository
+from rhizome.persistence import WorkspaceStateStore
 from rhizome.pull_request_dialog import PullRequestDetailsDialog
 from rhizome.pull_requests import PullRequest, PullRequestListing, hosted_repository
 from rhizome.sidebar import ReferenceSidebar
@@ -21,6 +22,52 @@ from rhizome.sidebar import ReferenceSidebar
 def workspace(git_repo, git_run):
     git_run(git_repo, "commit", "--allow-empty", "-m", "Initial")
     return git_repo
+
+
+@pytest.mark.parametrize("down,up", [("j", "k"), ("ctrl+alt+j", "ctrl+alt+k")])
+async def test_repository_tree_jk_matches_arrows_without_stealing_filter_input(workspace, down, up):
+    if down != "j":
+        WorkspaceStateStore().save("global", {"keymap": {"next_row": down, "previous_row": up}})
+    app = RhizomeApp(workspace)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await settle(app, pilot)
+        sidebar = app.query_one(ReferenceSidebar)
+        tree = sidebar.query_one(Tree)
+        search = sidebar.query_one("#ref-filter", Input)
+        search.focus()
+        await pilot.press("tab")
+        assert app.focused is tree
+
+        start = tree.root.children[0]
+        start.expand()
+        tree.move_cursor(start)
+        await pilot.pause()
+        await pilot.press("down")
+        following = tree.cursor_node
+        assert following is not None and following is not start
+        await pilot.press("up")
+        assert tree.cursor_node is start
+
+        if down != "j":
+            # Remapping must replace the defaults, not add hard-coded tree keys.
+            await pilot.press("j")
+            assert tree.cursor_node is start
+            await pilot.press("k")
+            assert tree.cursor_node is start
+        await pilot.press(down)
+        assert tree.cursor_node is following
+        await pilot.press(up)
+        assert tree.cursor_node is start
+        assert app.focused is tree
+
+        await pilot.press("shift+tab")
+        assert app.focused is search
+        await pilot.press("j", "k")
+        assert search.value == "jk"
+        assert app.focused is search
+        assert not app.busy
+        assert app.snapshot_data.branch == "main"
+        assert not app._last_error
 
 
 def selected(sidebar, kind, target):

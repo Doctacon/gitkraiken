@@ -45,7 +45,7 @@ See `dialog-layout-validation.md`. These remain headless UI checks, not human or
 platform acceptance. HEAD advanced externally during the follow-up; this session
 did not issue a commit or push.
 
-## Current requested feature: Pull / Fetch split button
+## Implemented follow-up: Pull / Fetch split button
 
 The operator supplied the four-mode dropdown screenshot and explicitly chose
 **Implement all four modes**, including guarded merge/rebase pull and pull-owned
@@ -60,6 +60,22 @@ Fresh adversarial regressions cover all six reviewed safety defects; current Git
 and actual Git 2.36 runs pass. Full roadmap, human, large-history and platform
 acceptance remain separate. No release, commit, push, or external network validation
 is implied.
+
+## Keyboard follow-up: repository navigation
+
+Fixed `j`/`k` in the repository tree. The shared next/previous-row handlers accepted
+only tables and the commit-file tree; they now accept Textual trees generally.
+A real-app regression first reproduced `j` leaving the cursor stationary while
+Down Arrow moved it. It now passes for default and remapped navigation keys,
+including Tab/Shift+Tab focus traversal and literal `jk` typing in the ref filter.
+
+Validation: **52 sidebar/integration/commit-file/settings cases plus one history
+navigation case passed**. Ruff, formatting and whitespace checks pass. Commands:
+
+```sh
+uv run pytest tests/test_sidebar.py tests/test_sidebar_integration.py tests/test_commit_files.py tests/test_m2_settings.py -q -p no:cacheprovider
+uv run pytest tests/test_app.py -k smooth_graph_toggle_preserves_selection_search_and_navigation -q -p no:cacheprovider
+```
 
 ## Current M2 state
 

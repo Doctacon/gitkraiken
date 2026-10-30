@@ -30,6 +30,7 @@ from textual.widgets import (
     TabbedContent,
     TabPane,
     TextArea,
+    Tree,
 )
 
 from .activity import ActivityDialog
@@ -4420,9 +4421,9 @@ class RhizomeApp(App[None]):
             self.push_screen(HelpDialog(self._settings["keymap"]))
 
     def action_next_row(self) -> None:
-        if isinstance(self.focused, (DataTable, CommitFileTree)):
+        if isinstance(self.focused, (DataTable, Tree)):
             self.focused.action_cursor_down()
 
     def action_previous_row(self) -> None:
-        if isinstance(self.focused, (DataTable, CommitFileTree)):
+        if isinstance(self.focused, (DataTable, Tree)):
             self.focused.action_cursor_up()
