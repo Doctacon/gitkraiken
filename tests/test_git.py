@@ -58,6 +58,23 @@ def test_empty_repository_snapshot(git_repo: Path) -> None:
     assert not snapshot.has_more
 
 
+def test_snapshot_can_poll_workspace_without_loading_legacy_history(git_repo, git_run):
+    oid = commit_file(git_run, git_repo, "tracked.txt", "base\n", "base")
+    (git_repo / "tracked.txt").write_text("changed\n")
+    repo = Repository(git_repo)
+
+    snapshot = repo.snapshot(include_history=False)
+
+    assert snapshot.head == oid
+    assert snapshot.branch == "main"
+    assert snapshot.refs[0].oid == oid
+    assert snapshot.files[0].path == "tracked.txt"
+    assert snapshot.files[0].unstaged
+    assert snapshot.history == ()
+    assert not snapshot.has_more
+    assert repo.snapshot().history[0].commit.oid == oid
+
+
 def test_history_detail_root_commit_detached_and_limit(git_repo: Path, git_run) -> None:
     first = commit_file(git_run, git_repo, "first.txt", "one\n", "first subject")
     second = commit_file(git_run, git_repo, "second.txt", "two\n", "second subject")

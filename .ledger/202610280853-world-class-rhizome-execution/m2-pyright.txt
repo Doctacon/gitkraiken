@@ -1,0 +1,172 @@
+WARNING: there is a new pyright version available (v1.1.404 -> v1.1.414).
+Please install the new version or set PYRIGHT_PYTHON_FORCE_VERSION to `latest`
+
+/Users/crlough/Code/personal/rhizome/src/rhizome/app.py
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:1250:9 - error: Method "push_screen" overrides class "App" in an incompatible manner
+    Return type mismatch: base method returns type "AwaitMount", override returns type "Future[Unknown] | AwaitMount"
+      Type "Future[Unknown] | AwaitMount" is not assignable to type "AwaitMount"
+        "Future[Unknown]" is not assignable to "AwaitMount" (reportIncompatibleMethodOverride)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:1400:93 - error: "key" is not a known attribute of "None" (reportOptionalMemberAccess)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:1433:14 - error: Cannot assign to attribute "_history_trail" for class "RhizomeApp*"
+    Expression of type "list[None]" cannot be assigned to attribute "_history_trail" of class "RhizomeApp"
+      "list[None]" is not assignable to "list[str | None]"
+        Type parameter "_T@list" is invariant, but "None" is not the same as "str | None"
+        Consider switching from "list" to "Sequence" which is covariant (reportAttributeAccessIssue)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:1450:25 - error: Argument of type "str" cannot be assigned to parameter "kind" of type "Literal['local', 'remote', 'tag']" in function "__init__"
+    Type "str" is not assignable to type "Literal['local', 'remote', 'tag']"
+      "str" is not assignable to type "Literal['local']"
+      "str" is not assignable to type "Literal['remote']"
+      "str" is not assignable to type "Literal['tag']" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:1539:49 - error: "remotes" is not a known attribute of "None" (reportOptionalMemberAccess)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:2229:66 - error: "remote" is possibly unbound (reportPossiblyUnboundVariable)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:2229:78 - error: "remote_name" is possibly unbound (reportPossiblyUnboundVariable)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:2236:43 - error: "source" is possibly unbound (reportPossiblyUnboundVariable)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:2236:83 - error: "remote_name" is possibly unbound (reportPossiblyUnboundVariable)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:2246:38 - error: "source" is possibly unbound (reportPossiblyUnboundVariable)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:2247:40 - error: "remote_name" is possibly unbound (reportPossiblyUnboundVariable)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:2530:59 - error: "detail" is not a known attribute of "None" (reportOptionalMemberAccess)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:2669:62 - error: "diff" is not a known attribute of "None" (reportOptionalMemberAccess)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:2672:42 - error: Argument of type "Repository | None" cannot be assigned to parameter "repo" of type "Repository" in function "__init__"
+    Type "Repository | None" is not assignable to type "Repository"
+      "None" is not assignable to "Repository" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:2968:22 - error: Cannot assign to attribute "_history_trail" for class "RhizomeApp*"
+    Expression of type "list[None]" cannot be assigned to attribute "_history_trail" of class "RhizomeApp"
+      "list[None]" is not assignable to "list[str | None]"
+        Type parameter "_T@list" is invariant, but "None" is not the same as "str | None"
+        Consider switching from "list" to "Sequence" which is covariant (reportAttributeAccessIssue)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:2969:71 - error: Argument of type "Snapshot | None" cannot be assigned to parameter "snapshot" of type "Snapshot" in function "_captured_badges_snapshot"
+    Type "Snapshot | None" is not assignable to type "Snapshot"
+      "None" is not assignable to "Snapshot" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:2973:62 - error: Argument of type "Snapshot | None" cannot be assigned to parameter "snapshot" of type "Snapshot" in function "_with_history"
+    Type "Snapshot | None" is not assignable to type "Snapshot"
+      "None" is not assignable to "Snapshot" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:3010:62 - error: Argument of type "Snapshot | None" cannot be assigned to parameter "snapshot" of type "Snapshot" in function "_with_history"
+    Type "Snapshot | None" is not assignable to type "Snapshot"
+      "None" is not assignable to "Snapshot" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:3533:39 - error: Object of type "None" is not subscriptable (reportOptionalSubscript)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:3614:25 - error: "result" is possibly unbound (reportPossiblyUnboundVariable)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:3616:32 - error: "result" is possibly unbound (reportPossiblyUnboundVariable)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/app.py:4048:9 - error: Method "action_quit" overrides class "App" in an incompatible manner
+    Return type mismatch: base method returns type "CoroutineType[Any, Any, None]", override returns type "None"
+      "None" is not assignable to "CoroutineType[Any, Any, None]" (reportIncompatibleMethodOverride)
+/Users/crlough/Code/personal/rhizome/src/rhizome/git.py
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:301:18 - error: No overloads for "run" match the provided arguments (reportCallIssue)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "bufsize" of type "int" in function "run"
+    "object" is not assignable to "int" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "executable" of type "StrOrBytesPath | None" in function "run"
+    Type "object" is not assignable to type "StrOrBytesPath | None"
+      "object" is not assignable to "str"
+      "object" is not assignable to "bytes"
+      "object" is incompatible with protocol "PathLike[str]"
+        "__fspath__" is not present
+      "object" is incompatible with protocol "PathLike[bytes]"
+        "__fspath__" is not present
+      "object" is not assignable to "None" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "stdin" of type "_FILE" in function "run"
+    Type "object" is not assignable to type "_FILE"
+      "object" is not assignable to "None"
+      "object" is not assignable to "int"
+      "object" is not assignable to "IO[Any]" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "stdout" of type "_FILE" in function "run"
+    Type "object" is not assignable to type "_FILE"
+      "object" is not assignable to "None"
+      "object" is not assignable to "int"
+      "object" is not assignable to "IO[Any]" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "stderr" of type "_FILE" in function "run"
+    Type "object" is not assignable to type "_FILE"
+      "object" is not assignable to "None"
+      "object" is not assignable to "int"
+      "object" is not assignable to "IO[Any]" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "preexec_fn" of type "(() -> Any) | None" in function "run"
+    Type "object" is not assignable to type "(() -> Any) | None"
+      Type "object" is not assignable to type "() -> Any"
+      "object" is not assignable to "None" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "close_fds" of type "bool" in function "run"
+    "object" is not assignable to "bool" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "shell" of type "bool" in function "run"
+    "object" is not assignable to "bool" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "universal_newlines" of type "bool | None" in function "run"
+    Type "object" is not assignable to type "bool | None"
+      "object" is not assignable to "bool"
+      "object" is not assignable to "None" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "creationflags" of type "int" in function "run"
+    "object" is not assignable to "int" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "restore_signals" of type "bool" in function "run"
+    "object" is not assignable to "bool" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "start_new_session" of type "bool" in function "run"
+    "object" is not assignable to "bool" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "pass_fds" of type "Collection[int]" in function "run"
+    "object" is incompatible with protocol "Collection[int]"
+      "__len__" is not present
+      "__iter__" is not present
+      "__contains__" is not present (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "encoding" of type "str | None" in function "run"
+    Type "object" is not assignable to type "str | None"
+      "object" is not assignable to "str"
+      "object" is not assignable to "None" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "errors" of type "str | None" in function "run"
+    Type "object" is not assignable to type "str | None"
+      "object" is not assignable to "str"
+      "object" is not assignable to "None" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "input" of type "_InputString | None" in function "run"
+    Type "object" is not assignable to type "_InputString | None"
+      "object" is incompatible with protocol "Buffer"
+        "__buffer__" is not present
+      "object" is not assignable to "str"
+      "object" is not assignable to "None" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "text" of type "bool | None" in function "run"
+    Type "object" is not assignable to type "bool | None"
+      "object" is not assignable to "bool"
+      "object" is not assignable to "None" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "user" of type "str | int | None" in function "run"
+    Type "object" is not assignable to type "str | int | None"
+      "object" is not assignable to "str"
+      "object" is not assignable to "int"
+      "object" is not assignable to "None" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "group" of type "str | int | None" in function "run"
+    Type "object" is not assignable to type "str | int | None"
+      "object" is not assignable to "str"
+      "object" is not assignable to "int"
+      "object" is not assignable to "None" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "extra_groups" of type "Iterable[str | int] | None" in function "run"
+    Type "object" is not assignable to type "Iterable[str | int] | None"
+      "object" is incompatible with protocol "Iterable[str | int]"
+        "__iter__" is not present
+      "object" is not assignable to "None" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "umask" of type "int" in function "run"
+    "object" is not assignable to "int" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "pipesize" of type "int" in function "run"
+    "object" is not assignable to "int" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:308:15 - error: Argument of type "object" cannot be assigned to parameter "process_group" of type "int | None" in function "run"
+    Type "object" is not assignable to type "int | None"
+      "object" is not assignable to "int"
+      "object" is not assignable to "None" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:598:31 - error: Argument of type "int | None" cannot be assigned to parameter "fd" of type "int" in function "dup"
+    Type "int | None" is not assignable to type "int"
+      "None" is not assignable to "int" (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:607:18 - error: Argument of type "int | None" cannot be assigned to parameter "fd" of type "FileDescriptorLike" in function "fsync"
+    Type "int | None" is not assignable to type "FileDescriptorLike"
+      Type "None" is not assignable to type "FileDescriptorLike"
+        "None" is not assignable to "int"
+        "None" is incompatible with protocol "HasFileno"
+          "fileno" is not present (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:848:18 - error: Argument of type "int | None" cannot be assigned to parameter "fd" of type "FileDescriptorLike" in function "fsync"
+    Type "int | None" is not assignable to type "FileDescriptorLike"
+      Type "None" is not assignable to type "FileDescriptorLike"
+        "None" is not assignable to "int"
+        "None" is incompatible with protocol "HasFileno"
+          "fileno" is not present (reportArgumentType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:1322:81 - error: Function with declared return type "str" must return value on all code paths
+    "None" is not assignable to "str" (reportReturnType)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:2142:54 - error: "readline" is not a known attribute of "None" (reportOptionalMemberAccess)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:2148:51 - error: "read" is not a known attribute of "None" (reportOptionalMemberAccess)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/git.py:2710:37 - error: Argument of type "str | bytes" cannot be assigned to parameter "value" of type "bytes" in function "_decode"
+    Type "str | bytes" is not assignable to type "bytes"
+      "str" is not assignable to "bytes" (reportArgumentType)
+/Users/crlough/Code/personal/rhizome/src/rhizome/investigation_dialogs.py
+  /Users/crlough/Code/personal/rhizome/src/rhizome/investigation_dialogs.py:510:34 - error: "complete" is not a known attribute of "None" (reportOptionalMemberAccess)
+  /Users/crlough/Code/personal/rhizome/src/rhizome/investigation_dialogs.py:510:51 - error: "next_cursor" is not a known attribute of "None" (reportOptionalMemberAccess)
+/Users/crlough/Code/personal/rhizome/src/rhizome/theme.py
+  /Users/crlough/Code/personal/rhizome/src/rhizome/theme.py:227:33 - error: Cannot access attribute "get_truecolor" for class "object"
+    Attribute "get_truecolor" is unknown (reportAttributeAccessIssue)
+56 errors, 0 warnings, 0 informations

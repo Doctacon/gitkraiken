@@ -34,6 +34,34 @@ def git(root, *args):
     return subprocess.check_output(["git", "-C", str(root), *args], text=True).strip()
 
 
+def fast_commit_chain(root, ref, start, count):
+    stream = []
+    previous = start
+    for index in range(count):
+        mark = index + 1
+        subject = f"window commit {index}"
+        stream.extend(
+            (
+                f"commit {ref}\n",
+                f"mark :{mark}\n",
+                f"committer Test User <test@example.invalid> {946684800 + index} +0000\n",
+                f"data {len(subject)}\n{subject}\n",
+                f"from {previous if index == 0 else f':{index}'}\n",
+                "\n",
+            )
+        )
+        previous = f":{mark}"
+    stream.append("done\n")
+    subprocess.run(
+        ["git", "fast-import", "--quiet"],
+        cwd=root,
+        check=True,
+        text=True,
+        input="".join(stream),
+        capture_output=True,
+    )
+
+
 async def settle(app, pilot):
     for _ in range(100):
         await pilot.pause(0.05)
@@ -225,7 +253,7 @@ async def test_history_author_and_date_time_columns_survive_style_and_size_chang
         assert app._selected_commit.date == "2024-02-03T04:05:06+05:30"
 
 
-async def test_graph_timeline_stays_newest_first_across_styles_and_load_more(
+async def test_graph_order_is_explicit_and_independent_of_style(
     git_repo, git_run, monkeypatch, local_timezone
 ):
     local_timezone("UTC")
@@ -243,37 +271,30 @@ async def test_graph_timeline_stays_newest_first_across_styles_and_load_more(
     git_run(git_repo, "switch", "main")
     older = dated_commit(2)
     newest = dated_commit(4)
-    expected = [newest, middle, older, base]
+    chronological = [newest, middle, older, base]
+    topology = git(git_repo, "rev-list", "--topo-order", "--all").splitlines()
+    expected = set(chronological)
     app = RhizomeApp(git_repo)
-    app.limit = 2
     async with app.run_test(size=(170, 45)) as pilot:
         await settle(app, pilot)
         table = app.query_one("#graph-table", DataTable)
 
-        async def assert_timeline(count):
-            for _ in range(2):
-                commit_rows = [
-                    row.key.value for row in table.ordered_rows if row.key.value in app._commits
-                ]
-                assert commit_rows == expected[:count]
-                dates = [table.get_cell(oid, "date").plain for oid in commit_rows]
-                assert dates == sorted(dates, reverse=True)
-                assert list(app._commits) == expected[:count]
-                app.action_toggle_graph_style()
-                await settle(app, pilot)
+        def commit_rows():
+            return [row.key.value for row in table.ordered_rows if row.key.value in expected]
 
-        assert app.snapshot_data.has_more
-        await assert_timeline(2)
-        app.jump_to(middle)
+        assert commit_rows() == topology
+        assert await pilot.click("#graph-style")
         await settle(app, pilot)
-        assert await pilot.click("#load-more")
+        assert commit_rows() == topology
+
+        assert await pilot.click("#graph-order")
         await settle(app, pilot)
-        assert not app.snapshot_data.has_more
-        assert app._history_key == middle
-        await assert_timeline(4)
-        await click_reference(app, pilot, "refs/heads/main")
+        assert commit_rows() == chronological
+        dates = [table.get_cell(oid, "date").plain for oid in chronological]
+        assert dates == sorted(dates, reverse=True)
+        assert await pilot.click("#graph-style")
         await settle(app, pilot)
-        await assert_timeline(4)
+        assert commit_rows() == chronological
 
 
 async def test_workspace_pane_drags_survive_refresh_collapse_and_terminal_resize(demo_repo):
@@ -931,34 +952,47 @@ async def test_remote_double_click_selects_without_changing_upstream(branch_repo
 async def test_out_of_window_tip_does_not_filter_or_autoload_but_explicit_load_reveals_it(
     branch_repo,
 ):
+    main = git(branch_repo, "rev-parse", "main")
+    old_topic = git(branch_repo, "rev-parse", "test")
+    fast_commit_chain(branch_repo, "refs/heads/test", old_topic, 301)
+    topic = git(branch_repo, "rev-parse", "test")
+    git(branch_repo, "switch", "test")
     app = RhizomeApp(branch_repo)
-    app.limit = 1
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
-        main = git(branch_repo, "rev-parse", "main")
-        topic = git(branch_repo, "rev-parse", "test")
-        assert main not in app._commits and topic in app._commits
-        app.jump_to(topic)
+        table = app.query_one("#graph-table", DataTable)
+
+        def loaded_rows():
+            return [
+                row.key.value
+                for row in table.ordered_rows
+                if not str(row.key.value).startswith("connector-") and row.key.value != "wip"
+            ]
+
+        assert len(loaded_rows()) == 300
+        assert main not in loaded_rows() and topic in loaded_rows()
+        table.move_cursor(row=table.get_row_index(topic), animate=False)
+        table.focus()
+        await pilot.press("enter")
         await settle(app, pilot)
-        before = app._graph_rows
+        before = loaded_rows()
+
         await click_reference(app, pilot, "refs/heads/main")
         await settle(app, pilot)
-        assert app.limit == 1
-        assert app._graph_rows is before
-        assert app._history_key == topic
-        assert app._selected_commit.oid == topic
-        assert app._selected_ref == "refs/heads/main"
-        assert "Tip not loaded" in str(app.query_one("#history-caption", Static).render())
-        app.action_refresh()
+        assert loaded_rows() == before
+        assert table.ordered_rows[table.cursor_row].key.value == topic
+        assert git(branch_repo, "branch", "--show-current") == "test"
+        assert "Tip not in this window" in str(app.query_one("#history-caption", Static).render())
+
+        assert await pilot.click("#load-more")
         await settle(app, pilot)
-        assert app._selected_ref == "refs/heads/main"
-        assert app.limit == 1
-        await pilot.click("#load-more")
-        await settle(app, pilot)
-        assert app.limit == 301
-        assert main in app._commits and topic in app._commits
-        assert app._history_key == main
-        assert "Tip not loaded" not in str(app.query_one("#history-caption", Static).render())
+        assert len(loaded_rows()) <= 300
+        assert main in loaded_rows()
+        assert topic not in loaded_rows()
+        assert git(branch_repo, "branch", "--show-current") == "test"
+        assert "Tip not in this window" not in str(
+            app.query_one("#history-caption", Static).render()
+        )
 
 
 async def test_sidebar_search_does_not_change_graph_or_steal_graph_shortcuts(demo_repo):

@@ -1,0 +1,69 @@
+F.F                                                                      [100%]
+=================================== FAILURES ===================================
+_______ test_split_newline_side_wrapping_and_explicit_canonical_staging ________
+
+git_repo = PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1731/test_split_newline_side_wrappi0/worktree')
+git_run = <function git_run.<locals>.run at 0x10a0e8400>
+
+    async def test_split_newline_side_wrapping_and_explicit_canonical_staging(git_repo, git_run):
+        path = git_repo / "split.txt"
+        path.write_text("before")
+        git_run(git_repo, "add", path.name)
+        git_run(git_repo, "commit", "-m", "base")
+        replacement = "after\n" + "long content " * 30 + "\n"
+        path.write_text(replacement)
+        WorkspaceStateStore().save("global", {"diff_layout": "split"})
+        app = RhizomeApp(git_repo)
+        async with app.run_test(size=(200, 50)) as pilot:
+            await settle(app, pilot)
+            app.open_diff(Repository(git_repo).snapshot(include_history=False).files[0])
+            await settle(app, pilot)
+            table = app.query_one("#split-lines", DataTable)
+            markers = [table.get_row_at(row) for row in range(table.row_count) if "No newline" in str(table.get_row_at(row))]
+            assert len(markers) == 1
+            assert "No newline" in str(markers[0][0])
+>           assert "No newline" not in str(markers[0][1])
+E           AssertionError: assert 'No newline' not in '      ! \\ ... end of file'
+E             
+E             'No newline' is contained here:
+E                     ! \ No newline at end of file
+E             ?           ++++++++++
+
+tests/test_m2_split.py:80: AssertionError
+______ test_stale_split_returns_without_bypassing_canonical_review_guard _______
+
+git_repo = PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1731/test_stale_split_returns_witho0/worktree')
+git_run = <function git_run.<locals>.run at 0x109c67740>
+
+    async def test_stale_split_returns_without_bypassing_canonical_review_guard(git_repo, git_run):
+        path = git_repo / "stale.txt"
+        path.write_text("before\n")
+        git_run(git_repo, "add", path.name)
+        git_run(git_repo, "commit", "-m", "base")
+        path.write_text("reviewed\n")
+        WorkspaceStateStore().save("global", {"diff_layout": "split"})
+        app = RhizomeApp(git_repo)
+        async with app.run_test(size=(200, 50)) as pilot:
+            await settle(app, pilot)
+            app.open_diff(Repository(git_repo).snapshot(include_history=False).files[0])
+            await settle(app, pilot)
+            path.write_text("external edit\n")
+            await pilot.press("ctrl+r")
+            await settle(app, pilot)
+            assert "STALE" in str(app.query_one(".split-caption", Static).renderable)
+            assert str(app.query_one("#split-show-unified", Button).label) == "Unified view"
+            assert await pilot.click("#split-show-unified")
+            await pilot.press("h", "s")
+            await settle(app, pilot)
+>           assert "STALE" in str(app.query_one("#precision-status", Static).renderable)
+E           AssertionError: assert 'STALE' in 'Changed on disk — refresh before applying a selection.'
+E            +  where 'Changed on disk — refresh before applying a selection.' = str('Changed on disk — refresh before applying a selection.')
+E            +    where 'Changed on disk — refresh before applying a selection.' = Static(id='precision-status').renderable
+E            +      where Static(id='precision-status') = query_one('#precision-status', Static)
+E            +        where query_one = RhizomeApp(title='Rhizome', classes={'-light-mode'}, pseudo_classes={'focus', 'light'}).query_one
+
+tests/test_m2_split.py:133: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_m2_split.py::test_split_newline_side_wrapping_and_explicit_canonical_staging
+FAILED tests/test_m2_split.py::test_stale_split_returns_without_bypassing_canonical_review_guard
+2 failed, 1 passed, 2 deselected in 9.56s

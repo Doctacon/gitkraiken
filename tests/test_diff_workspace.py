@@ -269,6 +269,9 @@ async def test_back_restores_graph_scroll_search_and_selection(file_repo, git_ru
         await settle(app, pilot)
         search = app.query_one("#graph-filter", Input)
         search.value = "Base files"
+        await pilot.pause(0.2)  # Scoped search is debounced and does not itself navigate.
+        await settle(app, pilot)
+        assert await pilot.click("#search-next")
         await settle(app, pilot)
         table = app.query_one("#graph-table", DataTable)
         tree = app.query_one(CommitFileTree)

@@ -10,6 +10,8 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, OptionList, Static, TextArea
 from textual.widgets.option_list import Option
 
+from .settings import COMMANDS
+
 
 class ActionPicker(ModalScreen[str | None]):
     BINDINGS = [("escape", "cancel", "Cancel")]
@@ -83,14 +85,14 @@ class MessageDialog(ModalScreen[str | None]):
         height: auto;
         max-height: 24;
         padding: 1 2;
-        border: round #4f8790;
-        background: #ffffff;
+        border: round $primary-muted;
+        background: $surface;
     }
     MessageDialog #message-value {
         height: 10;
         max-height: 14;
-        border: round #a8c1c7;
-        background: #f5fafa;
+        border: round $primary-muted;
+        background: $surface;
     }
     MessageDialog .dialog-buttons { height: 3; margin-top: 1; align: right middle; }
     MessageDialog .dialog-buttons Button { margin-left: 1; }
@@ -103,7 +105,11 @@ class MessageDialog(ModalScreen[str | None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="message-dialog"):
             yield Label(Text(self.heading), classes="dialog-title")
-            yield TextArea(self.value, id="message-value", theme="github_light")
+            yield TextArea(
+                self.value,
+                id="message-value",
+                theme="monokai" if self.app.current_theme.dark else "github_light",
+            )
             with Horizontal(classes="dialog-buttons"):
                 yield Button("Cancel", id="cancel")
                 yield Button("Save", id="confirm", variant="primary")
@@ -153,17 +159,17 @@ class BranchContextMenu(ModalScreen[str | None]):
         height: 3;
         max-width: 100%;
         padding: 0 1;
-        border: round #4f8790;
-        background: #ffffff;
-        color: #14232c;
+        border: round $primary-muted;
+        background: $surface;
+        color: $text;
         scrollbar-size: 1 1;
     }
     BranchContextMenu > #branch-context-menu:focus {
-        border: round #006d77;
+        border: round $primary;
     }
     BranchContextMenu > #branch-context-menu > .option-list--option-highlighted {
-        background: #d8eeee;
-        color: #14232c;
+        background: $primary-muted;
+        color: $text;
         text-style: none;
     }
     """
@@ -269,36 +275,34 @@ class BranchContextMenu(ModalScreen[str | None]):
 class HelpDialog(ModalScreen[None]):
     BINDINGS = [("escape", "close", "Close"), ("question_mark", "close", "Close")]
 
+    def __init__(self, keymap: dict[str, str] | None = None) -> None:
+        super().__init__()
+        self._keymap = keymap or {}
+
     def compose(self) -> ComposeResult:
+        commands = "\n".join(
+            f"{self._keymap.get(command.id, command.keys):<20} {command.description}"
+            for command in COMMANDS
+        )
         with Vertical(id="action-picker"):
             yield Label("YOUR REPOSITORY, AT YOUR FINGERTIPS", classes="dialog-title")
             with VerticalScroll():
                 yield Static(
                     Text(
+                        "CURRENT WORKSPACE COMMANDS (editors retain their own keys)\n"
+                        + commands
+                        + "\n\n"
                         "DAILY FLOW: inspect a changed file, choose exact lines or a hunk, stage, then write a commit.\n"
                         "This is optional guidance—your existing Git message style still works.\n\n"
-                        "↑ ↓ / j k     Navigate history and file lists\n"
-                        "Enter / click Inspect commit/file; select branch context\n"
-                        "/ or f        Search message, author, SHA, or ref\n"
-                        "Enter in search / Next  Jump to next match\n"
-                        "g             Switch Smooth / Compact graph\n"
-                        "Esc           Back to graph; otherwise clear search / selection\n"
-                        "Ctrl+P / x    Actions for the selected item\n"
-                        "Ctrl+L        Activity (closing never cancels Git)\n"
-                        "F2 / F3       Files / commit composer\n"
-                        "F4            Workspace controls and local diagnostics\n"
-                        "Ctrl+O        Open another local repository\n"
-                        "Ctrl+R / r    Refresh local state\n"
-                        "Ctrl+B        Create a branch\n"
-                        "Ctrl+Left     Toggle branch sidebar\n"
-                        "Ctrl+Right    Toggle inspector\n"
-                        "Ctrl+Q        Quit\n\n"
-                        "Files / F2 opens working changes; activate a file to review.\n"
+                        "Arrow keys navigate; Enter / click inspects a commit or file.\n"
+                        "Enter in search / Next jumps to the next captured-scope match.\n"
+                        "Esc returns to the graph, then clears search / selection.\n\n"
+                        "Files opens working changes; activate a file to review.\n"
                         "In a precision diff: v anchors a range; arrows extend it;\n"
                         "s stages, u unstages. Mouse/Shift-click and hunk controls work too.\n"
                         "Search, context and whitespace are reading aids, not patch input.\n"
                         "External edits mark the captured review stale: refresh/reselect.\n"
-                        "Commit / F3 opens the durable composer for staged changes.\n"
+                        "Commit opens the durable composer for staged changes.\n"
                         "On repository open, saved drafts take priority over Git templates.\n"
                         "Edit a loaded template before committing; summary/body style is optional.\n"
                         "Git owns editor-mode cleanup, encoding and message hooks.\n"
@@ -314,7 +318,7 @@ class HelpDialog(ModalScreen[None]):
                         "Drag a column header's right-edge │ to resize it.\n"
                         "Sizes are remembered for this running session.\n"
                         "Small panes show one primary task: Files, Commit, Refs or Back.\n"
-                        "F4 settings apply to this workspace or all workspaces. Global offline\n"
+                        "Workspace settings apply locally or to all workspaces. Global offline\n"
                         "is the master stop for network work; a workspace cannot bypass it.\n"
                         "Excluding a workspace keeps drafts, view and preferences session-only.\n"
                         "Reopen restores saved draft and view context when it is still valid.\n\n"
@@ -343,8 +347,12 @@ class HelpDialog(ModalScreen[None]):
                         "Discard, resets and message rewriting remain gated for safety.\n"
                         "A visible legacy choice is not permission to bypass that gate.\n"
                         "History dates use your computer's local timezone.\n"
-                        "Actions → Locate moves to its tip; Load more reveals\n"
-                        "unloaded tips explicitly (up to 5,000 commits).\n"
+                        "Older / Newer replace bounded history windows, without a total ceiling.\n"
+                        "Topology is the default; author-time order is separate from graph style.\n"
+                        "Ref selection never filters history: Focus is explicit and reversible.\n"
+                        "Search examines the captured scope, not only rendered rows.\n"
+                        "Changed refs are reported; Refresh explicitly captures new roots.\n"
+                        "Split diffs are read-only; Unified enables supported exact staging.\n"
                         "Carets / Space fold sections, remotes and namespaces.\n"
                         "Sidebar search reveals matches without changing history;\n"
                         "clear it to restore folds. Escape clears that search first.\n"
@@ -365,7 +373,8 @@ class HelpDialog(ModalScreen[None]):
                         "shell/editor keeps running; Ctrl+Q quits and restores it.\n"
                         "Explicit --popup: prefix + d or prefix + g detaches.\n"
                         "The hotkey requires the generated tmux binding."
-                    )
+                    ),
+                    id="help-text",
                 )
             yield Button("Close", id="cancel")
 

@@ -9,7 +9,7 @@ from rich.style import Style
 from rich.text import Text
 
 from .models import Ref, Snapshot, Worktree
-from .theme import MUTED, PROVIDER_COLORS, TEAL
+from .theme import LIGHT, MUTED, PROVIDER_COLORS, TEAL, Palette, theme_text
 
 _LOCAL = TEAL
 _WORKTREE = "#28733a"
@@ -29,7 +29,11 @@ class RefBadges:
 
 
 def build_ref_badges(
-    snapshot: Snapshot, selected_ref: str = "", *, plain_glyphs: bool = False
+    snapshot: Snapshot,
+    selected_ref: str = "",
+    *,
+    plain_glyphs: bool = False,
+    palette: Palette = LIGHT,
 ) -> dict[str, RefBadges]:
     """Group actual typed pointers by OID, independent of history selection.
 
@@ -167,5 +171,5 @@ def build_ref_badges(
                 else "\n… Full refs are listed in commit details."
             )
         text.stylize(Style(meta={"ref_description": tooltip}))
-        badges[oid] = RefBadges(text, description)
+        badges[oid] = RefBadges(theme_text(text, palette), theme_text(description, palette))
     return badges

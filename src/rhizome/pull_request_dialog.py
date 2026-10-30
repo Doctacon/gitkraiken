@@ -31,21 +31,21 @@ class PullRequestDialog(ModalScreen[str | None]):
         height: 32;
         max-height: 95%;
         padding: 1 2;
-        border: round #4f8790;
-        background: #ffffff;
+        border: round $primary-muted;
+        background: $surface;
     }
     PullRequestDialog #pr-content { height: 1fr; min-height: 1; }
     PullRequestDialog.created > #pr-dialog { height: 18; }
     PullRequestDialog #pr-form, PullRequestDialog #pr-result { height: auto; }
-    PullRequestDialog .pr-field-label { margin-top: 1; color: #36505b; }
+    PullRequestDialog .pr-field-label { margin-top: 1; color: $foreground-muted; }
     PullRequestDialog #pr-title { margin-bottom: 0; }
     PullRequestDialog #pr-description {
         height: 8;
-        border: round #a8c1c7;
-        background: #f5fafa;
+        border: round $primary-muted;
+        background: $surface;
     }
-    PullRequestDialog #pr-feedback { height: auto; margin-top: 1; color: #b13a48; }
-    PullRequestDialog #pr-feedback.copied { color: #007c78; }
+    PullRequestDialog #pr-feedback { height: auto; margin-top: 1; color: $error; }
+    PullRequestDialog #pr-feedback.copied { color: $success; }
     PullRequestDialog #pr-url { width: 1fr; height: auto; margin-top: 1; }
     PullRequestDialog #pr-result { display: none; }
     PullRequestDialog.created #pr-form, PullRequestDialog.created .dialog-detail { display: none; }
@@ -90,7 +90,11 @@ class PullRequestDialog(ModalScreen[str | None]):
                     yield Label("Title (required)", classes="pr-field-label")
                     yield Input(self._draft[0], placeholder="Summarize this change", id="pr-title")
                     yield Label("Description (optional · Markdown)", classes="pr-field-label")
-                    yield TextArea(self._draft[1], id="pr-description", theme="github_light")
+                    yield TextArea(
+                        self._draft[1],
+                        id="pr-description",
+                        theme="monokai" if self.app.current_theme.dark else "github_light",
+                    )
                     yield Static("", id="pr-draft-status", classes="dialog-detail")
                     yield Static(
                         "Uses pushed branches; does not push or merge.\n"
@@ -223,16 +227,16 @@ class PullRequestDetailsDialog(ModalScreen[None]):
         height: 22;
         max-height: 95%;
         padding: 1 2;
-        border: round #4f8790;
-        background: #ffffff;
+        border: round $primary-muted;
+        background: $surface;
     }
     PullRequestDetailsDialog #pr-details-content { height: 1fr; min-height: 1; }
     PullRequestDetailsDialog #pr-details-title { height: auto; text-style: bold; margin-bottom: 1; }
-    PullRequestDetailsDialog #pr-details-meta { height: auto; color: #36505b; }
-    PullRequestDetailsDialog #pr-details-url { height: auto; margin-top: 1; color: #48616c; }
-    PullRequestDetailsDialog #pr-details-link { height: auto; margin-top: 1; color: #006d77; }
+    PullRequestDetailsDialog #pr-details-meta { height: auto; color: $foreground-muted; }
+    PullRequestDetailsDialog #pr-details-url { height: auto; margin-top: 1; color: $text-muted; }
+    PullRequestDetailsDialog #pr-details-link { height: auto; margin-top: 1; color: $primary; }
     PullRequestDetailsDialog #pr-details-feedback { height: auto; margin-top: 1; }
-    PullRequestDetailsDialog #pr-details-feedback.copied { color: #007c78; }
+    PullRequestDetailsDialog #pr-details-feedback.copied { color: $success; }
     PullRequestDetailsDialog .dialog-buttons { height: 3; margin-top: 1; align: right middle; }
     PullRequestDetailsDialog .dialog-buttons Button { margin-left: 1; min-width: 10; }
     """

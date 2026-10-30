@@ -19,6 +19,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from rhizome.settings import validate_preferences
+
 SCHEMA_VERSION = 1
 _INSTALL_OWNER_MARKER = b"rhizome-install-root-v1"
 
@@ -29,6 +31,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "theme": "auto",
     "graph_style": "smooth",
     "graph_order": "topo",
+    "diff_layout": "unified",
     "plain_glyphs": False,
     "diagnostics_enabled": True,
     "excluded_workspaces": [],
@@ -166,42 +169,11 @@ def _validate_json_value(value: Any) -> None:
     raise StateValidationError("State must contain valid JSON state values.")
 
 
-def _validate_settings(data: dict[str, Any]) -> None:
-    unknown = data.keys() - DEFAULT_SETTINGS.keys()
-    if unknown:
-        raise StateValidationError("Settings must contain valid JSON state values.")
-
-    bool_fields = ("remote_refresh_enabled", "offline", "plain_glyphs", "diagnostics_enabled")
-    if any(name in data and type(data[name]) is not bool for name in bool_fields):
-        raise StateValidationError("Settings must contain valid JSON state values.")
-    if "remote_refresh_interval" in data and (
-        type(data["remote_refresh_interval"]) is not int or data["remote_refresh_interval"] < 1
-    ):
-        raise StateValidationError("Settings must contain valid JSON state values.")
-    choices = {
-        "theme": {"auto", "light", "dark", "high-contrast"},
-        "graph_style": {"smooth", "compact"},
-        "graph_order": {"topo", "chronological"},
-    }
-    for name, allowed in choices.items():
-        if name in data and (type(data[name]) is not str or data[name] not in allowed):
-            raise StateValidationError("Settings must contain valid JSON state values.")
-    if "excluded_workspaces" in data:
-        excluded = data["excluded_workspaces"]
-        if type(excluded) is not list or any(
-            type(key) is not str or not re.fullmatch(r"[0-9a-f]{64}", key) for key in excluded
-        ):
-            raise StateValidationError("Excluded workspaces must be opaque workspace identities.")
-    if "keymap" in data:
-        keymap = data["keymap"]
-        if type(keymap) is not dict or any(
-            type(key) is not str or type(value) is not str for key, value in keymap.items()
-        ):
-            raise StateValidationError("Settings must contain valid JSON state values.")
-    if "protected_branches" in data:
-        branches = data["protected_branches"]
-        if type(branches) is not list or any(type(branch) is not str for branch in branches):
-            raise StateValidationError("Settings must contain valid JSON state values.")
+def _validate_settings(data: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return validate_preferences(data)
+    except ValueError:
+        raise StateValidationError("Settings must contain valid JSON state values.") from None
 
 
 def _json_bytes(document: dict[str, Any]) -> bytes:
@@ -311,7 +283,7 @@ class WorkspaceStateStore:
         except RecursionError:
             raise StateValidationError("State must contain valid JSON state values.") from None
         if workspace_key == "global":
-            _validate_settings(data)
+            data = _validate_settings(data)
         target = self._target_for(workspace_key)
         parent = target.parent
         _ensure_private_directory(parent)
@@ -435,7 +407,7 @@ class WorkspaceStateStore:
         except (UnicodeDecodeError, json.JSONDecodeError, ValueError, RecursionError):
             raise StateCorruptionError("Saved workspace state is corrupt or unsupported.") from None
         if settings:
-            _validate_settings(data)
+            data = _validate_settings(data)
         return copy.deepcopy(data)
 
     def _atomic_write(self, target: Path, content: bytes) -> None:

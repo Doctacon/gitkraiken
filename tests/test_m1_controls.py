@@ -93,7 +93,7 @@ async def test_plain_preference_preserves_live_selection_and_literal_unicode(git
         assert path.read_text() == "after café\nsecond line\n"
 
 
-async def test_global_reset_keeps_protection_exclusion_and_unrelated_settings(git_repo):
+async def test_global_reset_keeps_protection_exclusion_and_resets_curated_settings(git_repo):
     store = WorkspaceStateStore()
     store.save(
         "global",
@@ -102,7 +102,7 @@ async def test_global_reset_keeps_protection_exclusion_and_unrelated_settings(gi
             "remote_refresh_interval": 42,
             "protected_branches": ["production"],
             "excluded_workspaces": ["a" * 64],
-            "keymap": {"custom": "keep"},
+            "keymap": {"command_picker": "ctrl+alt+p"},
         },
     )
     app = RhizomeApp(git_repo)
@@ -117,7 +117,7 @@ async def test_global_reset_keeps_protection_exclusion_and_unrelated_settings(gi
         assert settings["remote_refresh_interval"] == 60
         assert settings["protected_branches"] == ["production"]
         assert settings["excluded_workspaces"] == ["a" * 64]
-        assert settings["keymap"] == {"custom": "keep"}
+        assert settings["keymap"] == {}
 
 
 async def test_exclusion_removes_saved_state_keeps_session_text_and_never_resurrects(git_repo):

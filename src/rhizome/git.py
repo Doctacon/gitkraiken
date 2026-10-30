@@ -21,21 +21,31 @@ import sys
 import tempfile
 import termios
 import threading
+import uuid
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlsplit, urlunsplit
 
 from .models import (
     Action,
+    BlameLine,
+    CapturedRef,
     Commit,
     CommitDetail,
+    ComparisonIntent,
+    ComparisonResult,
     FileChange,
+    FileHistoryEntry,
     HistoryLine,
+    InvestigationScope,
     Ref,
     Remote,
+    ScopeState,
+    SearchQuery,
     Snapshot,
     Stash,
     Worktree,
@@ -334,6 +344,7 @@ def _run_spooled_process(
     timeout: float = _LOCAL_TIMEOUT,
     ok_codes: tuple[int, ...] = (0,),
     operation: str = "diff",
+    input_bytes: bytes | None = None,
 ) -> subprocess.CompletedProcess[bytes]:
     """Run Git with stdout/stderr spooled to disk beyond small memory limits."""
     try:
@@ -345,12 +356,13 @@ def _run_spooled_process(
                 argv,
                 cwd=cwd,
                 env=_git_environment(),
-                stdin=subprocess.DEVNULL,
+                stdin=subprocess.PIPE if input_bytes is not None else subprocess.DEVNULL,
                 stdout=stdout_file,
                 stderr=stderr_file,
             )
             try:
-                returncode = process.wait(timeout=timeout)
+                process.communicate(input=input_bytes, timeout=timeout)
+                returncode = process.returncode
             except subprocess.TimeoutExpired as error:
                 process.kill()
                 process.wait()
@@ -1442,6 +1454,7 @@ class Repository:
         literal_paths: bool = False,
         ok_codes: tuple[int, ...] = (0,),
         operation: str = "read diff",
+        input_bytes: bytes | None = None,
     ) -> subprocess.CompletedProcess[bytes]:
         # Git 2.36 diff's stat-cache refresh does not honor optional-locks
         # alone. Reading a diff must not take or rewrite the real index.
@@ -1449,7 +1462,9 @@ class Repository:
         if literal_paths:
             argv.append("--literal-pathspecs")
         argv.extend(args)
-        return _run_spooled_process(argv, cwd=self.root, ok_codes=ok_codes, operation=operation)
+        return _run_spooled_process(
+            argv, cwd=self.root, ok_codes=ok_codes, operation=operation, input_bytes=input_bytes
+        )
 
     def _head(self) -> str:
         result = self._git(
@@ -1885,6 +1900,839 @@ class Repository:
             return 0, 0
         return int(fields[0]), int(fields[1])
 
+    def _investigation_read(
+        self, args: list[str], *, operation: str, input_bytes: bytes | None = None
+    ) -> bytes:
+        """Bound read output and never let live replacement refs rewrite exact OIDs."""
+        result = self._git_diff(
+            ["--no-replace-objects", *args], operation=operation, input_bytes=input_bytes
+        )
+        if len(result.stdout) > _MAX_DIFF_BYTES:
+            raise GitError(f"Git {operation} exceeds the investigation output limit.")
+        return result.stdout
+
+    def _investigation_identity(self) -> str:
+        paths = [self.root]
+        for option in ("--absolute-git-dir", "--git-common-dir"):
+            value = _decode(self._git(["rev-parse", option]).stdout).removesuffix("\n")
+            path = Path(value)
+            paths.append((path if path.is_absolute() else self.root / path).resolve())
+        try:
+            records = [(os.fspath(path), path.stat().st_dev, path.stat().st_ino) for path in paths]
+        except OSError as error:
+            raise GitError("The captured repository is no longer available.") from error
+        return hashlib.sha256(repr(records).encode("utf-8", "surrogateescape")).hexdigest()
+
+    def _investigation_shallow(self) -> str:
+        path = self._git_path("shallow")
+        try:
+            with path.open("rb") as stream:
+                data = stream.read(_MAX_DIFF_BYTES + 1)
+        except FileNotFoundError:
+            return ""
+        except OSError as error:
+            raise GitError("Cannot read the repository's shallow boundary.") from error
+        if len(data) > _MAX_DIFF_BYTES:
+            raise GitError("The shallow boundary exceeds the investigation output limit.")
+        return hashlib.sha256(data).hexdigest() if data else ""
+
+    def _investigation_refs(self) -> tuple[CapturedRef, ...]:
+        fmt = "%(refname)%00%(objectname)%00%(objecttype)%00%(*objectname)%00%(*objecttype)"
+        data = self._investigation_read(
+            ["for-each-ref", "--sort=refname", f"--format={fmt}"], operation="capture refs"
+        )
+        refs = []
+        for line in _decode(data).split("\n"):
+            if not line:
+                continue
+            fields = line.split("\x00")
+            if len(fields) != 5:
+                raise GitError("Git returned malformed captured refs.")
+            name, oid, kind, peeled, peeled_kind = fields
+            if kind == "commit":
+                refs.append(CapturedRef(name, oid))
+            elif kind == "tag":
+                if peeled_kind == "commit":
+                    refs.append(CapturedRef(name, peeled))
+                elif peeled_kind == "tag":
+                    # Nested annotated tags are uncommon; resolve the captured object,
+                    # not the moving name. Tags to blobs/trees are not history roots.
+                    result = self._git(
+                        [
+                            "--no-replace-objects",
+                            "rev-parse",
+                            "--verify",
+                            "--quiet",
+                            f"{oid}^{{commit}}",
+                        ],
+                        ok_codes=(0, 1),
+                        operation="peel captured tag",
+                    )
+                    if result.returncode == 0:
+                        refs.append(CapturedRef(name, _decode(result.stdout).strip()))
+        return tuple(refs)
+
+    def _investigation_worktree_heads(self) -> tuple[CapturedRef, ...]:
+        # Git's legacy --all includes detached HEADs in linked worktrees too.
+        # Capture those exact objects rather than silently narrowing unified history.
+        return tuple(
+            sorted(
+                (
+                    CapturedRef(os.fspath(worktree.path), worktree.head)
+                    for worktree in self.worktrees()
+                    if not worktree.bare
+                    and not worktree.prunable
+                    and worktree.head
+                    and set(worktree.head) != {"0"}
+                ),
+                key=lambda item: item.full_name,
+            )
+        )
+
+    def capture_investigation(self, roots: tuple[str, ...] = ()) -> InvestigationScope:
+        """Capture all commit-bearing refs, or explicit full refs/HEAD/full OIDs."""
+        if not isinstance(roots, tuple) or any(not isinstance(root, str) for root in roots):
+            raise ValueError("Investigation roots must be a tuple of exact revision strings.")
+        repository_id = self._investigation_identity()
+        refs = self._investigation_refs()
+        by_name = {ref.full_name: ref.oid for ref in refs}
+        head = self._head()
+        branch_result = self._git(
+            ["symbolic-ref", "--quiet", "HEAD"], ok_codes=(0, 1), operation="capture HEAD branch"
+        )
+        branch = _decode(branch_result.stdout).strip() if branch_result.returncode == 0 else ""
+        bindings: list[CapturedRef] = []
+        selected = []
+        worktree_heads = self._investigation_worktree_heads() if not roots else ()
+        if not roots:
+            bindings.extend(refs)
+            bindings.append(CapturedRef("HEAD", head))
+            selected.extend(ref.oid for ref in refs)
+            selected.extend(ref.oid for ref in worktree_heads)
+            if head:
+                selected.append(head)
+        for root in roots:
+            _safe_value(root, "Investigation root")
+            if root == "HEAD":
+                if not head:
+                    raise GitError("HEAD does not name a commit yet.")
+                oid = head
+                bindings.append(CapturedRef(root, oid))
+            elif root.startswith("refs/"):
+                if root not in by_name:
+                    raise GitError(f"Investigation root is not an exact commit-bearing ref: {root}")
+                oid = by_name[root]
+                bindings.append(CapturedRef(root, oid))
+            elif re.fullmatch(r"(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})", root):
+                oid = self._resolve_commit(root, label="Investigation root")
+            else:
+                raise GitError(
+                    "Use HEAD, a full refs/... name, or a full commit OID for investigation."
+                )
+            selected.append(oid)
+        scope = InvestigationScope(
+            repository_id=repository_id,
+            scope_id=uuid.uuid4().hex,
+            kind="focused" if roots else "unified",
+            label=", ".join(roots) if roots else "All refs + HEAD",
+            root_oids=tuple(sorted(set(selected))),
+            captured_refs=refs,
+            bindings=tuple(sorted(set(bindings), key=lambda ref: ref.full_name)),
+            head_oid=head,
+            branch=branch,
+            shallow_fingerprint=self._investigation_shallow(),
+            worktree_heads=worktree_heads,
+        )
+        state = self.investigation_status(scope)
+        if not state.current:
+            raise GitError(f"Repository changed during scope capture: {state.reason}")
+        return scope
+
+    def investigation_status(self, scope: InvestigationScope) -> ScopeState:
+        """Observe freshness without ever retargeting a captured root."""
+        try:
+            if self._investigation_identity() != scope.repository_id:
+                return ScopeState(False, False, "The captured repository was replaced.")
+            if scope.root_oids:
+                data = self._git(
+                    [
+                        "--no-replace-objects",
+                        "cat-file",
+                        "--batch-check=%(objectname) %(objecttype)",
+                    ],
+                    input_bytes=("\n".join(scope.root_oids) + "\n").encode("ascii"),
+                    operation="check captured objects",
+                ).stdout
+                records = _decode(data).splitlines()
+                if len(records) != len(scope.root_oids) or any(
+                    record != f"{oid} commit"
+                    for oid, record in zip(scope.root_oids, records, strict=True)
+                ):
+                    return ScopeState(
+                        False, False, "Captured commit objects are no longer available."
+                    )
+            if self._investigation_shallow() != scope.shallow_fingerprint:
+                return ScopeState(
+                    False, True, "The shallow history boundary changed; refresh explicitly."
+                )
+            current_refs = self._investigation_refs()
+            if (
+                scope.kind == "unified"
+                and self._investigation_worktree_heads() != scope.worktree_heads
+            ):
+                return ScopeState(False, True, "Worktree HEADs changed; refresh explicitly.")
+            if scope.kind == "unified" and current_refs != scope.captured_refs:
+                return ScopeState(False, True, "Repository refs changed; refresh explicitly.")
+            current = {ref.full_name: ref.oid for ref in current_refs}
+            if any(ref.full_name == "HEAD" for ref in scope.bindings):
+                current["HEAD"] = self._head()
+                result = self._git(["symbolic-ref", "--quiet", "HEAD"], ok_codes=(0, 1))
+                branch = _decode(result.stdout).strip() if result.returncode == 0 else ""
+                if branch != scope.branch:
+                    return ScopeState(False, True, "HEAD's branch changed; refresh explicitly.")
+            if any(current.get(ref.full_name) != ref.oid for ref in scope.bindings):
+                return ScopeState(False, True, "A captured ref changed; refresh explicitly.")
+        except (GitError, OSError, UnicodeError) as error:
+            return ScopeState(False, False, f"Captured scope unavailable: {error}")
+        return ScopeState(True, True)
+
+    @contextmanager
+    def _investigation_lines(
+        self,
+        args: list[str],
+        roots: tuple[str, ...],
+        *,
+        paths: tuple[str, ...] = (),
+        nul: bool = False,
+    ):
+        """Stream bounded index/path records with a wall-clock timeout."""
+        argv = ["git", "--no-replace-objects", *args, "--stdin", "--", *paths]
+        expired = threading.Event()
+        with (
+            tempfile.SpooledTemporaryFile(max_size=64 * 1024) as input_file,
+            tempfile.SpooledTemporaryFile(max_size=_MAX_ERROR_BYTES) as errors,
+        ):
+            input_file.write(("\n".join(roots) + "\n").encode("ascii"))
+            input_file.seek(0)
+            try:
+                process = subprocess.Popen(
+                    argv,
+                    cwd=self.root,
+                    env=_git_environment(),
+                    stdin=input_file,
+                    stdout=subprocess.PIPE,
+                    stderr=errors,
+                )
+            except OSError as error:
+                raise GitError(f"Cannot read investigation history: {error}") from error
+
+            def expire() -> None:
+                if process.poll() is None:
+                    expired.set()
+                    process.kill()
+
+            timer = threading.Timer(_LOCAL_TIMEOUT, expire)
+            timer.daemon = True
+            timer.start()
+            try:
+                stdout = process.stdout
+                assert stdout is not None
+
+                def records():
+                    if not nul:
+                        while line := stdout.readline(4097):
+                            if len(line) > 4096:
+                                raise GitError("Git returned an oversized history index record.")
+                            yield line
+                        return
+                    pending = b""
+                    while chunk := stdout.read(64 * 1024):
+                        parts = (pending + chunk).split(b"\x00")
+                        pending = parts.pop()
+                        for part in parts:
+                            if len(part) > _MAX_DIFF_BYTES:
+                                raise GitError("Git returned an oversized file-history record.")
+                            yield part
+                        if len(pending) > _MAX_DIFF_BYTES:
+                            raise GitError("Git returned an oversized file-history record.")
+                    if pending:
+                        raise GitError("Git returned incomplete file-history output.")
+
+                yield records()
+                returncode = process.wait()
+                if expired.is_set():
+                    raise GitError("Git investigation history timed out; the view is incomplete.")
+                errors.seek(0)
+                result = subprocess.CompletedProcess(
+                    argv, returncode, b"", errors.read(_MAX_ERROR_BYTES + 1)
+                )
+                _raise_process_error(
+                    result,
+                    timeout=_LOCAL_TIMEOUT,
+                    ok_codes=(0,),
+                    operation="read investigation history",
+                )
+            finally:
+                timer.cancel()
+                if process.poll() is None:
+                    process.kill()
+                process.wait()
+                if process.stdout is not None:
+                    process.stdout.close()
+
+    @staticmethod
+    def _investigation_log_options() -> list[str]:
+        return ["--no-show-signature", "--no-patch", "--no-decorate", "--no-notes", "--no-color"]
+
+    def _investigation_commits(
+        self, scope: InvestigationScope, oids: tuple[str, ...]
+    ) -> tuple[Commit, ...]:
+        if not oids:
+            return ()
+        data = self._investigation_read(
+            [
+                "log",
+                "--no-walk=unsorted",
+                *self._investigation_log_options(),
+                "-z",
+                "--format=%H%x00%P%x00%an%x00%ae%x00%aI%x00%s",
+                "--stdin",
+                "--",
+            ],
+            input_bytes=("\n".join(oids) + "\n").encode("ascii"),
+            operation="read investigation metadata",
+        )
+        fields = _decode(data).split("\x00")
+        if fields[-1] != "" or (len(fields) - 1) % 6:
+            raise GitError("Git returned malformed investigation metadata.")
+        names: dict[str, list[str]] = {}
+        for ref in scope.captured_refs:
+            short = re.sub(r"^refs/(?:heads|remotes|tags)/", "", ref.full_name)
+            names.setdefault(ref.oid, []).append(short)
+        if scope.head_oid:
+            names.setdefault(scope.head_oid, []).append("HEAD")
+        commits = {}
+        for start in range(0, len(fields) - 1, 6):
+            oid, parents, author, email, date, subject = fields[start : start + 6]
+            commits[oid] = Commit(
+                oid,
+                tuple(parents.split()),
+                author,
+                email,
+                _commit_date(date),
+                subject,
+                tuple(dict.fromkeys(names.get(oid, ()))),
+            )
+        if any(oid not in commits for oid in oids):
+            raise GitError("Git returned incomplete investigation metadata.")
+        return tuple(commits[oid] for oid in oids)
+
+    def investigation_history(
+        self,
+        scope: InvestigationScope,
+        *,
+        order: str = "topology",
+        offset: int = 0,
+        after: tuple[int, int] | None = None,
+        limit: int = 300,
+    ) -> tuple[tuple[Commit, ...], tuple[tuple[int, int], ...], bool]:
+        """Read one bounded window from exact roots; never retain a whole-scope index."""
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 1000:
+            raise ValueError("History limit must be between 1 and 1000.")
+        if order not in ("topology", "author-time"):
+            raise ValueError("Unknown history order.")
+        if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+            raise ValueError("History offset must be a non-negative integer.")
+        state = self.investigation_status(scope)
+        if not state.available:
+            raise GitError(state.reason)
+        if self._investigation_shallow() != scope.shallow_fingerprint:
+            raise GitError("The shallow history boundary changed; refresh before loading more.")
+        if not scope.root_oids:
+            return (), (), False
+        options = self._investigation_log_options()
+        if order == "topology":
+            data = self._investigation_read(
+                [
+                    "log",
+                    "--topo-order",
+                    *options,
+                    f"--skip={offset}",
+                    f"-n{limit + 1}",
+                    "--format=%H",
+                    "--stdin",
+                    "--",
+                ],
+                input_bytes=("\n".join(scope.root_oids) + "\n").encode("ascii"),
+                operation="read topology page",
+            )
+            oids = tuple(_decode(data).splitlines())
+            has_more = len(oids) > limit
+            oids = oids[:limit]
+            keys = tuple((0, offset + position) for position in range(len(oids)))
+        else:
+            with self._investigation_lines(
+                ["log", "--author-date-order", *options, "--format=%at%x00%H"], scope.root_oids
+            ) as lines:
+
+                def candidates():
+                    for position, line in enumerate(lines):
+                        try:
+                            raw_epoch, raw_oid = line.rstrip(b"\n").split(b"\x00")
+                            key = (-int(raw_epoch), position)
+                            oid = raw_oid.decode("ascii")
+                        except (ValueError, UnicodeError) as error:
+                            raise GitError("Git returned a malformed history index.") from error
+                        if after is None or key > after:
+                            yield key, oid
+
+                selected = heapq.nsmallest(limit + 1, candidates(), key=lambda item: item[0])
+            has_more = len(selected) > limit
+            oids = tuple(item[1] for item in selected[:limit])
+            keys = tuple(item[0] for item in selected[:limit])
+        commits = self._investigation_commits(scope, oids)
+        if self._investigation_shallow() != scope.shallow_fingerprint:
+            raise GitError(
+                "The shallow history boundary changed while reading; refresh explicitly."
+            )
+        return commits, keys, has_more
+
+    def _investigation_path_matches(self, oids: tuple[str, ...], path: str) -> set[str]:
+        selected = PurePosixPath(self._path(path)).as_posix()
+        data = self._investigation_read(
+            [
+                "diff-tree",
+                "--stdin",
+                "--root",
+                "-m",
+                "-r",
+                "-z",
+                "--name-status",
+                "-M",
+                "-C",
+                "--no-ext-diff",
+                "--no-textconv",
+            ],
+            input_bytes=("\n".join(oids) + "\n").encode("ascii"),
+            operation="search changed paths",
+        )
+        tokens = _decode(data).split("\x00")
+        index, oid = 0, ""
+        allowed = set(oids)
+        matched = set()
+        while index < len(tokens):
+            token = tokens[index]
+            index += 1
+            if not token:
+                continue
+            if token in allowed:
+                oid = token
+                continue
+            if not oid or not re.fullmatch(r"[ACDMRTUXB][0-9]*", token):
+                raise GitError("Git returned malformed changed-path records.")
+            count = 2 if token[0] in "RC" else 1
+            paths = tokens[index : index + count]
+            if len(paths) != count or not all(paths):
+                raise GitError("Git returned incomplete changed-path records.")
+            if selected in paths:
+                matched.add(oid)
+            index += count
+        return matched
+
+    def investigation_search(
+        self,
+        scope: InvestigationScope,
+        query: SearchQuery,
+        *,
+        order: str = "topology",
+        offset: int = 0,
+        after: tuple[int, int] | None = None,
+        scan_limit: int = 1000,
+    ) -> tuple[
+        tuple[Commit, ...],
+        tuple[tuple[int, int], ...],
+        tuple[tuple[int, tuple[str, ...], tuple[str, ...]], ...],
+        bool,
+    ]:
+        """Search full messages and captured identity metadata in one traversal batch."""
+        if query.path is not None:
+            self._path(query.path)
+        commits, keys, has_more = self.investigation_history(
+            scope, order=order, offset=offset, after=after, limit=scan_limit
+        )
+        if not commits:
+            return commits, keys, (), has_more
+        data = self._investigation_read(
+            [
+                "log",
+                "--no-walk=unsorted",
+                *self._investigation_log_options(),
+                "-z",
+                "--format=%H%x00%B",
+                "--stdin",
+                "--",
+            ],
+            input_bytes=("\n".join(commit.oid for commit in commits) + "\n").encode("ascii"),
+            operation="search full commit messages",
+        )
+        fields = _decode(data).split("\x00")
+        if fields[-1] != "" or (len(fields) - 1) % 2:
+            raise GitError("Git returned unsupported commit message data.")
+        messages = dict(zip(fields[:-1:2], fields[1:-1:2], strict=True))
+        needle = query.text.casefold()
+        path_matches = (
+            self._investigation_path_matches(tuple(commit.oid for commit in commits), query.path)
+            if query.path is not None
+            else None
+        )
+        matches = []
+        for index, commit in enumerate(commits):
+            if commit.oid not in messages:
+                raise GitError("Git returned incomplete search metadata.")
+            matched = []
+            for name, value in (
+                ("message", messages[commit.oid]),
+                ("author", commit.author),
+                ("email", commit.email),
+                ("sha", commit.oid),
+            ):
+                if needle and needle in value.casefold():
+                    matched.append(name)
+            refs = tuple(
+                ref.full_name
+                for ref in scope.captured_refs
+                if ref.oid == commit.oid and needle and needle in ref.full_name.casefold()
+            )
+            if commit.oid == scope.head_oid and needle and needle in "head":
+                refs += ("HEAD",)
+            if refs:
+                matched.append("ref")
+            if needle and not matched:
+                continue
+            if path_matches is not None:
+                if commit.oid not in path_matches:
+                    continue
+                matched.append("path")
+            if query.authored_from is not None or query.authored_through is not None:
+                try:
+                    authored = datetime.fromisoformat(commit.date)
+                except ValueError as error:
+                    raise GitError("Git returned an unsupported author date.") from error
+                if query.authored_from is not None and authored < query.authored_from:
+                    continue
+                if query.authored_through is not None and authored > query.authored_through:
+                    continue
+                matched.append("author-date")
+            matches.append((index, tuple(matched), refs))
+        if self._investigation_shallow() != scope.shallow_fingerprint:
+            raise GitError(
+                "The shallow history boundary changed while searching; refresh explicitly."
+            )
+        return commits, keys, tuple(matches), has_more
+
+    def _investigation_revision(self, scope: InvestigationScope, oid: str) -> str:
+        if not isinstance(oid, str) or not re.fullmatch(
+            r"(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})", oid
+        ):
+            raise GitError("Investigation revisions must be full commit OIDs.")
+        resolved = self._resolve_commit(oid, label="Investigation revision")
+        if resolved != oid.lower():
+            raise GitError("Investigation revision must name a commit object, not a tag object.")
+        for root in scope.root_oids:
+            if root == resolved:
+                return resolved
+            result = self._git(
+                ["--no-replace-objects", "merge-base", "--is-ancestor", resolved, root],
+                ok_codes=(0, 1),
+                operation="check investigation revision scope",
+            )
+            if result.returncode == 0:
+                return resolved
+        raise GitError("The requested commit is outside the captured investigation scope.")
+
+    def _investigation_ready(self, scope: InvestigationScope) -> ScopeState:
+        state = self.investigation_status(scope)
+        if not state.available:
+            raise GitError(state.reason)
+        if self._investigation_shallow() != scope.shallow_fingerprint:
+            raise GitError("The shallow history boundary changed; refresh explicitly.")
+        return state
+
+    def investigation_compare(
+        self,
+        scope: InvestigationScope,
+        left_oid: str,
+        right_oid: str,
+        intent: ComparisonIntent,
+    ) -> ComparisonResult:
+        """Compare captured trees with explicit semantics; never substitute a base."""
+        if intent not in ("branch-review", "endpoints"):
+            raise ValueError("Comparison intent must be 'branch-review' or 'endpoints'.")
+        self._investigation_ready(scope)
+        left = self._investigation_revision(scope, left_oid)
+        right = self._investigation_revision(scope, right_oid)
+        base = None
+        if intent == "branch-review":
+            if scope.shallow_fingerprint:
+                raise GitError(
+                    "Branch review is unavailable in shallow history; use explicit endpoint comparison."
+                )
+            result = self._git(
+                ["--no-replace-objects", "merge-base", "--all", left, right],
+                ok_codes=(0, 1),
+                operation="find comparison merge bases",
+            )
+            bases = _decode(result.stdout).splitlines()
+            if len(bases) != 1:
+                raise GitError(
+                    "Branch review requires one unique merge base; use explicit endpoint comparison."
+                )
+            base = bases[0]
+        start = base or left
+        options = ["diff", "--no-color", "--no-ext-diff", "--no-textconv", "-M"]
+        names = self._investigation_read(
+            [*options, "--name-status", "-z", start, right, "--"], operation="read comparison files"
+        )
+        statistics = self._investigation_read(
+            [*options, "--stat", start, right, "--"], operation="read comparison statistics"
+        )
+        patch = self._git_diff(
+            ["--no-replace-objects", *options, start, right, "--"],
+            operation="read comparison patch",
+        ).stdout
+        state = self._investigation_ready(scope)
+        return ComparisonResult(
+            scope.scope_id,
+            intent,
+            left,
+            right,
+            base,
+            start,
+            right,
+            self._parse_name_status(names),
+            _decode(statistics).rstrip("\n"),
+            self._bounded_diff(patch),
+            len(patch) > _MAX_DIFF_BYTES,
+            state,
+        )
+
+    def investigation_file_history(
+        self,
+        scope: InvestigationScope,
+        start_oid: str,
+        path: str,
+        *,
+        offset: int = 0,
+        limit: int = 300,
+        follow_renames: bool = True,
+    ) -> tuple[tuple[FileHistoryEntry, ...], bool, tuple[str, ...], ScopeState]:
+        """Read Git's single-file history, explicitly retaining rename limitations."""
+        self._investigation_ready(scope)
+        revision = self._investigation_revision(scope, start_oid)
+        selected = self._path(path)
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 1000:
+            raise ValueError("File history limit must be between 1 and 1000.")
+        if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+            raise ValueError("File history offset must be non-negative.")
+        if not isinstance(follow_renames, bool):
+            raise ValueError("Follow renames must be a boolean.")
+        options = [option for option in self._investigation_log_options() if option != "--no-patch"]
+        # --skip can bypass the diff generation that --follow needs to discover
+        # earlier names. Stream and discard the prefix instead of losing renames
+        # or retaining an offset-sized buffer.
+        records: list[tuple[str, list[FileChange]]] = []
+        position = -1
+        with self._investigation_lines(
+            [
+                "--literal-pathspecs",
+                "log",
+                *options,
+                "--topo-order",
+                "-z",
+                "--name-status",
+                "-M",
+                *(["--follow"] if follow_renames else []),
+                f"-n{offset + limit + 1}",
+                "--format=%x00%H",
+            ],
+            (revision,),
+            paths=(selected,),
+            nul=True,
+        ) as raw_tokens:
+            tokens = (_decode(token) for token in raw_tokens)
+            for token in tokens:
+                if not token:
+                    continue
+                if re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", token):
+                    position += 1
+                    if position >= offset:
+                        records.append((token, []))
+                    continue
+                status = token.removeprefix("\n")
+                if position < 0 or not re.fullmatch(r"[ACDMRTUXB][0-9]*", status):
+                    raise GitError("Git returned unsupported file-history records.")
+                count = 2 if status[0] in "RC" else 1
+                names = [next(tokens, "") for _ in range(count)]
+                if not all(names):
+                    raise GitError("Git returned incomplete file history.")
+                if position >= offset:
+                    records[-1][1].append(
+                        FileChange(
+                            names[-1], index=status[0], original_path=names[0] if count == 2 else ""
+                        )
+                    )
+        if not records and offset == 0:
+            raise GitError(
+                "No file history is available for that literal path at the captured revision."
+            )
+        has_more = len(records) > limit
+        records = records[:limit]
+        commits = self._investigation_commits(scope, tuple(oid for oid, _ in records))
+        entries = []
+        for commit, (_, changes) in zip(commits, records, strict=True):
+            if len(changes) != 1:
+                raise GitError(
+                    "File history needs one explicit file; this Git history representation is unsupported."
+                )
+            change = changes[0]
+            entries.append(
+                FileHistoryEntry(commit, change.path, change.original_path, change.index)
+            )
+        limitations = ("rename-heuristic",) if follow_renames else ()
+        if scope.shallow_fingerprint:
+            limitations += ("shallow-history",)
+        return tuple(entries), has_more, limitations, self._investigation_ready(scope)
+
+    def investigation_blame(
+        self,
+        scope: InvestigationScope,
+        start_oid: str,
+        path: str,
+        *,
+        offset: int = 0,
+        limit: int = 300,
+    ) -> tuple[tuple[BlameLine, ...], bool, tuple[str, ...], ScopeState]:
+        """Read a bounded porcelain blame range, refusing binary/oversized blobs."""
+        self._investigation_ready(scope)
+        revision = self._investigation_revision(scope, start_oid)
+        selected = PurePosixPath(self._path(path)).as_posix()
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 1000:
+            raise ValueError("Blame limit must be between 1 and 1000.")
+        if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+            raise ValueError("Blame offset must be non-negative.")
+        tree = self._investigation_read(
+            ["--literal-pathspecs", "ls-tree", "--full-tree", "-z", revision, "--", selected],
+            operation="inspect blame file",
+        ).split(b"\x00")
+        if len(tree) != 2 or tree[-1] != b"":
+            raise GitError("Blame requires an existing regular file at the captured revision.")
+        try:
+            metadata, actual_path = tree[0].split(b"\t", 1)
+            mode, kind, raw_oid = metadata.split()
+        except ValueError as error:
+            raise GitError("Git returned unsupported blame file metadata.") from error
+        if (
+            kind != b"blob"
+            or mode not in (b"100644", b"100755")
+            or _decode(actual_path) != selected
+        ):
+            raise GitError("Blame is available only for one regular text file.")
+        oid = raw_oid.decode("ascii")
+        size = int(
+            self._investigation_read(["cat-file", "-s", oid], operation="inspect blame size")
+        )
+        if size > _MAX_DIFF_BYTES:
+            raise GitError(
+                "Blame is unavailable for oversized files (limit: 2 MiB); use Git externally."
+            )
+        content = self._investigation_read(["cat-file", "blob", oid], operation="read blame file")
+        if b"\x00" in content:
+            raise GitError("Blame is unavailable for binary files.")
+        try:
+            content.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise GitError(
+                "Blame requires UTF-8 text; this file's encoding is unsupported."
+            ) from error
+        total = content.count(b"\n") + bool(content and not content.endswith(b"\n"))
+        through = min(offset + limit, total)
+        limitations = ("rename-heuristic",) + (
+            ("shallow-history",) if scope.shallow_fingerprint else ()
+        )
+        if offset >= total:
+            return (), False, limitations, self._investigation_ready(scope)
+        data = self._investigation_read(
+            [
+                "--literal-pathspecs",
+                "blame",
+                "--line-porcelain",
+                "--no-textconv",
+                "--encoding=UTF-8",
+                f"-L{offset + 1},{through}",
+                revision,
+                "--",
+                selected,
+            ],
+            operation="read blame lines",
+        )
+        lines: list[BlameLine] = []
+        header: list[str] | None = None
+        fields: dict[bytes, bytes] = {}
+        for raw in data.split(b"\n"):
+            if header is None:
+                if not raw:
+                    continue
+                header = _decode(raw).split()
+                if len(header) not in (3, 4) or not re.fullmatch(
+                    r"(?:[0-9a-f]{40}|[0-9a-f]{64})", header[0]
+                ):
+                    raise GitError("Git returned unsupported blame records.")
+                fields = {}
+            elif raw.startswith(b"\t"):
+                try:
+                    filename = fields[b"filename"]
+                    if filename.startswith(b'"'):
+                        if not filename.endswith(b'"'):
+                            raise ValueError("Malformed quoted filename")
+                        decoded_filename = codecs.escape_decode(filename[1:-1])[0]
+                        if not isinstance(decoded_filename, bytes):
+                            raise ValueError("Malformed quoted filename")
+                        filename = decoded_filename
+                    zone = fields[b"author-tz"].decode("ascii")
+                    if not re.fullmatch(r"[+-][0-9]{4}", zone):
+                        raise ValueError("Malformed timezone")
+                    minutes = (int(zone[1:3]) * 60 + int(zone[3:])) * (-1 if zone[0] == "-" else 1)
+                    date = datetime.fromtimestamp(
+                        int(fields[b"author-time"]), timezone(timedelta(minutes=minutes))
+                    )
+                    original_line, final_line = int(header[1]), int(header[2])
+                    if original_line < 1 or final_line != offset + len(lines) + 1:
+                        raise ValueError("Unexpected line numbers")
+                    lines.append(
+                        BlameLine(
+                            header[0],
+                            _decode(filename),
+                            original_line,
+                            final_line,
+                            _decode(fields[b"author"]),
+                            _decode(fields[b"author-mail"]).removeprefix("<").removesuffix(">"),
+                            _commit_date(date.isoformat()),
+                            _decode(raw[1:]),
+                            b"boundary" in fields,
+                        )
+                    )
+                except (KeyError, ValueError, OverflowError, UnicodeError) as error:
+                    raise GitError(
+                        "Git returned incomplete or unsupported blame metadata."
+                    ) from error
+                header = None
+            else:
+                name, _, value = raw.partition(b" ")
+                fields[name] = value
+        if header is not None or len(lines) != through - offset:
+            raise GitError("Git returned incomplete blame output.")
+        return tuple(lines), through < total, limitations, self._investigation_ready(scope)
+
     def _history(
         self, limit: int, ref: str, refs: tuple[Ref, ...], head: str
     ) -> tuple[tuple[HistoryLine, ...], bool]:
@@ -1992,7 +2840,9 @@ class Repository:
             HistoryLine(graph="", commit=commits_by_oid[oid]) for oid in selected_oids
         ), has_more
 
-    def snapshot(self, limit: int = 300, ref: str = "") -> Snapshot:
+    def snapshot(
+        self, limit: int = 300, ref: str = "", *, include_history: bool = True
+    ) -> Snapshot:
         if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= _MAX_HISTORY:
             raise GitError(f"History limit must be between 1 and {_MAX_HISTORY}.")
         head = self._head()
@@ -2000,7 +2850,9 @@ class Repository:
         refs = self._refs()
         upstream = self._upstream(branch)
         ahead, behind = self._ahead_behind(head, upstream)
-        history, has_more = self._history(limit, ref, refs, head)
+        history, has_more = (
+            self._history(limit, ref, refs, head) if include_history else ((), False)
+        )
         return Snapshot(
             root=self.root,
             branch=branch,

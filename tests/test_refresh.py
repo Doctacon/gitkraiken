@@ -38,9 +38,9 @@ async def test_manual_refresh_does_not_immediately_rescan_the_same_repository(
     snapshots = []
     snapshot = Repository.snapshot
 
-    def observe(repo, limit=300):
-        snapshots.append(repo.root)
-        return snapshot(repo, limit)
+    def observe(repo, limit=300, ref="", *, include_history=True):
+        snapshots.append((repo.root, include_history))
+        return snapshot(repo, limit, ref, include_history=include_history)
 
     monkeypatch.setattr(Repository, "snapshot", observe)
     app = RhizomeApp(git_repo)
@@ -50,7 +50,7 @@ async def test_manual_refresh_does_not_immediately_rescan_the_same_repository(
         snapshots.clear()
         await pilot.press("ctrl+r")
         await settle(app, pilot)
-        assert snapshots == [git_repo]
+        assert snapshots == [(git_repo, False)]
 
 
 async def test_local_poll_keeps_controls_and_unchanged_graph_stable(git_repo):
@@ -97,8 +97,17 @@ async def test_open_fetches_remote_commits_without_pulling(
         assert app.snapshot_data.head == head
         remote = app.query_one(ReferenceSidebar).get_selection("remote:refs/remotes/origin/main")
         assert remote is not None and remote.oid == remote_head
-        row = app.query_one(HistoryTable).get_row(remote_head)
+        table = app.query_one(HistoryTable)
+        assert remote_head not in {row.key.value for row in table.ordered_rows}
+        assert "CHANGED" in str(app.query_one("#history-caption", Static).renderable).upper()
+        assert git_run(git_repo, "rev-parse", "HEAD").stdout.strip() == head
+        assert git_run(git_repo, "status", "--porcelain").stdout == ""
+
+        await pilot.press("ctrl+r")
+        await settle(app, pilot)
+        row = table.get_row(remote_head)
         assert "Remote update" in " ".join(str(cell) for cell in row)
+        assert git_run(git_repo, "rev-parse", "HEAD").stdout.strip() == head
         assert git_run(git_repo, "status", "--porcelain").stdout == ""
 
 

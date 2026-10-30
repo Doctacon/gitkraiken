@@ -32,14 +32,14 @@ class ActivityDialog(ModalScreen[None]):
         height: 22;
         max-height: 100%;
         padding: 0 2;
-        border: round #4f8790;
-        background: #ffffff;
-        color: #14232c;
+        border: round $primary-muted;
+        background: $surface;
+        color: $text;
     }
     ActivityDialog .dialog-title { height: 1; margin-bottom: 1; }
     ActivityDialog .activity-label {
         height: 1;
-        color: #36505b;
+        color: $foreground-muted;
         text-style: bold underline;
     }
     ActivityDialog #activity-context {
@@ -47,34 +47,34 @@ class ActivityDialog(ModalScreen[None]):
         min-height: 2;
         margin-bottom: 1;
         padding: 0 1;
-        border-left: tall #a8c1c7;
-        color: #36505b;
+        border-left: tall $primary-muted;
+        color: $foreground-muted;
     }
     ActivityDialog #activity-list {
         height: 1fr;
         min-height: 3;
         margin-bottom: 1;
-        border: round #a8c1c7;
-        background: #f5fafa;
-        color: #14232c;
+        border: round $primary-muted;
+        background: $surface;
+        color: $text;
     }
-    ActivityDialog #activity-list:focus { border: round #006d77; }
+    ActivityDialog #activity-list:focus { border: round $primary; }
     ActivityDialog #activity-list > .option-list--option-highlighted {
-        background: #d8eeee;
-        color: #14232c;
+        background: $primary-muted;
+        color: $text;
         text-style: bold underline;
     }
     ActivityDialog #activity-detail {
         height: 3;
         min-height: 3;
         padding: 0 1;
-        border-left: tall #4f8790;
-        color: #36505b;
+        border-left: tall $primary-muted;
+        color: $foreground-muted;
     }
     ActivityDialog #activity-notice {
         height: 2;
         margin-top: 0;
-        color: #6b4300;
+        color: $warning;
     }
     ActivityDialog .dialog-buttons { height: 3; align: right middle; }
     ActivityDialog .dialog-buttons Button { min-width: 10; margin-left: 1; }

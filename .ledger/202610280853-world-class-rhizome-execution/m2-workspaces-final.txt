@@ -1,0 +1,63 @@
+.................................................F...................... [ 37%]
+........................................................................ [ 74%]
+..................................F..............                        [100%]
+=================================== FAILURES ===================================
+_____________ test_back_restores_graph_scroll_search_and_selection _____________
+
+file_repo = PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1721/test_back_restores_graph_scrol0/worktree')
+git_run = <function git_run.<locals>.run at 0x10956a5c0>
+
+    async def test_back_restores_graph_scroll_search_and_selection(file_repo, git_run):
+        for number in range(25):
+            git_run(file_repo, "commit", "--allow-empty", "-m", f"Later {number}")
+        app = RhizomeApp(file_repo)
+        async with app.run_test(size=(150, 35)) as pilot:
+            await settle(app, pilot)
+            search = app.query_one("#graph-filter", Input)
+            search.value = "Base files"
+            await settle(app, pilot)
+            table = app.query_one("#graph-table", DataTable)
+            tree = app.query_one(CommitFileTree)
+            selection, position = app._history_key, table.scroll_offset
+>           assert position.y > 0
+E           assert 0 > 0
+E            +  where 0 = Offset(x=0, y=0).y
+
+tests/test_diff_workspace.py:276: AssertionError
+__________ test_clean_checkout_selects_head_not_newer_other_branch[1] __________
+
+clean_branch = PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1721/test_clean_checkout_selects_he1/worktree')
+git_run = <function git_run.<locals>.run at 0x10b3ff240>, limit = 1
+
+    @pytest.mark.parametrize("limit", [300, 1])
+    async def test_clean_checkout_selects_head_not_newer_other_branch(clean_branch, git_run, limit):
+        head = git_run(clean_branch, "rev-parse", "HEAD").stdout.strip()
+        git_run(clean_branch, "switch", "-c", "newer")
+        git_run(
+            clean_branch,
+            "commit",
+            "--allow-empty",
+            "--date=2040-01-01T00:00:00+00:00",
+            "-m",
+            "Newer commit on another branch",
+        )
+        other = git_run(clean_branch, "rev-parse", "HEAD").stdout.strip()
+        git_run(clean_branch, "switch", "test")
+        app = RhizomeApp(clean_branch)
+        app.limit = limit
+        async with app.run_test(size=(170, 45)) as pilot:
+            await settle(app, pilot)
+            table = app.query_one("#graph-table", DataTable)
+            assert table.ordered_rows[0].key.value == other
+            expected = head if limit > 1 else other  # HEAD may be outside the loaded history.
+>           assert app._history_key == expected
+E           AssertionError: assert 'c5cc60cd1d4f...c80a24390a99c' == 'bf420f05fa44...db7f9a6b7d82d'
+E             
+E             - bf420f05fa444d80d49bc0e0b4edb7f9a6b7d82d
+E             + c5cc60cd1d4fa330317e7dac95bc80a24390a99c
+
+tests/test_working_directory_graph.py:107: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_diff_workspace.py::test_back_restores_graph_scroll_search_and_selection
+FAILED tests/test_working_directory_graph.py::test_clean_checkout_selects_head_not_newer_other_branch[1]
+2 failed, 191 passed in 539.06s (0:08:59)

@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import os
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from time import monotonic
-from typing import Self
+from typing import Literal, Self
 
 from rich.markup import escape
 from rich.style import Style
@@ -18,6 +19,7 @@ from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.geometry import Offset
 from textual.message import Message
 from textual.widgets import (
     Button,
@@ -38,7 +40,22 @@ from .dates import format_commit_date
 from .dialogs import ActionPicker, BranchContextMenu, HelpDialog, MessageDialog, PromptDialog
 from .git import GitError, Repository
 from .graph import GraphRow, GraphStyle, render_history
-from .models import Action, Commit, FileChange, HistoryLine, Snapshot
+from .investigation import InvestigationService
+from .investigation_dialogs import ComparisonDialog, FileInvestigationDialog, SearchCriteriaDialog
+from .models import (
+    Action,
+    Commit,
+    FileChange,
+    HistoryLine,
+    HistoryOrder,
+    HistoryPage,
+    InvestigationScope,
+    Ref,
+    ScopeState,
+    SearchPage,
+    SearchQuery,
+    Snapshot,
+)
 from .operations import OperationActivity, OperationCoordinator
 from .pane_splitter import PaneGroup, PaneSplitter
 from .patches import PatchDocument, PatchService
@@ -58,20 +75,43 @@ from .pull_requests import (
 )
 from .ref_badges import RefBadges, build_ref_badges
 from .resizable_table import ResizableDataTable
+from .settings import COMMANDS, CURATED_SETTINGS, validate_preferences
 from .sidebar import ReferenceSidebar, SidebarSelection
-from .theme import MUTED, TEAL, TEXT
+from .split_diff import SplitDiff, UnifiedRequested
+from .theme import (
+    LIGHT,
+    MUTED,
+    TEAL,
+    TEXT,
+    TEXTUAL_THEMES,
+    Palette,
+    palette_for,
+    resolve_theme,
+    theme_text,
+)
 from .workspace_controls import DiagnosticsDialog, WorkspaceControlRequest, WorkspaceControlsDialog
 
-_CORE_SETTINGS = (
-    "offline",
-    "remote_refresh_enabled",
-    "remote_refresh_interval",
-    "plain_glyphs",
-    "diagnostics_enabled",
-)
+_CORE_SETTINGS = CURATED_SETTINGS
 
 
-def patch_text(patch: str) -> Text:
+@dataclass(frozen=True)
+class _HistoryContext:
+    scope: InvestigationScope
+    page: HistoryPage
+    snapshot: Snapshot
+    state: ScopeState
+    order: HistoryOrder
+    roots: tuple[str, ...]
+    cursors: tuple[str | None, ...]
+    position: int
+    selection: str
+    search: str
+    search_query: SearchQuery | None
+    search_page: SearchPage | None
+    scroll: Offset
+
+
+def patch_text(patch: str, *, palette: Palette = LIGHT) -> Text:
     """Render a literal file diff without Git's redundant transport headers.
 
     Only hide headers before a hunk: removed/added content can itself start
@@ -95,7 +135,11 @@ def patch_text(patch: str) -> Text:
         elif line.startswith("-"):
             style = "#b13a48"
         text.append(line, style)
-    return text if text else Text("No textual changes (mode-only change or empty file).")
+    return (
+        theme_text(text, palette)
+        if text
+        else Text("No textual changes (mode-only change or empty file).")
+    )
 
 
 class HistoryTable(ResizableDataTable):
@@ -184,36 +228,41 @@ class RhizomeApp(App[None]):
     LOCAL_REFRESH_INTERVAL = 2
     REMOTE_REFRESH_INTERVAL = 60
     BINDINGS = [
-        Binding("ctrl+q", "quit", "Quit"),
-        Binding("ctrl+p", "command_picker", "Actions", priority=True),
-        Binding("ctrl+o", "open_repository", "Open", priority=True),
-        Binding("ctrl+r", "refresh", "Refresh", priority=True),
-        Binding("ctrl+l", "activity", "Activity", priority=True),
-        Binding("ctrl+b", "new_branch", "Branch", priority=True),
-        Binding("f,slash", "focus_filter", "Search"),
-        Binding("r", "refresh", "Refresh"),
-        Binding("x", "command_picker", "Actions"),
-        Binding("g", "toggle_graph_style", "Graph style"),
-        Binding("question_mark", "help", "Help"),
-        Binding("j", "next_row", "Next", show=False),
-        Binding("k", "previous_row", "Previous", show=False),
-        Binding("ctrl+left", "toggle_refs", "Refs", show=False),
-        Binding("ctrl+right", "toggle_inspector", "Inspector", show=False),
-        Binding("f2", "show_files", "Files", show=False),
-        Binding("f3", "show_composer", "Commit", show=False),
-        Binding("f4", "workspace_settings", "Workspace", show=False),
-        Binding("escape", "clear_filter", "Clear selection", show=False),
+        Binding(
+            command.keys,
+            command.action,
+            command.description,
+            priority=command.priority,
+            show=command.show,
+            id=f"rhizome.{command.id}",
+        )
+        for command in COMMANDS
     ]
 
     def __init__(self, path: str | Path) -> None:
         super().__init__()
-        self.theme = "textual-light"
+        for theme in TEXTUAL_THEMES:
+            self.register_theme(theme)
+        self.theme = "rhizome-light"
+        self._palette = LIGHT
+        self._appearance_reason = "light fallback"
         self.path = Path(path)
         self.repo: Repository | None = None
         self._operations: OperationCoordinator | None = None
         self._pending_operation: tuple[str, datetime] | None = None
         self.snapshot_data: Snapshot | None = None
-        self.limit = 300
+        self._investigation: InvestigationService | None = None
+        self._history_scope: InvestigationScope | None = None
+        self._history_page: HistoryPage | None = None
+        self._scope_snapshot: Snapshot | None = None
+        self._scope_state = ScopeState(True, True)
+        self.history_order: HistoryOrder = "topology"
+        self._focus_roots: tuple[str, ...] = ()
+        self._history_trail: list[str | None] = [None]
+        self._history_position = 0
+        self._history_loading = False
+        self._history_token = 0
+        self._focus_return: _HistoryContext | None = None
         self.busy = False
         self._serial = asyncio.Lock()
         self._generation = 0
@@ -229,6 +278,8 @@ class RhizomeApp(App[None]):
         # A diff exists only after an explicit file activation.
         self._active_diff: tuple[FileChange, bool, str] | None = None
         self._patch_document: PatchDocument | None = None
+        self._display_patch = ""
+        self._prefer_unified_diff = False
         self._patch_stale = False
         self._diff_context = 3
         self._sidebar_selection: SidebarSelection | None = None
@@ -238,9 +289,14 @@ class RhizomeApp(App[None]):
         self._history_key = "wip"
         self.graph_style: GraphStyle = "smooth"
         self._graph_rows: tuple[GraphRow, ...] = ()
-        self._graph_cache_key: tuple[tuple[HistoryLine, ...], GraphStyle] | None = None
+        self._graph_cache_key: tuple[tuple[HistoryLine, ...], GraphStyle, bool, str] | None = None
         self._graph_geometry: tuple[tuple[str, int], ...] = ()
         self._search_matches: list[str] = []
+        self._search_query: SearchQuery | None = None
+        self._search_page: SearchPage | None = None
+        self._search_token = 0
+        self._search_running = False
+        self._search_note = ""
         self._last_error = ""
         self._status_message = "Ready"
         self._refresh_error = ""
@@ -320,12 +376,17 @@ class RhizomeApp(App[None]):
                             placeholder="Search commits, authors, refs or SHA…", id="graph-filter"
                         )
                         yield Button("Next", id="search-next", classes="tool")
+                        yield Button("Filters", id="search-criteria")
                         yield Button(
                             Text("Smooth [g]"),
                             id="graph-style",
                             tooltip="Switch Smooth / Compact graph (g). Smooth uses rounded bends; "
                             "broken horizontal lines pass behind vertical lanes without joining them.",
                         )
+                    with Horizontal(id="search-controls"):
+                        yield Button("Search more", id="search-more")
+                        yield Button("Stop search", id="search-stop")
+                        yield Button("Widen to all refs", id="search-widen")
                     yield Static("Unified history · local + remote branches", id="history-caption")
                     yield HistoryTable(
                         id="graph-table",
@@ -333,7 +394,12 @@ class RhizomeApp(App[None]):
                         zebra_stripes=False,
                         cursor_foreground_priority="renderable",
                     )
-                    yield Button("Load 300 more commits", id="load-more")
+                    with Horizontal(id="history-navigation"):
+                        yield Button("Topology", id="graph-order")
+                        yield Button("Focus", id="focus-history")
+                        yield Button("Exit focus", id="exit-focus")
+                        yield Button("Newer", id="history-newer")
+                        yield Button("Older 300", id="load-more")
                 with Vertical(id="diff-workspace"):
                     with Horizontal(id="diff-toolbar"):
                         yield Button("← Back to graph", id="back-to-graph")
@@ -341,6 +407,7 @@ class RhizomeApp(App[None]):
                     with VerticalScroll(id="center-diff-scroll"):
                         yield Static("", id="center-diff")
                     yield PrecisionDiff(id="precision-diff")
+                    yield SplitDiff()
             yield PaneSplitter(
                 "#inspector-panel",
                 "#history-panel",
@@ -394,11 +461,10 @@ class RhizomeApp(App[None]):
             else:
                 self.notify(escape("Settings: " + str(error)), severity="error", timeout=12)
         self._global_settings = dict(self._settings)
-        self.REMOTE_REFRESH_INTERVAL = self._settings["remote_refresh_interval"]
-        self.graph_style = self._settings["graph_style"]
-        self.query_one("#graph-style", Button).label = Text(f"{self.graph_style.title()} [g]")
+        self._apply_core_settings()
         self.query_one("#operation-banner").display = False
         self.query_one("#load-more").display = False
+        self.query_one("#search-controls").display = False
         self.query_one("#diff-workspace").display = False
         self.query_one(PrecisionDiff).display = False
         wip_table = self.query_one("#wip-table", ResizableDataTable)
@@ -473,7 +539,7 @@ class RhizomeApp(App[None]):
                 self._view_error = str(error)
                 self._pending_view = {}
                 self.notify(escape(str(error)), severity="warning")
-            self.limit = self._pending_view.get("history_limit", self.limit)
+            # Legacy history_limit is accepted on read but never restores a total ceiling.
             self._history_key = self._pending_view.get("history_key", "wip")
             draft = state.get("draft", "")
             if not isinstance(draft, str):
@@ -596,16 +662,10 @@ class RhizomeApp(App[None]):
             raise StateValidationError(
                 "Saved workspace preferences are invalid; reset them in Workspace."
             )
-        for key, item in value.items():
-            if key == "remote_refresh_interval":
-                valid = type(item) is int and item >= 1
-            else:
-                valid = type(item) is bool
-            if not valid:
-                raise StateValidationError(
-                    "Saved workspace preferences are invalid; reset them in Workspace."
-                )
-        return dict(value)
+        try:
+            return validate_preferences(value)
+        except ValueError as error:
+            raise StateValidationError(str(error)) from error
 
     @staticmethod
     def _validated_view(value: object) -> dict:
@@ -650,12 +710,40 @@ class RhizomeApp(App[None]):
         self._settings["offline"] = self._global_settings["offline"] or self._settings["offline"]
         self.REMOTE_REFRESH_INTERVAL = self._settings["remote_refresh_interval"]
         self.graph_style = self._settings["graph_style"]
+        self.set_keymap(
+            {f"rhizome.{key}": value for key, value in self._settings["keymap"].items()}
+        )
+        self.theme, self._appearance_reason = resolve_theme(self._settings["theme"], os.environ)
+        self._palette = palette_for(self.theme)
         workspace = self.screen_stack[0]
+        workspace.refresh_bindings()
+        for ident, label, command_id in (
+            ("show-files", "Files", "show_files"),
+            ("show-composer", "Commit", "show_composer"),
+            ("workspace-settings", "Workspace", "workspace_settings"),
+        ):
+            shortcut = self._shortcut(command_id)
+            workspace.query_one(f"#{ident}", Button).label = (
+                f"{label} [{shortcut.upper()}]" if len(shortcut) <= 5 else label
+            )
         plain = self._settings["plain_glyphs"]
         workspace.query_one(ReferenceSidebar).set_plain_glyphs(plain)
+        workspace.query_one(ReferenceSidebar).set_palette(self._palette)
         workspace.query_one(CommitFileTree).set_plain_glyphs(plain)
+        workspace.query_one(CommitFileTree).set_palette(self._palette)
+        workspace.query_one("#commit-message", TextArea).theme = (
+            "monokai" if self.current_theme.dark else "github_light"
+        )
         workspace.query_one(PrecisionDiff).set_plain_glyphs(plain)
-        workspace.query_one("#graph-style", Button).label = Text(f"{self.graph_style.title()} [g]")
+        workspace.query_one(PrecisionDiff).set_palette(self._palette)
+        workspace.query_one("#graph-style", Button).label = Text(
+            f"{self.graph_style.title()} [{self._shortcut('toggle_graph_style')}]"
+        )
+        workspace.query_one("#key-hint", Static).update(
+            Text(
+                f"{self._shortcut('command_picker')} actions  ·  {self._shortcut('focus_filter')} search  ·  {self._shortcut('help')} help"
+            )
+        )
         for ident, normal, fallback in (
             ("pull", "↓ Pull", "Pull"),
             ("push", "↑ Push", "Push"),
@@ -669,6 +757,38 @@ class RhizomeApp(App[None]):
             button.refresh(layout=True)
         self._graph_cache_key = None
         self._next_remote_refresh = 0.0
+        if self._active_diff:
+            self._apply_diff_presentation()
+
+    def _shortcut(self, command_id: str) -> str:
+        default = next(command.keys for command in COMMANDS if command.id == command_id)
+        return (
+            self._settings["keymap"]
+            .get(command_id, default)
+            .split(",")[0]
+            .replace("question_mark", "?")
+            .replace("slash", "/")
+        )
+
+    def _save_view_preference(self, name: str, value: str) -> None:
+        """Respect an existing workspace override; otherwise update only the global key."""
+        self._settings[name] = value
+        try:
+            overrides = self._validated_core_settings(self._workspace_state.get("preferences", {}))
+            if name in overrides:
+                self._persist_workspace(
+                    {**self._workspace_state, "preferences": {**overrides, name: value}}
+                )
+            elif self._state_store and not self._state_excluded:
+                current = self._state_store.load("global")
+                settings = {**current, name: value}
+                self._state_store.save("global", settings, expected=current)
+                self._global_settings = settings
+        except PersistenceError as error:
+            self.notify(
+                escape("Preference changed for this session but not saved: " + str(error)),
+                severity="warning",
+            )
 
     def _record_diagnostic(self, event: str, metadata: dict) -> None:
         if (
@@ -707,7 +827,6 @@ class RhizomeApp(App[None]):
         workspace = self.screen_stack[0]
         view = {
             "history_key": self._history_key,
-            "history_limit": self.limit,
             "graph_filter": workspace.query_one("#graph-filter", Input).value[:1024],
             "ref_filter": workspace.query_one("#ref-filter", Input).value[:1024],
             "task": self._task_view,
@@ -778,6 +897,7 @@ class RhizomeApp(App[None]):
                 global_settings=self._global_settings,
                 overrides=self._workspace_state.get("preferences", {}),
                 excluded=self._state_excluded,
+                settings_path=str(self._state_store.settings_path) if self._state_store else "",
                 state_error=self._state_error
                 or self._settings_error
                 or self._preferences_error
@@ -792,7 +912,7 @@ class RhizomeApp(App[None]):
         if request.action == "diagnostics":
             self.action_diagnostics()
             return
-        if request.action in {"settings", "reset-overrides"}:
+        if request.action in {"settings", "reset-overrides", "reload-settings"}:
             self._apply_workspace_control(request)
             return
         descriptions = {
@@ -831,10 +951,11 @@ class RhizomeApp(App[None]):
                     self._global_settings = settings
                 else:
                     self._persist_workspace({**self._workspace_state, "preferences": values})
+            elif action == "reload-settings":
+                self._global_settings = store.load("global")
             elif action == "reset-global":
                 current = store.load("global")
-                # Only reset this M1 dialog's preferences; never erase protected
-                # branches, future keymaps, or explicit exclusion policies.
+                # Reset curated preferences, not branch protection or exclusion policies.
                 settings = {
                     **current,
                     **{name: DEFAULT_SETTINGS[name] for name in (*_CORE_SETTINGS, "graph_style")},
@@ -893,7 +1014,9 @@ class RhizomeApp(App[None]):
             self._apply_core_settings()
             self._state_error = ""
             self._preferences_error = ""
-            if action == "reset-global" or (action == "settings" and request.scope == "global"):
+            if action in {"reset-global", "reload-settings"} or (
+                action == "settings" and request.scope == "global"
+            ):
                 self._settings_error = ""
             text = self.query_one("#commit-message", TextArea).text
             if text != self._saved_draft and text != self._commit_template_seed:
@@ -917,6 +1040,13 @@ class RhizomeApp(App[None]):
                 self.run_worker(
                     self.apply_snapshot(self.snapshot_data), group="view", exit_on_error=False
                 )
+                desired_order: HistoryOrder = (
+                    "author-time"
+                    if self._settings["graph_order"] == "chronological"
+                    else "topology"
+                )
+                if desired_order != self.history_order:
+                    self._request_history_page(None, 0, order=desired_order, persist_order=False)
             self.status("Workspace preferences updated · running Git work is not cancelled")
         except PersistenceError as error:
             self._draft_error(str(error))
@@ -1163,7 +1293,8 @@ class RhizomeApp(App[None]):
                 if not self._can_refresh(repo):
                     return
                 generation, epoch = self._generation, self._mutation_epoch
-                snapshot = await asyncio.to_thread(repo.snapshot, self.limit)
+                snapshot = await asyncio.to_thread(repo.snapshot, include_history=False)
+                await self._poll_history_state()
             if (
                 not self._can_refresh(repo)
                 or generation != self._generation
@@ -1236,7 +1367,8 @@ class RhizomeApp(App[None]):
                     self._remote_reading = None
             async with self._serial:
                 generation, epoch = self._generation, self._mutation_epoch
-                snapshot = await asyncio.to_thread(repo.snapshot, self.limit)
+                snapshot = await asyncio.to_thread(repo.snapshot, include_history=False)
+                await self._poll_history_state()
             if self.repo is not repo:
                 return
             if (
@@ -1286,12 +1418,82 @@ class RhizomeApp(App[None]):
             if self._remote_refreshing is repo:
                 self._remote_refreshing = None
 
+    async def _capture_history(self, snapshot: Snapshot) -> None:
+        self._history_token += 1
+        self._history_loading = False
+        self._stop_search(clear_results=True)
+        if self._investigation is None:
+            assert self.repo is not None
+            self._investigation = InvestigationService(self.repo)
+        scope = await asyncio.to_thread(self._investigation.capture, self._focus_roots)
+        page = await asyncio.to_thread(self._investigation.history, scope, self.history_order)
+        self._history_scope, self._history_page = scope, page
+        self._scope_state = page.state
+        self._scope_snapshot = self._captured_badges_snapshot(snapshot, scope)
+        self._history_trail = [None]
+        self._history_position = 0
+
+    @staticmethod
+    def _captured_badges_snapshot(snapshot: Snapshot, scope: InvestigationScope) -> Snapshot:
+        previous = {ref.full_name: ref for ref in snapshot.refs}
+        refs = []
+        prefixes: tuple[tuple[str, Literal["local", "remote", "tag"]], ...] = (
+            ("refs/heads/", "local"),
+            ("refs/remotes/", "remote"),
+            ("refs/tags/", "tag"),
+        )
+        for captured in scope.captured_refs:
+            for prefix, kind in prefixes:
+                if captured.full_name.startswith(prefix):
+                    ref = previous.get(captured.full_name) or Ref(
+                        captured.full_name.removeprefix(prefix),
+                        captured.full_name,
+                        captured.oid,
+                        kind,
+                    )
+                    refs.append(
+                        replace(ref, oid=captured.oid, current=captured.full_name == scope.branch)
+                    )
+                    break
+        return replace(
+            snapshot,
+            refs=tuple(refs),
+            head=scope.head_oid,
+            branch=scope.branch.removeprefix("refs/heads/"),
+        )
+
+    async def _poll_history_state(self) -> None:
+        service, scope = self._investigation, self._history_scope
+        if service is None or scope is None:
+            return
+        state = await asyncio.to_thread(service.status, scope)
+        if service is self._investigation and scope is self._history_scope:
+            if not self._scope_state.current and state.current:
+                state = ScopeState(False, state.available, self._scope_state.reason)
+            self._scope_state = state
+            if not state.current and self._search_running:
+                self._stop_search()
+                self._search_note = "scope changed — stopped"
+
+    def _with_history(self, snapshot: Snapshot) -> Snapshot:
+        page = self._history_page
+        if page is None:
+            return snapshot
+        return replace(
+            snapshot,
+            history=tuple(HistoryLine("", commit) for commit in page.commits),
+            has_more=page.has_more,
+        )
+
     async def _apply_refresh(self, snapshot: Snapshot) -> None:
+        snapshot = self._with_history(snapshot)
         if snapshot != self.snapshot_data:
             await self.apply_snapshot(snapshot)
         elif self._active_diff and self._active_diff[2] == "":
             # Porcelain status can stay unchanged while an open file is edited.
             self.load_diff(*self._active_diff[:2], preserve_scroll=True)
+        self.update_search(jump=False)
+        self._update_history_controls()
 
     def request_refresh(self, *, quiet: bool = False) -> None:
         if self.busy:
@@ -1307,9 +1509,17 @@ class RhizomeApp(App[None]):
                 if self.repo is None:
                     self.repo = await asyncio.to_thread(Repository, self.path)
                     await self._restore_workspace_state(self.repo)
-                snapshot = await asyncio.to_thread(self.repo.snapshot, self.limit)
+                self.history_order = (
+                    "author-time"
+                    if self._settings["graph_order"] == "chronological"
+                    else "topology"
+                )
+                snapshot = await asyncio.to_thread(self.repo.snapshot, include_history=False)
+                await self._capture_history(snapshot)
             if len(self.screen_stack) == 1:
                 await self._apply_refresh(snapshot)
+                if self._search_query:
+                    self._start_scoped_search(self._search_query, force=True)
             if not quiet:
                 freshness = (
                     "offline · network paused"
@@ -1351,7 +1561,7 @@ class RhizomeApp(App[None]):
         )
         if snapshot.upstream:
             header.append(f"   {snapshot.upstream}", style=MUTED)
-        self.query_one("#repo-header", Static).update(header)
+        self.query_one("#repo-header", Static).update(theme_text(header, self._palette))
         previous = self._sidebar_selection
         self._sidebar_selection = self.query_one(ReferenceSidebar).update_snapshot(
             snapshot, previous
@@ -1365,7 +1575,12 @@ class RhizomeApp(App[None]):
                 self._history_key = selection.oid
                 self._reveal_ref_key = None
         self._ref_badges = build_ref_badges(
-            snapshot, self._selected_ref, plain_glyphs=self._settings["plain_glyphs"]
+            replace(self._scope_snapshot, worktrees=snapshot.worktrees, remotes=snapshot.remotes)
+            if self._scope_snapshot
+            else snapshot,
+            self._selected_ref,
+            plain_glyphs=self._settings["plain_glyphs"],
+            palette=self._palette,
         )
         self.repaint_history()
         self.paint_wip(snapshot.files)
@@ -1378,7 +1593,7 @@ class RhizomeApp(App[None]):
             )
         )
         self.query_one("#continue", Button).disabled = bool(snapshot.conflicts)
-        self.query_one("#load-more").display = snapshot.has_more and self.limit < 5000
+        self._update_history_controls()
         # Reconcile details without treating polling as an explicit graph click.
         # In particular, a clean checkout can show Working directory while the
         # graph cursor remains on HEAD (there is no WIP row to select).
@@ -1436,7 +1651,16 @@ class RhizomeApp(App[None]):
             return
         old = self._ref_badges
         self._ref_badges = build_ref_badges(
-            self.snapshot_data, self._selected_ref, plain_glyphs=self._settings["plain_glyphs"]
+            replace(
+                self._scope_snapshot,
+                worktrees=self.snapshot_data.worktrees,
+                remotes=self.snapshot_data.remotes,
+            )
+            if self._scope_snapshot
+            else self.snapshot_data,
+            self._selected_ref,
+            plain_glyphs=self._settings["plain_glyphs"],
+            palette=self._palette,
         )
         table = self.query_one("#graph-table", DataTable)
         for oid in self._commits:
@@ -1569,7 +1793,8 @@ class RhizomeApp(App[None]):
             listings = await asyncio.to_thread(repo.open_pull_requests)
             async with self._serial:
                 generation, epoch = self._generation, self._mutation_epoch
-                snapshot = await asyncio.to_thread(repo.snapshot, self.limit)
+                snapshot = await asyncio.to_thread(repo.snapshot, include_history=False)
+                await self._poll_history_state()
             if self.repo is not repo:
                 return
             if (
@@ -2080,10 +2305,13 @@ class RhizomeApp(App[None]):
         table = self.query_one("#graph-table", DataTable)
         previous_scroll = table.scroll_offset
         plain = self._settings["plain_glyphs"]
-        cache_key = (self.snapshot_data.history, self.graph_style, plain)
+        cache_key = (self.snapshot_data.history, self.graph_style, plain, self.theme)
         if cache_key != self._graph_cache_key:
             self._graph_rows = render_history(
-                self.snapshot_data.history, self.graph_style, plain_glyphs=plain
+                self.snapshot_data.history,
+                self.graph_style,
+                plain_glyphs=plain,
+                palette=self._palette,
             )
             self._graph_cache_key = cache_key
         heading = Text("COMMIT GRAPH", no_wrap=True, overflow="ellipsis")
@@ -2091,7 +2319,7 @@ class RhizomeApp(App[None]):
             heading.append("   ╴│╶ crossing, not a join", style=MUTED)
         if any("↑ parent " in row.graph.plain for row in self._graph_rows):
             heading.append("   ↑ parent shown above", style=MUTED)
-        self.query_one("#history-heading", Static).update(heading)
+        self.query_one("#history-heading", Static).update(theme_text(heading, self._palette))
         dirty = len(self.snapshot_data.files)
         wip_height = 2 if self.graph_style == "smooth" else 1
         geometry = (("wip", wip_height),) if dirty else ()
@@ -2109,12 +2337,14 @@ class RhizomeApp(App[None]):
                     (" *" if self.graph_style == "smooth" else "*")
                     if plain
                     else (" ◉" if self.graph_style == "smooth" else "◉"),
-                    style=TEAL,
+                    style=self._palette.teal,
                 ),
-                Text("WIP", style=TEAL),
+                Text("WIP", style=self._palette.teal),
                 "",  # Working changes have no commit author.
                 "",  # Working changes have no commit timestamp.
-                Text(f"Working directory · {dirty} changed files", style=f"bold {TEAL}"),
+                Text(
+                    f"Working directory · {dirty} changed files", style=f"bold {self._palette.teal}"
+                ),
                 *([""] if self._show_sha else []),
                 height=wip_height,
                 key="wip",
@@ -2135,21 +2365,23 @@ class RhizomeApp(App[None]):
             self._commits[commit.oid] = commit
             badges = self._ref_badges.get(commit.oid)
             refs = badges.text if badges else Text()
-            message = Text(commit.subject, style=TEXT, no_wrap=True, overflow="ellipsis")
+            message = Text(
+                commit.subject, style=self._palette.text, no_wrap=True, overflow="ellipsis"
+            )
             table.add_row(
                 row.graph,
                 refs,
-                Text(commit.author, style=MUTED, no_wrap=True, overflow="ellipsis"),
+                Text(commit.author, style=self._palette.muted, no_wrap=True, overflow="ellipsis"),
                 Text(
                     format_commit_date(commit.date),
                     style=Style(
-                        color=MUTED,
+                        color=self._palette.muted,
                         meta={"commit_date": format_commit_date(commit.date, full=True)},
                     ),
                     no_wrap=True,
                 ),
                 message,
-                *([Text(commit.short_id, style=MUTED)] if self._show_sha else []),
+                *([Text(commit.short_id, style=self._palette.muted)] if self._show_sha else []),
                 height=row.height,
                 key=commit.oid,
             )
@@ -2189,7 +2421,11 @@ class RhizomeApp(App[None]):
                 key = f"{'s' if staged else 'u'}-{number}"
                 self._file_rows[key] = (file, staged)
                 state = "CONFLICT" if file.conflicted else ("STAGED" if staged else "UNSTAGED")
-                color = "#9a5a00" if file.conflicted else (TEAL if staged else MUTED)
+                color = (
+                    self._palette.warning
+                    if file.conflicted
+                    else (self._palette.teal if staged else self._palette.muted)
+                )
                 table.add_row(Text(state, style=color), Text(file.path), key=key)
                 if (
                     self._selected_file
@@ -2313,7 +2549,7 @@ class RhizomeApp(App[None]):
                     metadata.append("\n")
                     metadata.append(badges.description)
                 header = workspace.query_one("#commit-detail", Static)
-                header.update(text)
+                header.update(theme_text(text, self._palette))
                 header.tooltip = metadata
                 tree = workspace.query_one(CommitFileTree)
                 tree.set_files(detail.files, identity=commit.oid)
@@ -2369,6 +2605,34 @@ class RhizomeApp(App[None]):
         workspace.query_one("#diff-workspace").display = False
         workspace.query_one("#graph-workspace").display = True
 
+    def _apply_diff_presentation(self) -> None:
+        workspace = self.screen_stack[0]
+        split = workspace.query_one(SplitDiff)
+        use_split = self._settings["diff_layout"] == "split" and not self._prefer_unified_diff
+        split.display = use_split
+        workspace.query_one(PrecisionDiff).display = (
+            not use_split and self._patch_document is not None
+        )
+        workspace.query_one("#center-diff-scroll").display = (
+            not use_split and self._patch_document is None
+        )
+        if use_split:
+            split.set_patch(
+                self._display_patch,
+                plain_glyphs=self._settings["plain_glyphs"],
+                palette=self._palette,
+                stageable=self._patch_document is not None and self._patch_document.selectable,
+            )
+            split.set_stale(self._patch_stale)
+
+    def on_unified_requested(self, event: UnifiedRequested) -> None:
+        event.stop()
+        if self._active_diff and event.patch == self._display_patch:
+            self._prefer_unified_diff = True
+            self._apply_diff_presentation()
+            if self._patch_document is not None:
+                self.query_one("#precision-lines").focus()
+
     def load_diff(
         self,
         file: FileChange,
@@ -2387,6 +2651,9 @@ class RhizomeApp(App[None]):
         scroll = workspace.query_one("#center-diff-scroll")
         context = self._diff_context
         if not preserve_scroll:
+            self._prefer_unified_diff = False
+            self._display_patch = ""
+            workspace.query_one(SplitDiff).display = False
             precision.display = False
             scroll.display = True
             target.update("Loading diff…")
@@ -2425,6 +2692,7 @@ class RhizomeApp(App[None]):
                 if failure or document != self._patch_document:
                     self._patch_stale = True
                     precision.set_stale()
+                    workspace.query_one(SplitDiff).set_stale()
                 return
             if document is not None:
                 self._patch_document = document
@@ -2432,13 +2700,28 @@ class RhizomeApp(App[None]):
                 precision.display = True
                 scroll.display = False
                 precision.set_document(document, context=context)
+                self._display_patch = (
+                    "\n".join(line.text for line in document.lines)
+                    or document.reason
+                    or "No textual changes."
+                )
+                self._apply_diff_presentation()
                 # Retain a literal source summary for copy/inspection consumers;
                 # selection always uses the original document, never this text.
-                target.update(patch_text("\n".join(line.text for line in document.lines)))
+                target.update(
+                    patch_text(
+                        "\n".join(line.text for line in document.lines), palette=self._palette
+                    )
+                )
             else:
                 precision.display = False
                 scroll.display = True
-                target.update(Text(failure) if failure else patch_text(patch))
+                target.update(
+                    Text(failure) if failure else patch_text(patch, palette=self._palette)
+                )
+                if not failure:
+                    self._display_patch = patch
+                    self._apply_diff_presentation()
                 if not preserve_scroll:
                     scroll.scroll_home(animate=False)
 
@@ -2446,6 +2729,9 @@ class RhizomeApp(App[None]):
 
     def on_precision_diff_apply_selection(self, event: PrecisionDiff.ApplySelection) -> None:
         event.stop()
+        if self.query_one(SplitDiff).display:
+            self.status("Split inspection is read-only; use Unified for exact staging.")
+            return
         if self.busy:
             return
         if event.document is not self._patch_document or self._patch_stale:
@@ -2471,31 +2757,385 @@ class RhizomeApp(App[None]):
         self.query_one("#graph-table").focus()
 
     def update_search(self, *, jump: bool = True) -> None:
-        needle = self.query_one("#graph-filter", Input).value.strip().casefold()
-        self._search_matches = [
-            c.oid
-            for c in self._commits.values()
-            if needle
-            and needle in " ".join((c.subject, c.author, c.email, c.oid, *c.refs)).casefold()
-        ]
-        caption = f"All branches + remotes · {len(self._commits)} commits"
-        if needle:
-            caption += f" · {len(self._search_matches)} matches (graph preserved)"
+        query, page = self._search_query, self._search_page
+        scope_label = (
+            f"Focused: {self._history_scope.label}"
+            if self._history_scope and self._history_scope.kind == "focused"
+            else "All refs + HEAD"
+        )
+        caption = f"{scope_label} · {len(self._commits)} commits"
+        if query is not None:
+            progress = page.examined_total if page else 0
+            state = (
+                "complete"
+                if page and page.complete
+                else "searching"
+                if self._search_running
+                else "incomplete"
+            )
+            caption += (
+                f" · {len(self._search_matches)} batch matches · {progress} examined · {state}"
+            )
+            if self._search_note:
+                caption += f" · {self._search_note}"
         if not self._commits:
             caption += " · No commits yet. Stage files to begin."
         selection = self._sidebar_selection
-        if selection and selection.oid and selection.oid not in self._commits:
-            if self.snapshot_data and self.snapshot_data.has_more and self.limit < 5000:
-                caption = f"Tip not loaded · Load more to locate {selection.label} · unified graph"
-            elif self.limit >= 5000:
-                caption = f"Tip outside 5,000-commit display limit · {selection.label}"
-            else:
-                caption = f"Tip not in loaded commit graph · {selection.label} · Actions available"
+        if selection and selection.oid and selection.oid not in self._commits and query is None:
+            caption += f" · Tip not in this window: {selection.label} — browse or Focus"
+        caption += f" · {'Topology' if self.history_order == 'topology' else 'Author time'}"
+        if self._history_page and self._history_page.omitted_before:
+            caption += f" · {self._history_page.omitted_before} earlier rows omitted"
+        if not self._scope_state.current:
+            caption += " · CHANGED — refresh explicitly"
         self.query_one("#history-caption", Static).update(Text(caption))
         self.query_one("#history-caption", Static).tooltip = Text(caption)
+        self.query_one("#history-caption", Static).styles.height = (
+            2 if query or not self._scope_state.current else 1
+        )
         self.query_one("#search-next", Button).disabled = not self._search_matches
-        if jump and self._search_matches:
-            self.jump_to(self._search_matches[0])
+        self.query_one("#search-controls").display = query is not None
+        self.query_one("#search-more", Button).disabled = (
+            self._search_running
+            or query is None
+            or bool(page and page.complete)
+            or not self._scope_state.current
+        )
+        self.query_one("#search-stop", Button).disabled = not self._search_running
+        self.query_one("#search-widen").display = bool(
+            self._history_scope and self._history_scope.kind == "focused"
+        )
+
+    def _stop_search(self, *, clear_results: bool = False) -> None:
+        self._search_token += 1
+        self._search_running = False
+        self._search_note = ""
+        if clear_results:
+            self._search_page = None
+            self._search_matches = []
+
+    def action_stop_search(self) -> None:
+        self._stop_search()
+        self._search_note = "stopped between batches"
+        self.update_search(jump=False)
+
+    def action_search_criteria(self) -> None:
+        def chosen(query: SearchQuery | None) -> None:
+            if query is not None:
+                self._start_scoped_search(query)
+                self.query_one("#graph-filter", Input).value = query.text
+
+        self.push_screen(SearchCriteriaDialog(self._search_query), chosen)
+
+    def action_search_more(self) -> None:
+        if self._search_query and not self._search_running:
+            cursor = self._search_page.next_cursor if self._search_page else None
+            if self._search_page is None or not self._search_page.complete:
+                self._start_scoped_search(self._search_query, cursor=cursor, force=True)
+
+    def action_widen_search(self) -> None:
+        if self._search_query:
+            self._focus_history((), resume_query=self._search_query)
+
+    def _start_scoped_search(
+        self,
+        query: SearchQuery,
+        *,
+        cursor: str | None = None,
+        force: bool = False,
+    ) -> None:
+        if not (
+            query.text or query.path is not None or query.authored_from or query.authored_through
+        ):
+            self._stop_search(clear_results=True)
+            self._search_query = None
+            self.update_search(jump=False)
+            return
+        if (
+            not force
+            and query == self._search_query
+            and (self._search_running or self._search_page)
+        ):
+            return
+        service, scope, order = self._investigation, self._history_scope, self.history_order
+        if service is None or scope is None:
+            return
+        self._stop_search(clear_results=cursor is None)
+        self._search_query = query
+        if not self._scope_state.current:
+            self._search_note = "scope changed — refresh explicitly"
+            self.update_search(jump=False)
+            return
+        self._search_running = True
+        token = self._search_token
+        self.update_search(jump=False)
+
+        async def search() -> None:
+            next_cursor = cursor
+            try:
+                await asyncio.sleep(0.2)
+                while token == self._search_token and scope is self._history_scope:
+                    page = await asyncio.to_thread(
+                        service.search, scope, query, order, next_cursor, 300
+                    )
+                    if token != self._search_token or scope is not self._history_scope:
+                        return
+                    if not self._scope_state.current or not page.state.current:
+                        if not page.state.current:
+                            self._scope_state = page.state
+                        self._search_note = "scope changed — stopped"
+                        return
+                    self._search_page = page
+                    self._search_matches = [hit.commit.oid for hit in page.hits]
+                    if len(self.screen_stack) == 1:
+                        self.update_search(jump=False)
+                    # Keep only this bounded batch. Empty batches continue automatically;
+                    # nonempty batches expose an explicit Search more control.
+                    if page.hits or page.complete:
+                        return
+                    next_cursor = page.next_cursor
+                    await asyncio.sleep(0)
+            except Exception as error:
+                if token == self._search_token:
+                    self._search_note = f"incomplete: {error}"
+            finally:
+                if token == self._search_token:
+                    self._search_running = False
+                    if len(self.screen_stack) == 1:
+                        self.update_search(jump=False)
+                        self._update_history_controls()
+
+        self.run_worker(search(), group="investigation-search", exit_on_error=False)
+
+    def _history_context(self) -> _HistoryContext | None:
+        if not self._history_scope or not self._history_page or not self._scope_snapshot:
+            return None
+        return _HistoryContext(
+            self._history_scope,
+            self._history_page,
+            self._scope_snapshot,
+            self._scope_state,
+            self.history_order,
+            self._focus_roots,
+            tuple(self._history_trail),
+            self._history_position,
+            self._history_key,
+            self.query_one("#graph-filter", Input).value,
+            self._search_query,
+            self._search_page,
+            self.query_one("#graph-table", DataTable).scroll_offset,
+        )
+
+    def action_focus_history(self) -> None:
+        selection = self._sidebar_selection
+        if selection and selection.oid:
+            root = selection.target if selection.target.startswith("refs/") else selection.oid
+            self._focus_history((root,), expected=selection.oid)
+        elif self._selected_commit:
+            self._focus_history((self._selected_commit.oid,))
+        else:
+            self.status("Select a ref or commit, then choose Focus")
+
+    def _focus_history(
+        self,
+        roots: tuple[str, ...],
+        *,
+        expected: str = "",
+        resume_query: SearchQuery | None = None,
+    ) -> None:
+        service, previous = self._investigation, self._history_context()
+        if service is None or previous is None or self.busy or self._history_loading:
+            return
+        self._history_token += 1
+        token = self._history_token
+        self._history_loading = True
+        self._update_history_controls()
+
+        async def focus() -> None:
+            try:
+                scope = await asyncio.to_thread(service.capture, roots)
+                if expected and scope.root_oids != (expected,):
+                    raise GitError("Selected ref changed; refresh/reselect before focusing it.")
+                page = await asyncio.to_thread(service.history, scope, self.history_order)
+                if (
+                    token != self._history_token
+                    or service is not self._investigation
+                    or len(self.screen_stack) != 1
+                ):
+                    return
+                snapshot = self.snapshot_data
+                if snapshot is None:
+                    return
+                if not page.state.current:
+                    raise GitError("Scope changed while focusing; refresh/reselect explicitly.")
+                if self._focus_return is None:
+                    self._focus_return = previous
+                self._stop_search(clear_results=True)
+                self._search_query = None
+                self._history_scope, self._history_page = scope, page
+                self._scope_state, self._focus_roots = page.state, roots
+                self._history_trail = [None]
+                self._history_position = 0
+                self._scope_snapshot = self._captured_badges_snapshot(snapshot, scope)
+                self.query_one("#graph-filter", Input).value = (
+                    resume_query.text if resume_query else ""
+                )
+                await self.apply_snapshot(self._with_history(snapshot))
+                if resume_query is not None:
+                    self._start_scoped_search(resume_query, force=True)
+                self.status(f"Scope: {scope.label} · Exit focus restores the previous view")
+            except Exception as error:
+                if token == self._history_token:
+                    self.show_error(str(error))
+            finally:
+                if token == self._history_token:
+                    self._history_loading = False
+                    self._update_history_controls()
+
+        self.run_worker(focus(), group="investigation", exit_on_error=False)
+
+    def action_exit_focus(self) -> None:
+        context, service = self._focus_return, self._investigation
+        if context is None or service is None or self.busy or self._history_loading:
+            return
+        self._history_token += 1
+        self._stop_search(clear_results=True)
+        self._search_query, self._search_page = context.search_query, context.search_page
+        self._search_matches = (
+            [hit.commit.oid for hit in context.search_page.hits] if context.search_page else []
+        )
+        self._history_scope, self._history_page = context.scope, context.page
+        self._scope_snapshot, self.history_order = context.snapshot, context.order
+        self._scope_state = context.state
+        self._focus_roots = context.roots
+        self._history_trail, self._history_position = list(context.cursors), context.position
+        self._history_key = context.selection
+        self._focus_return = None
+        self._restoring_view = True
+        self.query_one("#graph-filter", Input).value = context.search
+
+        async def restore() -> None:
+            await self._poll_history_state()
+            snapshot = self.snapshot_data
+            if (
+                snapshot is not None
+                and self._history_scope is context.scope
+                and len(self.screen_stack) == 1
+            ):
+                await self.apply_snapshot(self._with_history(snapshot))
+                table = self.query_one("#graph-table", DataTable)
+                self.call_after_refresh(
+                    table.scroll_to, context.scroll.x, context.scroll.y, animate=False
+                )
+                self.status("Returned to the captured history window")
+            self._restoring_view = False
+
+        self.run_worker(restore(), group="investigation", exit_on_error=False)
+
+    def _update_history_controls(self) -> None:
+        workspace = self.screen_stack[0]
+        blocked = self._history_loading or not self._scope_state.current
+        workspace.query_one("#graph-order", Button).label = (
+            "Topology" if self.history_order == "topology" else "Author time"
+        )
+        workspace.query_one("#graph-order", Button).disabled = blocked
+        workspace.query_one("#focus-history", Button).disabled = self._history_loading
+        workspace.query_one("#exit-focus").display = self._focus_return is not None
+        workspace.query_one("#history-newer", Button).disabled = (
+            blocked or self._history_position == 0
+        )
+        older = workspace.query_one("#load-more", Button)
+        older.display = True
+        older.disabled = blocked or self._history_page is None or not self._history_page.has_more
+
+    def action_history_older(self) -> None:
+        if self._history_page and self._history_page.next_cursor:
+            self._request_history_page(self._history_page.next_cursor, self._history_position + 1)
+
+    def action_history_newer(self) -> None:
+        if self._history_position:
+            position = self._history_position - 1
+            self._request_history_page(self._history_trail[position], position)
+
+    def action_toggle_history_order(self) -> None:
+        order: HistoryOrder = "author-time" if self.history_order == "topology" else "topology"
+        self._request_history_page(None, 0, order=order)
+
+    def _request_history_page(
+        self,
+        cursor: str | None,
+        position: int,
+        *,
+        order: HistoryOrder | None = None,
+        selected_oid: str = "",
+        persist_order: bool = True,
+    ) -> None:
+        service, scope = self._investigation, self._history_scope
+        if (
+            service is None
+            or scope is None
+            or self.busy
+            or self._history_loading
+            or not self._scope_state.current
+            or len(self.screen_stack) != 1
+        ):
+            return
+        requested_order = order or self.history_order
+        self._history_token += 1
+        token = self._history_token
+        self._history_loading = True
+        self._update_history_controls()
+        self.status("Reading bounded history page…")
+
+        async def load_page() -> None:
+            try:
+                page = await asyncio.to_thread(service.history, scope, requested_order, cursor)
+                if (
+                    token != self._history_token
+                    or scope is not self._history_scope
+                    or len(self.screen_stack) != 1
+                ):
+                    return
+                if not self._scope_state.current or not page.state.current:
+                    if not page.state.current:
+                        self._scope_state = page.state
+                    self.status("History changed — refresh explicitly before loading more")
+                    return
+                self._history_page = page
+                if order is not None:
+                    self._history_trail = [None]
+                    self.history_order = order
+                    self._settings["graph_order"] = (
+                        "chronological" if order == "author-time" else "topo"
+                    )
+                    self._stop_search(clear_results=True)
+                    if persist_order:
+                        self._save_view_preference("graph_order", self._settings["graph_order"])
+                elif selected_oid:
+                    self._history_trail = self._history_trail[:position] + [cursor]
+                elif position >= len(self._history_trail):
+                    self._history_trail.append(cursor)
+                self._history_position = position
+                if selected_oid:
+                    self._history_key = selected_oid
+                if self.snapshot_data:
+                    await self.apply_snapshot(self._with_history(self.snapshot_data))
+                if order is not None and self._search_query:
+                    self._start_scoped_search(self._search_query, force=True)
+                self.status(
+                    f"Showing {len(page.commits)} commits · {page.omitted_before} earlier rows omitted"
+                )
+            except Exception as error:
+                if token == self._history_token:
+                    self.show_error(str(error))
+            finally:
+                if token == self._history_token:
+                    self._history_loading = False
+                    self._update_history_controls()
+                    if len(self.screen_stack) == 1:
+                        self.update_search(jump=False)
+
+        self.run_worker(load_page(), group="investigation", exit_on_error=False)
 
     def jump_to(self, key: str) -> None:
         table = self.query_one("#graph-table", DataTable)
@@ -2508,17 +3148,24 @@ class RhizomeApp(App[None]):
             self.select_row("graph-table", key, explicit=True)
 
     def next_match(self) -> None:
-        if self._search_matches:
+        if self._search_matches and self._search_page:
             index = (
                 self._search_matches.index(self._history_key) + 1
                 if self._history_key in self._search_matches
                 else 0
-            )
-            self.jump_to(self._search_matches[index % len(self._search_matches)])
+            ) % len(self._search_matches)
+            hit = self._search_page.hits[index]
+            if hit.commit.oid in self._commits:
+                self.jump_to(hit.commit.oid)
+            else:
+                self._request_history_page(
+                    hit.history_cursor, self._history_position + 1, selected_oid=hit.commit.oid
+                )
 
     def on_input_changed(self, event: Input.Changed) -> None:
-        if event.input.id == "graph-filter" and self.snapshot_data:
-            self.update_search()
+        if event.input.id == "graph-filter" and self.snapshot_data and not self._restoring_view:
+            query = replace(self._search_query or SearchQuery(), text=event.value)
+            self._start_scoped_search(query)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "graph-filter":
@@ -2534,8 +3181,24 @@ class RhizomeApp(App[None]):
             self.action_open_repository()
         elif ident == "search-next":
             self.next_match()
+        elif ident == "search-criteria":
+            self.action_search_criteria()
+        elif ident == "search-more":
+            self.action_search_more()
+        elif ident == "search-stop":
+            self.action_stop_search()
+        elif ident == "search-widen":
+            self.action_widen_search()
         elif ident == "graph-style":
             self.action_toggle_graph_style()
+        elif ident == "graph-order":
+            self.action_toggle_history_order()
+        elif ident == "history-newer":
+            self.action_history_newer()
+        elif ident == "focus-history":
+            self.action_focus_history()
+        elif ident == "exit-focus":
+            self.action_exit_focus()
         elif ident == "actions":
             self.action_command_picker()
         elif ident == "activity":
@@ -2556,10 +3219,7 @@ class RhizomeApp(App[None]):
         elif self.busy:
             return
         elif ident == "load-more":
-            if self._sidebar_selection and self._sidebar_selection.oid not in self._commits:
-                self._reveal_ref_key = self._sidebar_selection.key
-            self.limit = min(5000, self.limit + 300)
-            self.request_refresh()
+            self.action_history_older()
         elif ident == "branch":
             self.action_new_branch()
         elif ident == "stash":
@@ -2590,9 +3250,26 @@ class RhizomeApp(App[None]):
             ("refresh", "Refresh local repository"),
             ("create-branch", "Create and check out a branch"),
         ]
+        if self._history_scope:
+            actions.extend(
+                [
+                    ("focus-history", "Focus selected ref / commit (explicit scope)"),
+                    ("graph-order", "Switch Topology / Author-time order"),
+                    ("history-older", "Load older bounded history page"),
+                    ("history-newer", "Return to newer history page"),
+                    ("compare-commits", "Compare selected commit → captured endpoint"),
+                    ("file-history", "File history at selected captured commit"),
+                    ("blame", "Blame file at selected captured commit"),
+                ]
+            )
+            if self._focus_return:
+                actions.append(("exit-focus", "Exit focus / restore previous history context"))
         if self._sidebar_selection and self._sidebar_selection.oid:
-            actions.append(
-                ("locate-ref", f"Locate {self._sidebar_selection.label} in unified graph")
+            actions.extend(
+                [
+                    ("locate-ref", f"Locate {self._sidebar_selection.label} in unified graph"),
+                    ("review-branch", "Review changes introduced by selected captured ref"),
+                ]
             )
         if self._selected_ref and self._selected_kind in {"local", "remote", "tag"}:
             actions.extend(
@@ -2679,6 +3356,20 @@ class RhizomeApp(App[None]):
             self.action_help()
         elif operation == "graph-style":
             self.action_toggle_graph_style()
+        elif operation == "graph-order":
+            self.action_toggle_history_order()
+        elif operation == "history-older":
+            self.action_history_older()
+        elif operation == "history-newer":
+            self.action_history_newer()
+        elif operation == "focus-history":
+            self.action_focus_history()
+        elif operation == "exit-focus":
+            self.action_exit_focus()
+        elif operation in {"compare-commits", "review-branch"}:
+            self.action_compare_history(branch_review=operation == "review-branch")
+        elif operation in {"file-history", "blame"}:
+            self.action_file_investigation("history" if operation == "file-history" else "blame")
         elif operation in {"fetch", "pull", "push"}:
             self.network_action(operation)
         elif operation in {"create-branch", "tag", "rename-branch"}:
@@ -2705,6 +3396,76 @@ class RhizomeApp(App[None]):
                 else ""
             )
             self.run_mutation(Action(operation, target=target, remote=remote))
+
+    def action_compare_history(self, *, branch_review: bool = False) -> None:
+        service, scope = self._investigation, self._history_scope
+        if service is None or scope is None or self.busy:
+            return
+        if branch_review:
+            selected = self._sidebar_selection
+            right = next(
+                (
+                    ref.oid
+                    for ref in scope.captured_refs
+                    if selected and ref.full_name == selected.target
+                ),
+                "",
+            )
+            if not selected or right != selected.oid or not scope.head_oid:
+                self.status("Select a ref from this captured scope, or refresh explicitly first")
+                return
+            self.push_screen(
+                ComparisonDialog(service, scope, scope.head_oid, right, "branch-review")
+            )
+            return
+        left = self._selected_commit.oid if self._selected_commit else scope.head_oid
+        if not left:
+            self.status("Select a commit before comparing")
+            return
+        choices = {
+            commit.oid: f"{commit.short_id} · {commit.subject}" for commit in self._commits.values()
+        }
+        for ref in scope.captured_refs:
+            choices.setdefault(ref.oid, f"{ref.oid[:8]} · {ref.full_name}")
+
+        def compare(right: str | None) -> None:
+            if right in choices and service is self._investigation and scope is self._history_scope:
+                self.push_screen(ComparisonDialog(service, scope, left, right, "endpoints"))
+
+        self.push_screen(
+            ActionPicker(f"COMPARE {left[:12]} → RIGHT ENDPOINT (captured)", list(choices.items())),
+            compare,
+        )
+
+    def action_file_investigation(self, mode: str = "history") -> None:
+        service, scope = self._investigation, self._history_scope
+        if service is None or scope is None or self.busy:
+            return
+        revision = self._selected_commit.oid if self._selected_commit else scope.head_oid
+        path = ""
+        if self._active_diff:
+            file, _, oid = self._active_diff
+            revision = oid or scope.head_oid
+            path = file.path
+        if not revision:
+            self.status("File investigation requires a captured commit")
+            return
+
+        def inspect(selected_path: str | None) -> None:
+            if selected_path and service is self._investigation and scope is self._history_scope:
+                self.push_screen(
+                    FileInvestigationDialog(service, scope, revision, selected_path, mode)
+                )
+
+        if path:
+            inspect(path)
+        else:
+            self.push_screen(
+                PromptDialog(
+                    f"{mode.title()} at {revision[:12]}", "Literal repository-relative file path"
+                ),
+                inspect,
+            )
 
     def named_action(self, operation: str, name: str | None) -> None:
         if not name:
@@ -3081,7 +3842,7 @@ class RhizomeApp(App[None]):
                     repo = await asyncio.to_thread(Repository, destination)
                     if worktree and repo.root != destination.resolve():
                         raise GitError("Worktree moved or was removed. Refresh and try again.")
-                    snapshot = await asyncio.to_thread(repo.snapshot)
+                    snapshot = await asyncio.to_thread(repo.snapshot, include_history=False)
                 self.repo, self.path = repo, repo.root
                 self._clear_reference_selection()
                 self.back_to_graph()
@@ -3089,12 +3850,20 @@ class RhizomeApp(App[None]):
                 self._history_key = "wip"
                 self.snapshot_data = None
                 self._graph_geometry = ()
-                self.limit = 300
+                self._investigation = InvestigationService(repo)
+                self._history_scope = self._history_page = self._scope_snapshot = None
+                self._focus_roots = ()
+                self._focus_return = None
+                self._search_query = None
                 await self._restore_workspace_state(repo)
-                if self.limit != 300:
-                    snapshot = await asyncio.to_thread(repo.snapshot, self.limit)
+                self.history_order = (
+                    "author-time"
+                    if self._settings["graph_order"] == "chronological"
+                    else "topology"
+                )
+                await self._capture_history(snapshot)
                 self.query_one("#graph-filter", Input).value = ""
-                await self.apply_snapshot(snapshot)
+                await self.apply_snapshot(self._with_history(snapshot))
                 self.status(f"Opened {repo.root}")
             except Exception as error:
                 self.show_error(str(error))
@@ -3129,6 +3898,8 @@ class RhizomeApp(App[None]):
             self.back_to_graph()
             self.query_one("#graph-table").focus()
             return
+        self._stop_search(clear_results=True)
+        self._search_query = None
         self.query_one("#graph-filter", Input).value = ""
         self._clear_reference_selection()
         self.update_search(jump=False)
@@ -3231,21 +4002,13 @@ class RhizomeApp(App[None]):
         if len(self.screen_stack) > 1:
             return
         self.graph_style = "compact" if self.graph_style == "smooth" else "smooth"
-        self.query_one("#graph-style", Button).label = Text(f"{self.graph_style.title()} [g]")
+        shortcut = self._shortcut("toggle_graph_style")
+        self.query_one("#graph-style", Button).label = Text(
+            f"{self.graph_style.title()} [{shortcut}]"
+        )
         self.repaint_history()
-        self._settings["graph_style"] = self.graph_style
-        if self._state_store is not None and not self._state_excluded:
-            try:
-                # Preserve unrelated edits made to the user-owned settings file.
-                current = self._state_store.load("global")
-                settings = {**current, "graph_style": self.graph_style}
-                self._state_store.save("global", settings, expected=current)
-                self._global_settings = settings
-                self._settings_error = ""
-            except PersistenceError as error:
-                self._settings_error = str(error)
-                self.notify(escape("Preference not saved: " + str(error)), severity="error")
-        self.status(f"{self.graph_style.title()} graph · g to switch")
+        self._save_view_preference("graph_style", self.graph_style)
+        self.status(f"{self.graph_style.title()} graph · {shortcut} to switch")
 
     def action_activity(self) -> None:
         if len(self.screen_stack) > 1:
@@ -3312,7 +4075,7 @@ class RhizomeApp(App[None]):
 
     def action_help(self) -> None:
         if len(self.screen_stack) == 1:
-            self.push_screen(HelpDialog())
+            self.push_screen(HelpDialog(self._settings["keymap"]))
 
     def action_next_row(self) -> None:
         if isinstance(self.focused, (DataTable, CommitFileTree)):
