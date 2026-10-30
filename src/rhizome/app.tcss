@@ -1,410 +1,181 @@
-/* Rhizome — bright, quiet framing for high-contrast colored commit lanes. */
-Screen {
-    background: $background;
-    color: $text;
-}
-
-/* Never let hover popups cover the workspace or dialogs. Textual toggles
-   display inline, so hide visibility instead (also excludes mouse hit-testing). */
+/* Rhizome — a calm Git desk: hierarchy first, colour only for meaning. */
+Screen { background: $background; color: $text; }
 Tooltip { visibility: hidden; }
-
 Static, Label { color: $text; }
-ModalScreen Input { background: $surface; color: $text; border: tall $primary-muted; }
-ModalScreen Input:focus { border: tall $primary; }
-Input > .input--placeholder, Input > .input--suggestion { color: $text-muted; }
 Button { min-width: 0; border: none; }
-/* Focus is a shape and type treatment as well as a colour change. */
 Button:focus { text-style: bold underline; }
 Input:focus, TextArea:focus, Select:focus { border: tall $primary; }
+Input > .input--placeholder, Input > .input--suggestion { color: $text-muted; }
+ModalScreen Input { background: $surface; color: $text; border: tall $primary-muted; }
+ModalScreen Input:focus { border: tall $primary; }
 
-/* Repository identity is the calm topmost anchor, not another toolbar. */
+/* Identity and actions share one deliberately small header band. */
+#app-header { height: 3; padding: 0 1; background: $panel; border-bottom: tall $primary-muted; }
 #repo-header, #brand {
-    height: 2;
-    padding: 0 2;
-    background: $panel;
-    color: $text;
-    content-align: left middle;
-    text-style: bold;
+    width: 1fr; height: 3; padding: 0 1; background: $panel;
+    color: $text; content-align: left middle; text-style: bold;
 }
 #repo-path { color: $text-muted; text-style: none; }
-#toolbar {
-    height: 3;
-    padding: 1 1 0 1;
-    background: $panel;
-    border-bottom: tall $primary-muted;
-}
+#toolbar { width: auto; height: 3; padding: 1 0; background: $panel; }
 .tool, #open, #help, #refresh {
-    height: 1;
-    min-width: 7;
-    margin-right: 1;
-    padding: 0 1;
-    background: $surface;
-    color: $text;
+    height: 1; min-width: 0; margin-left: 1; padding: 0 1;
+    background: transparent; color: $foreground-muted;
 }
 .tool:hover, .tool:focus, #open:hover, #open:focus, #help:hover, #help:focus,
-#refresh:hover, #refresh:focus {
-    background: $primary-muted;
-    color: $text;
-}
-.tool.primary, #refresh {
-    background: $primary;
-    color: $surface;
-    text-style: bold;
-}
-#workspace-nav {
-    height: 1;
-    padding: 0 1;
-    background: $panel;
-}
+#refresh:hover, #refresh:focus { background: $primary-muted; color: $text; }
+.tool.primary, #refresh { background: $primary; color: $surface; text-style: bold; }
+/* These stay available through Actions; the daily surface remains uncluttered. */
+#pull, #stash, #pop, #branch { display: none; }
+
+#workspace-nav { height: 2; padding: 0 1; background: $background; border-bottom: tall $primary-muted; }
 #workspace-nav Button {
-    height: 1;
-    margin-right: 1;
-    padding: 0 1;
-    background: $surface;
-    color: $text;
+    height: 2; margin-right: 1; padding: 0 1; background: transparent;
+    color: $text-muted;
 }
-#workspace-nav Button:hover, #workspace-nav Button:focus {
-    background: $primary-muted;
-    color: $text;
-}
-#workspace-settings {
-    background: $primary-muted;
-    color: $primary;
-    text-style: bold;
-}
-#workspace-settings:hover, #workspace-settings:focus { background: $primary-muted; color: $text; }
-/* Horizontal containers otherwise consume the vertical free space in history-panel. */
-#search-bar { height: 1; min-height: 1; }
-#history-caption { height: 1; min-height: 1; }
-#graph-filter {
-    width: 1fr;
-    height: 1;
-    padding: 0 1;
-    border: none;
-    background: $surface;
-    color: $text;
-}
-#graph-filter:focus { background: $surface; border: none; }
-#search-controls { height: 1; min-height: 1; }
-#search-controls Button {
-    width: 1fr;
-    height: 1;
-    background: $surface;
-    color: $primary;
-}
-#search-criteria {
-    width: 7;
-    min-width: 7;
-    height: 1;
-    margin-left: 1;
-    padding: 0;
-    background: $surface;
-    color: $primary;
-}
-#search-next, #clear-search {
-    width: 6;
-    min-width: 6;
-    height: 1;
-    margin-left: 1;
-    padding: 0;
-    background: $surface;
-    color: $primary;
-}
+#workspace-nav Button:hover, #workspace-nav Button:focus { background: $primary-muted; color: $text; }
+#workspace-nav .nav-active { color: $primary; text-style: bold; border-bottom: tall $primary; }
+#nav-spacer { width: 1fr; }
+#workspace-settings { color: $primary; text-style: bold; }
 
-#graph-style {
-    width: 13;
-    min-width: 13;
-    height: 1;
-    margin-left: 1;
-    padding: 0;
-    background: $surface;
-    color: $primary;
-}
-#graph-style:hover, #graph-style:focus { background: $primary-muted; color: $text; }
-
-/* Pending work deserves colour, but never the entire screen. */
-#operation-banner {
-    /* App turns this on only for conflicts/operations; absent state must take no row. */
-    display: none;
-    height: 2;
-    padding: 0 2;
-    background: $warning-muted;
-    color: $text-warning;
-    border-bottom: tall $warning;
-}
+#operation-banner { display: none; height: 2; padding: 0 2; background: $warning-muted; color: $text-warning; border-bottom: tall $warning; }
 #operation-text { width: 1fr; content-align: left middle; text-style: bold; }
-.operation-button {
-    width: 10;
-    height: 1;
-    margin: 0 0 0 1;
-    padding: 0 1;
-    background: $warning-muted;
-    color: $text-warning;
-}
-.operation-button:hover, .operation-button:focus { background: $warning; color: $text-warning; }
+.operation-button { width: 10; height: 1; margin-left: 1; padding: 0 1; background: transparent; color: $text-warning; }
+.operation-button:hover, .operation-button:focus { background: $warning; color: $text; }
 
 #workspace { height: 1fr; }
-#refs-panel {
-    width: 25;
-    min-width: 15;
-    padding: 1;
-    background: $panel;
-}
-#history-panel {
-    width: 1fr;
-    min-width: 34;
-    padding: 0;
-    background: $background;
-}
-#inspector-panel {
-    width: 46;
-    min-width: 25;
-    padding: 0;
-    background: $panel;
-}
+#refs-panel { width: 24; min-width: 15; padding: 1; background: $panel; }
+#refs-heading { height: 2; padding: 0 1; color: $text-muted; text-style: bold; }
+/* Focus must not grow this one-line filter and move click targets beneath it. */
+#ref-filter, #ref-filter:focus { border: none; }
+#ref-filter:focus { background: $primary-muted; }
+#history-panel { width: 1fr; min-width: 34; background: $surface; }
+#inspector-panel { width: 42; min-width: 25; background: $panel; }
 #graph-workspace, #diff-workspace { height: 1fr; }
-#history-heading {
-    height: 1;
-    margin: 0;
-    padding: 0 1;
-    color: $primary;
-    text-style: bold;
-    background: $panel;
+#history-titlebar { height: 2; padding: 0 1; background: $background; border-bottom: tall $primary-muted; }
+#history-heading { width: 1fr; height: 2; padding: 0; color: $text; content-align: left middle; text-style: bold; background: $background; }
+#history-count { width: auto; height: 2; color: $text-muted; content-align: right middle; background: $background; }
+#search-bar, #search-controls, #history-caption, #history-navigation { height: 1; min-height: 1; }
+#search-bar { margin: 0 1; }
+#graph-filter { width: 1fr; height: 1; padding: 0 1; border: none; background: $surface; color: $text; }
+#graph-filter:focus { background: $surface; border: none; }
+#search-controls Button, #search-criteria, #search-next, #clear-search, #graph-style {
+    height: 1; margin-left: 1; padding: 0; border: none; background: transparent; color: $primary;
 }
-#history-caption { height: 1; padding: 0 1; color: $text-muted; background: $panel; }
+#search-controls Button { width: 1fr; }
+#search-criteria { width: 9; min-width: 9; }
+#search-next, #clear-search { width: 6; min-width: 6; }
+#graph-style { width: auto; min-width: 12; }
+#search-controls Button:hover, #search-controls Button:focus, #graph-style:hover, #graph-style:focus { background: $primary-muted; color: $text; }
+#history-caption { padding: 0 1; color: $text-muted; background: $background; }
 
-/* A quiet canvas keeps lane colors readable, including on the selected row. */
+/* The graph is the primary reading surface, not a spreadsheet. */
 #graph-table {
-    height: 1fr;
-    border: none;
-    background: $background;
+    height: 1fr; border: none; background: $surface;
+    scrollbar-size-vertical: 1; scrollbar-size-horizontal: 1;
+    scrollbar-background: $surface; scrollbar-color: $foreground-muted 35%;
+    scrollbar-color-hover: $foreground-muted 65%;
 }
-#graph-table > .datatable--header {
-    background: $panel;
-    color: $foreground-muted;
-    text-style: bold;
-}
+#graph-table > .datatable--header { background: $background; color: $text-muted; text-style: bold; }
 #graph-table > .datatable--header-hover { background: $primary-muted; }
-#graph-table > .datatable--cursor {
-    background: $primary-muted;
-    color: $text;
-    text-style: bold;
-}
-#graph-table > .datatable--hover { background: $surface; }
-#history-navigation { height: 1; min-height: 1; }
-#history-navigation Button {
-    width: 1fr;
-    height: 1;
-    padding: 0 1;
-    background: $panel;
-    color: $primary;
-    text-style: bold;
-}
-#history-navigation Button:hover, #history-navigation Button:focus {
-    background: $primary-muted;
-    color: $text;
-}
+#graph-table > .datatable--cursor { background: $primary-muted; color: $text; text-style: bold; }
+#graph-table > .datatable--hover { background: $panel; }
+#history-navigation Button { width: 1fr; height: 1; padding: 0 1; background: transparent; color: $primary; }
+#history-navigation Button:hover, #history-navigation Button:focus { background: $primary-muted; color: $text; }
 
-/* An explicit file activation temporarily replaces, but never rebuilds, the graph. */
-#diff-toolbar {
-    height: 2;
-    padding: 0 1;
-    background: $panel;
-    border-bottom: tall $primary-muted;
-}
-#back-to-graph {
-    height: 1;
-    margin-right: 1;
-    padding: 0 1;
-    background: $primary-muted;
-    color: $primary;
-}
+#diff-toolbar { height: 2; padding: 0 1; background: $panel; border-bottom: tall $primary-muted; }
+#back-to-graph { height: 1; margin-right: 1; padding: 0 1; background: transparent; color: $primary; }
 #back-to-graph:hover, #back-to-graph:focus { background: $primary-muted; color: $text; }
 #center-diff-title { width: 1fr; height: 1; color: $foreground-muted; text-style: bold; }
-#center-diff-scroll {
-    height: 1fr;
-    padding: 0 1;
-    overflow-y: auto;
-    background: $surface;
-    border-left: tall $primary-muted;
-}
+#center-diff-scroll { height: 1fr; padding: 0 1; overflow-y: auto; background: $surface; }
 #center-diff { height: auto; min-height: 1; color: $text; }
 
 TabbedContent { height: 1fr; background: $panel; }
 TabbedContent ContentTab { color: $text-muted; background: $panel; }
-TabbedContent ContentTab.-active { color: $primary; background: $primary-muted; text-style: bold; }
+TabbedContent ContentTab.-active { color: $text; background: $primary-muted; text-style: bold; }
 #inspector-tabs > ContentSwitcher, TabPane { height: 1fr; }
 TabPane { padding: 1; }
 #commit-changes, #wip-changes { height: 1fr; min-height: 8; }
-/* Compact commit metadata leaves the whole inspector available to its file tree. */
-#commit-detail {
-    height: 4;
-    min-height: 4;
-    max-height: 4;
-    overflow-y: hidden;
-    padding: 0 1;
-    color: $text;
-}
-/* Changed files fill the space formerly occupied by the inline diff. */
+#commit-detail { height: 4; min-height: 4; max-height: 4; overflow-y: hidden; padding: 0 1; color: $text; }
+/* A file list is an inspector, not a second terminal inside a box. */
 #commit-file-tree {
-    height: 1fr;
-    min-height: 5;
-    margin-top: 1;
-    padding: 0 1;
-    border: round $primary-muted;
-    background: $surface;
-    color: $text;
-    scrollbar-size-vertical: 1;
-    scrollbar-size-horizontal: 1;
+    height: 1fr; min-height: 5; margin-top: 1; padding: 0; border: none;
+    background: $panel; color: $text; overflow-x: auto;
+    scrollbar-size-vertical: 1; scrollbar-size-horizontal: 1;
+    scrollbar-background: $panel; scrollbar-color: $foreground-muted 35%;
+}
+/* The file toolbar already names this view; don't nest another framed header. */
+#precision-diff { border: none; }
+PrecisionDiff .precision-heading { display: none; }
+PrecisionDiff #precision-lines {
+    scrollbar-size-vertical: 1; scrollbar-size-horizontal: 1;
+    scrollbar-background: $surface; scrollbar-color: $foreground-muted 35%;
 }
 #commit-file-tree > .tree--guides { color: $text-muted; }
 #commit-file-tree > .tree--guides-hover { color: $text-muted; }
 #commit-file-tree > .tree--guides-selected { color: $primary; }
-#commit-file-tree > .tree--cursor, #commit-file-tree:focus > .tree--cursor {
-    background: $primary-muted;
-    color: $text;
-    text-style: none;
-}
-/* Working copy keeps its staging controls and composer in the inspector. */
+#commit-file-tree > .tree--cursor, #commit-file-tree:focus > .tree--cursor { background: $primary-muted; color: $text; text-style: none; }
 .wip-actions { height: 2; }
-.wip-actions Button, #stage-all, #unstage-all {
-    min-width: 8;
-    height: 1;
-    margin-right: 1;
-    padding: 0 1;
-    background: $primary-muted;
-    color: $text;
-}
-.wip-actions Button:hover, .wip-actions Button:focus, #stage-all:hover,
-#stage-all:focus, #unstage-all:hover, #unstage-all:focus { background: $primary-muted; color: $text; }
-#discard { background: $error-muted; color: $text-error; }
-#discard:hover, #discard:focus { background: $error-muted; color: $text-error; }
-#wip-table {
-    height: 1fr;
-    min-height: 3;
-    border: round $primary-muted;
-    background: $surface;
-}
-#wip-empty {
-    height: auto;
-    min-height: 3;
-    padding: 0 1;
-    color: $text-muted;
-    background: $surface;
-    border: round $primary-muted;
-}
-#wip-table > .datatable--header {
-    background: $panel;
-    color: $foreground-muted;
-    text-style: bold;
-}
-#wip-table > .datatable--cursor {
-    background: $primary-muted;
-    color: $text;
-    text-style: none;
-}
+.wip-actions Button, #stage-all, #unstage-all { min-width: 8; height: 1; margin-right: 1; padding: 0 1; background: transparent; color: $primary; }
+.wip-actions Button:hover, .wip-actions Button:focus, #stage-all:hover, #stage-all:focus, #unstage-all:hover, #unstage-all:focus { background: $primary-muted; color: $text; }
+#discard { color: $text-error; }
+#wip-table, #wip-empty { height: 1fr; min-height: 3; border: none; background: $surface; }
+#wip-empty { height: auto; padding: 0 1; color: $text-muted; }
+#wip-table > .datatable--header { background: $panel; color: $text-muted; text-style: bold; }
+#wip-table > .datatable--cursor { background: $primary-muted; color: $text; }
 #staged-summary { height: 2; color: $foreground-muted; }
-#composer-guidance {
-    height: auto;
-    min-height: 1;
-    margin-top: 1;
-    padding: 0 1;
-    border-left: tall $primary-muted;
-    background: $surface;
-    color: $text-muted;
-}
+#composer-guidance { height: auto; min-height: 1; margin-top: 1; padding: 0 1; border-left: tall $primary-muted; color: $text-muted; }
 #draft-status { height: 1; color: $text-muted; }
 .composer-label { height: 1; margin-top: 1; color: $foreground-muted; }
-#commit-message {
-    height: 4;
-    margin-top: 0;
-    border: round $primary-muted;
-    background: $surface;
-    color: $text;
-}
+#commit-message { height: 4; margin-top: 0; border: round $primary-muted; background: $surface; color: $text; }
 #commit-message:focus { border: round $primary; }
-#commit {
-    width: 1fr;
-    height: 2;
-    margin-top: 1;
-    background: $primary;
-    color: $surface;
-    text-style: bold;
-}
-#commit:hover, #commit:focus { background: $primary; }
+#commit { width: 1fr; height: 2; margin-top: 1; background: $primary; color: $surface; text-style: bold; }
 
-#status-line, #key-hint {
-    height: 1;
-    padding: 0 2;
-    background: $surface;
-    color: $text-muted;
-}
-#status-line { color: $foreground-muted; }
-.collapsed, .refs-hidden #refs-panel, .refs-hidden #refs-splitter,
-.inspector-hidden #inspector-panel, .inspector-hidden #inspector-splitter { display: none; }
+#status-bar { height: 2; padding: 0 1; background: $panel; border-top: tall $primary-muted; }
+#status-line, #key-hint { height: 1; padding: 0 1; background: transparent; color: $text-muted; }
+#status-line { width: 1fr; color: $foreground-muted; }
+#key-hint { width: auto; }
+.collapsed, .refs-hidden #refs-panel, .refs-hidden #refs-splitter, .inspector-hidden #inspector-panel, .inspector-hidden #inspector-splitter, .refs-auto-hidden #refs-panel, .refs-auto-hidden #refs-splitter { display: none; }
 
-/* Root adds these classes from terminal width; no CSS media queries are needed in Textual. */
-.compact #refs-panel { width: 22; }
-.compact #inspector-panel { width: 36; }
-.compact .tool, .compact #open, .compact #help, .compact #refresh { min-width: 5; padding: 0; }
-.compact #toolbar { padding-left: 0; padding-right: 0; }
+.compact #refs-panel { width: 21; }
+.compact #inspector-panel { width: 34; }
+.compact .tool, .compact #open, .compact #help, .compact #refresh { margin-left: 0; padding: 0; }
 .narrow #refs-panel { width: 18; padding: 0 1; }
 .narrow #inspector-panel { width: 30; }
-.narrow .tool, .narrow #open, .narrow #help, .narrow #refresh { width: 5; min-width: 5; }
 .narrow #graph-filter { min-width: 12; }
+/* Medium terminals keep the history and its inspector; refs remain summonable. */
+.responsive-refs.refs-auto-hidden #refs-panel, .responsive-refs.refs-auto-hidden #refs-splitter { display: none; }
 
-/* At 80×24 one task owns the canvas. Summoned panels preserve the graph,
-   captured diff, and draft beneath them, and Back restores the primary view. */
-.pane-constrained #repo-header { height: 1; padding: 0 1; }
-.pane-constrained #toolbar { height: 2; padding-top: 0; }
-.pane-constrained #pull, .pane-constrained #stash, .pane-constrained #pop { display: none; }
-.pane-constrained .tool { width: auto; min-width: 7; }
-.pane-constrained #open { width: 6; min-width: 6; }
-.pane-constrained #refresh { width: auto; min-width: 5; }
-/* Button labels already include one cell on each side; avoid double padding. */
-.pane-constrained #workspace-nav Button { padding: 0; margin-right: 0; }
-.pane-constrained #refs-panel, .pane-constrained #refs-splitter,
-.pane-constrained #inspector-panel, .pane-constrained #inspector-splitter { display: none; }
-.pane-constrained.responsive-inspector #history-panel,
-.pane-constrained.responsive-refs #history-panel { display: none; }
+/* A one-cell border consumes the whole content box. Keep text-bearing chrome
+   at two rows where it has a border; the nav stays a clean single row. */
+.pane-constrained #app-header { height: 2; padding: 0 1; }
+.pane-constrained #repo-header, .pane-constrained #toolbar { height: 1; padding: 0; }
+.pane-constrained #repo-header { padding-left: 1; }
+.pane-constrained #toolbar .tool { margin-left: 0; padding: 0 1; }
+.pane-constrained #fetch, .pane-constrained #push, .pane-constrained #help { display: none; }
+.pane-constrained #workspace-nav { height: 1; padding: 0; border-bottom: none; }
+.pane-constrained #workspace-nav Button { height: 1; margin-right: 0; padding: 0; }
+/* The active underline would consume the compact button's only content row. */
+.pane-constrained #workspace-nav .nav-active { border-bottom: none; }
+.pane-constrained #status-bar { height: 2; padding: 0; }
+.pane-constrained #status-line, .pane-constrained #key-hint { padding: 0 1; }
+.pane-constrained #refs-panel, .pane-constrained #refs-splitter, .pane-constrained #inspector-panel, .pane-constrained #inspector-splitter { display: none; }
+.pane-constrained.responsive-inspector #history-panel, .pane-constrained.responsive-refs #history-panel { display: none; }
 .pane-constrained.responsive-inspector #inspector-panel { display: block; width: 1fr; }
 .pane-constrained.responsive-refs #refs-panel { display: block; width: 1fr; }
 .pane-constrained #wip-changes { min-height: 3; }
-.pane-constrained.task-files #staged-summary,
-.pane-constrained.task-files #composer-guidance,
-.pane-constrained.task-files .composer-label,
-.pane-constrained.task-files #commit-message,
-.pane-constrained.task-files #draft-status,
-.pane-constrained.task-files #commit { display: none; }
-.pane-constrained.task-composer .wip-actions,
-.pane-constrained.task-composer #wip-changes { display: none; }
-.pane-constrained.task-composer #composer-guidance { margin-top: 0; }
+.pane-constrained.task-files #staged-summary, .pane-constrained.task-files #composer-guidance, .pane-constrained.task-files .composer-label, .pane-constrained.task-files #commit-message, .pane-constrained.task-files #draft-status, .pane-constrained.task-files #commit { display: none; }
+.pane-constrained.task-composer .wip-actions, .pane-constrained.task-composer #wip-changes { display: none; }
 .pane-constrained.task-composer #commit-message { height: 1fr; min-height: 4; }
-.pane-constrained.task-composer .composer-label { margin-top: 0; }
-.pane-constrained #key-hint { padding: 0 1; }
-
-/* At 60 columns the inspector gets 25, leaving 34 for the center + divider. */
 .pane-tight #inspector-panel { width: 25; }
 .pane-tight .wip-actions Button { min-width: 0; width: 1fr; margin-right: 0; padding: 0; }
-
-/* Keep the pane toolbar useful instead of clipping ten terse controls. */
-.pane-tight #fetch, .pane-tight #pull, .pane-tight #push, .pane-tight #branch,
-.pane-tight #stash, .pane-tight #pop { display: none; }
+.pane-tight #fetch { display: none; }
 .pane-tight #actions { width: 9; min-width: 9; }
 
 ModalScreen { align: center middle; background: $foreground-muted 28%; }
-/* Branch and commit context menus are anchored dropdowns, not dimmed dialogs. */
 BranchContextMenu { align: left top; background: transparent; }
-#action-picker, #prompt-dialog {
-    width: 54;
-    height: auto;
-    max-height: 22;
-    padding: 1 2;
-    border: round $primary-muted;
-    background: $panel;
-}
+#action-picker, #prompt-dialog { width: 54; height: auto; max-height: 22; padding: 1 2; border: round $primary-muted; background: $panel; }
 .dialog-title { margin-bottom: 1; color: $primary; text-style: bold; }
 .dialog-detail { margin-bottom: 1; color: $foreground-muted; }
-#action-options { height: auto; max-height: 14; border: round $primary-muted; background: $surface; }
+#action-options { height: auto; max-height: 14; border: none; background: $surface; }
 .dialog-buttons { height: 3; margin-top: 1; align: right middle; }
 .dialog-buttons Button { margin-left: 1; }

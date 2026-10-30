@@ -32,18 +32,29 @@ is cloned or pushed by the demo. `uv run --locked python -m rhizome [path]` also
 The target environment is macOS/Linux/WSL2, including SSH and optional tmux 3.2+.
 The precision flow has headless **80×24** coverage; that is not proof of every
 terminal, platform, minimum version, assistive technology, or human usability gate.
-At wide sizes all three panels fit. In a constrained terminal, Files, Commit, Refs,
-and Back summon one primary task rather than squeezing all panels together.
+At wide sizes all three panels fit. At 85–119 columns, history and inspection take
+priority; **Refs** summons the reference rail. Below 85 columns, **Changes / F2**,
+**Commit / F3**, and **Refs** summon one primary task. **History** returns to the
+graph; **Esc** returns to the previous review view.
+
+The repository header holds frequent actions; branch creation, stash controls and
+Pull remain in **Actions / Ctrl+P** with their existing safety gates. **Settings /
+F4** includes light, dark and high-contrast themes. The active task is highlighted.
 
 ## Browse without checking out
 
 - **References:** the searchable tree groups repository, local branches, remotes,
   worktrees, PRs, tags and stashes. Carets and Space fold groups. Selecting or
   double-clicking a branch sets context; it never checks out or filters history.
-- **History:** select or double-click a commit to inspect it. Right-click its row
-  for exact commit actions, or its branch-name badge for branch-specific actions.
+- **History:** commit messages come first. Branches, dates, authors and SHAs appear
+  as width permits; the inspector retains the full metadata. Select or double-click
+  a commit to inspect it. At narrow widths, **Enter** opens the inspector and **Esc**
+  returns to history. Right-click a row for exact commit actions, or a branch-name
+  badge for branch-specific actions.
 - **Details:** activate a changed file to open its diff. Back/Esc restores the
-  graph; merely selecting a commit does not open a file diff.
+  graph; merely selecting a commit does not open a file diff. Commits with more
+  than 20 changed files start with folded, counted directory groups. Enter/Space
+  opens a group; refresh preserves your folds and selected file.
 - **Worktrees:** double-click a registered worktree, or select it and choose
   **Open selected worktree** in **Actions / Ctrl+P**. This navigates to another
   checkout without changing the current one. **Create worktree at HEAD** in Actions
@@ -56,11 +67,10 @@ Only an explicit **Checkout** command changes the checkout. Remote checkout uses
 exact remote-ref identity: an unrelated same-named local branch is not silently
 substituted. A ref/HEAD/context change while a prompt is open invalidates the action.
 
-Current history still uses the existing author-time timeline, loaded in batches
-of 300 up to 5,000. Search currently covers that loaded history. Complete captured-
-scope search, topology-first ordering, bounded deep pagination, explicit focus,
-comparisons, file history, and blame belong to M2 and are **not yet implemented**.
-Selecting a reference does not pretend to provide those features.
+The development checkout includes M2 captured-scope search, topology-first history,
+bounded pagination, explicit Focus and investigation tools. These are implemented
+but M2 is not yet accepted; see [investigation semantics and limitations](investigation.md).
+Selecting a reference does not implicitly filter history or change the checkout.
 
 ### Graph and pointer details
 
@@ -85,7 +95,7 @@ suppressed in the workspace.
 
 ## Craft a precise commit
 
-1. Choose **Files / F2**. Staged and unstaged versions of a mixed file have separate
+1. Choose **Changes / F2**. Staged and unstaged versions of a mixed file have separate
    entries. A row highlight and an explicitly opened review are independent.
 2. Activate the file to open the canonical unified diff. The diff takes keyboard
    focus; return focus to Files when changing the whole-file selection.

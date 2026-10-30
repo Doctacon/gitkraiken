@@ -87,6 +87,9 @@ def reference_node(app, target):
 
 
 async def click_reference(app, pilot, target, *, times=1, button=1):
+    if not app.query_one("#refs-panel").display:
+        await pilot.click("#show-refs")
+        await pilot.pause()
     tree = app.query_one("#refs-tree", Tree)
     node = reference_node(app, target)
     parent = node.parent
@@ -210,7 +213,7 @@ async def test_hover_tooltips_stay_hidden_in_workspace_and_context_menu(demo_rep
         assert app.graph_style == "compact"
 
 
-@pytest.mark.parametrize("width", [120, 170])
+@pytest.mark.parametrize("width", [240, 270])
 async def test_history_author_and_date_time_columns_survive_style_and_size_changes(
     demo_repo, git_run, monkeypatch, local_timezone, width
 ):
@@ -224,7 +227,7 @@ async def test_history_author_and_date_time_columns_survive_style_and_size_chang
         table = app.query_one("#graph-table", DataTable)
         for _ in range(2):
             columns = [column.key.value for column in table.ordered_columns]
-            assert columns[:5] == ["graph", "refs", "author", "date", "subject"]
+            assert columns[:5] == ["graph", "subject", "refs", "author", "date"]
             assert table.get_cell(tip, "author").plain == app._commits[tip].author
             assert str(table.get_cell("wip", "author")) == ""
             assert ("sha" in columns) == app._show_sha
@@ -377,7 +380,7 @@ async def test_opening_modal_cancels_mouse_resize_capture(demo_repo, selector):
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         widget = app.query_one(selector)
-        point = header_grip(widget, "author") if selector == "#graph-table" else (0, 3)
+        point = header_grip(widget, "subject") if selector == "#graph-table" else (0, 3)
         assert await pilot.mouse_down(widget, offset=point)
         assert app.mouse_captured is widget
         app.action_help()
@@ -394,17 +397,19 @@ async def test_opening_modal_cancels_mouse_resize_capture(demo_repo, selector):
 
 async def test_history_column_drags_preserve_sizes_and_selection(demo_repo, git_run):
     app = RhizomeApp(demo_repo)
-    async with app.run_test(size=(190, 50)) as pilot:
+    async with app.run_test(size=(240, 50)) as pilot:
         await settle(app, pilot)
         table = app.query_one("#graph-table", ResizableDataTable)
         app.jump_to(app.snapshot_data.head)
         await settle(app, pilot)
         key, rows = app._history_key, app._graph_rows
         widths = {}
-        for column in ("graph", "refs", "author", "date", "subject", "sha"):
-            table.scroll_to(
-                x=table.max_scroll_x if column in ("subject", "sha") else 0, animate=False
+        for column in ("graph", "subject", "refs", "author", "date", "sha"):
+            right = sum(
+                col.get_render_width(table)
+                for col in table.ordered_columns[: table.get_column_index(column) + 1]
             )
+            table.scroll_to(x=max(0, right - table.scrollable_content_region.width), animate=False)
             await pilot.pause()
             original = table.columns[column].width
             await drag(pilot, table, header_grip(table, column), (4, 2))
@@ -419,7 +424,7 @@ async def test_history_column_drags_preserve_sizes_and_selection(demo_repo, git_
         await settle(app, pilot)
         await pilot.resize_terminal(120, 45)  # SHA temporarily disappears.
         await settle(app, pilot)
-        await pilot.resize_terminal(190, 50)
+        await pilot.resize_terminal(240, 50)
         await settle(app, pilot)
         for column, width in widths.items():
             assert table.columns[column].width == width
@@ -640,8 +645,8 @@ async def test_branch_creation_runs_on_name_submission(demo_repo):
     app = RhizomeApp(demo_repo)
     async with app.run_test(size=(160, 45)) as pilot:
         await settle(app, pilot)
-        await pilot.click("#branch")
-        await pilot.pause()
+        await pilot.click("#actions")
+        await choose_option(app, pilot, "create-branch")
         assert isinstance(app.screen, PromptDialog)
         app.screen.query_one(Input).value = "feature/from-ui"
         await pilot.click("#confirm")
@@ -661,7 +666,7 @@ async def test_smooth_graph_toggle_preserves_selection_search_and_navigation(dem
         assert app.graph_style == "smooth"
         assert table.cursor_foreground_priority == "renderable"
         assert table.row_count == len(commits) + 1
-        assert "crossing, not a join" in str(app.query_one("#history-heading", Static).render())
+        assert "crossing, not a join" in app.query_one("#history-heading", Static).tooltip.plain
         assert any(row.height > 1 for row in app._graph_rows)
         assert any("╮" in row.graph.plain or "╯" in row.graph.plain for row in app._graph_rows)
         assert all(
@@ -692,7 +697,7 @@ async def test_smooth_graph_toggle_preserves_selection_search_and_navigation(dem
         await settle(app, pilot)
         assert app.graph_style == "compact"
         assert app.query_one("#graph-style", Button).label.plain == "Compact [g]"
-        assert "crossing, not a join" in str(app.query_one("#history-heading", Static).render())
+        assert "crossing, not a join" in app.query_one("#history-heading", Static).tooltip.plain
         assert all(row.height == 1 for row in app._graph_rows)
         assert table.row_count == len(app._graph_rows) + 1
         assert app._history_key == selected
@@ -710,7 +715,7 @@ async def test_smooth_graph_toggle_preserves_selection_search_and_navigation(dem
         await settle(app, pilot)
         assert app._graph_rows is graph_rows  # Resizing does not recompute topology.
         assert app._history_key == selected
-        assert "crossing, not a join" in str(app.query_one("#history-heading", Static).render())
+        assert "crossing, not a join" in app.query_one("#history-heading", Static).tooltip.plain
 
 
 async def test_graph_shortcut_does_not_steal_text_input_or_escape_dialog(demo_repo):
@@ -1036,23 +1041,23 @@ async def test_real_local_remote_badges_separate_when_local_branch_advances(bran
         await settle(app, pilot)
         table = app.query_one("#graph-table", DataTable)
         base = git(branch_repo, "rev-parse", "main")
-        assert "💻" in table.get_cell(base, "refs").plain
+        assert "⑂" in table.get_cell(base, "refs").plain
         assert "↗" in table.get_cell(base, "refs").plain
-        assert "🌳" not in table.get_cell(base, "refs").plain
+        assert "▤" not in table.get_cell(base, "refs").plain
         (branch_repo / "local.txt").write_text("local advance\n")
         git_run(branch_repo, "add", ".")
         git_run(branch_repo, "commit", "-m", "Advance local main")
         tip = git(branch_repo, "rev-parse", "HEAD")
         app.action_refresh()
         await settle(app, pilot)
-        assert "💻" in table.get_cell(tip, "refs").plain
+        assert "⑂" in table.get_cell(tip, "refs").plain
         assert "↗" not in table.get_cell(tip, "refs").plain
         assert "↗" in table.get_cell(base, "refs").plain
-        assert "💻" not in table.get_cell(base, "refs").plain
+        assert "⑂" not in table.get_cell(base, "refs").plain
         git_run(branch_repo, "push", "origin", "main")
         app.action_refresh()
         await settle(app, pilot)
-        assert "💻" in table.get_cell(tip, "refs").plain
+        assert "⑂" in table.get_cell(tip, "refs").plain
         assert "↗" in table.get_cell(tip, "refs").plain
 
 
@@ -1065,7 +1070,7 @@ async def test_worktree_graph_marker_tracks_other_checkout_without_moving_this_o
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
         base = app.snapshot_data.head
-        assert "🌳" not in app._ref_badges[base].text.plain
+        assert "▤" not in app._ref_badges[base].text.plain
         geometry = [(row.commit.oid, row.graph.plain) for row in app._graph_rows]
         mode = ["--detach"] if detached else ["-b", "feature/linked"]
         git_run(branch_repo, "worktree", "add", *mode, str(linked), "main")
@@ -1073,7 +1078,7 @@ async def test_worktree_graph_marker_tracks_other_checkout_without_moving_this_o
         await settle(app, pilot)
         assert [(row.commit.oid, row.graph.plain) for row in app._graph_rows] == geometry
         table = app.query_one("#graph-table", DataTable)
-        assert table.get_cell(base, "refs").plain.count("🌳") == 1
+        assert table.get_cell(base, "refs").plain.count("▤") == 1
         assert str(linked) in app._ref_badges[base].description.plain
 
         git_run(linked, "commit", "--allow-empty", "-m", "Advance linked worktree")
@@ -1081,9 +1086,9 @@ async def test_worktree_graph_marker_tracks_other_checkout_without_moving_this_o
         app.action_refresh()
         await settle(app, pilot)
         assert tip in app._commits  # --all also reaches detached linked worktree HEADs.
-        assert "🌳" in table.get_cell(tip, "refs").plain
-        assert ("💻" in table.get_cell(tip, "refs").plain) is not detached
-        assert "🌳" not in table.get_cell(base, "refs").plain  # Only the primary checkout remains.
+        assert "▤" in table.get_cell(tip, "refs").plain
+        assert ("⑂" in table.get_cell(tip, "refs").plain) is not detached
+        assert "▤" not in table.get_cell(base, "refs").plain  # Only the primary checkout remains.
         assert "↗" in table.get_cell(base, "refs").plain
         assert app.snapshot_data.head == base
         assert app.snapshot_data.branch == "main"
@@ -1092,8 +1097,8 @@ async def test_worktree_graph_marker_tracks_other_checkout_without_moving_this_o
         app.action_refresh()
         await settle(app, pilot)
         badge = app._ref_badges.get(tip)
-        assert badge is None or "🌳" not in badge.text.plain
-        assert "🌳" not in table.get_cell(base, "refs").plain
+        assert badge is None or "▤" not in badge.text.plain
+        assert "▤" not in table.get_cell(base, "refs").plain
         assert git(branch_repo, "rev-parse", "HEAD") == base
 
 
@@ -1109,7 +1114,7 @@ async def test_new_branch_at_same_tip_does_not_invent_divergence(branch_repo):
         assert app.snapshot_data.branch == "Connor"
         assert [(row.commit.oid, row.graph.plain) for row in app._graph_rows] == before
         cell = app.query_one("#graph-table", DataTable).get_cell(app.snapshot_data.head, "refs")
-        assert all(marker in cell.plain for marker in ("💻", "↗", "Connor", "main"))
+        assert all(marker in cell.plain for marker in ("⑂", "↗", "Connor", "main"))
 
 
 async def test_single_click_and_checkout_preserve_scrolled_graph_viewport(branch_repo, git_run):
@@ -1120,7 +1125,10 @@ async def test_single_click_and_checkout_preserve_scrolled_graph_viewport(branch
     app = RhizomeApp(branch_repo)
     async with app.run_test(size=(130, 32)) as pilot:
         await settle(app, pilot)
-        table = app.query_one("#graph-table", DataTable)
+        table = app.query_one("#graph-table", ResizableDataTable)
+        # Default columns now fit the viewport; explicit user sizing may scroll.
+        table.set_column_width("subject", table.size.width + 40)
+        await pilot.pause()
         table.scroll_to(x=table.max_scroll_x, y=table.max_scroll_y, animate=False)
         await pilot.pause()
         position = table.scroll_offset
@@ -1267,7 +1275,12 @@ async def test_network_toolbar_actions_obey_m1_gates(branch_repo, bare_remote, g
             ).stdout.strip()
             git_run(bare_remote, "update-ref", "refs/heads/main", operation_tip)
             assert git(branch_repo, "rev-parse", "refs/remotes/origin/main") == remote_before
-        await pilot.click(f"#{operation}")
+        if operation == "pull":
+            # Infrequent/gated actions now live in the command menu.
+            await pilot.click("#actions")
+            await choose_option(app, pilot, "pull")
+        else:
+            await pilot.click(f"#{operation}")
         await settle(app, pilot)
         assert len(app.screen_stack) == 1
         assert app.snapshot_data.branch == "main"
@@ -1484,8 +1497,12 @@ async def test_expanded_branch_menu_copy_actions_do_not_mutate(branch_repo, monk
         await click_reference(app, pilot, "refs/heads/main", button=3)
         assert isinstance(app.screen, BranchContextMenu)
         options = app.screen.query_one(OptionList)
-        assert options.get_option("pull") and options.get_option("push")
-        assert options.get_option("edit-message") and options.get_option("reset")
+        ids = {options.get_option_at_index(i).id for i in range(options.option_count)}
+        assert {"pull", "push", "edit-message", "reset"} <= ids, (
+            app.screen.current_branch,
+            app.screen.target,
+            ids,
+        )
         assert options.region.right <= 100 and options.region.bottom <= 24
         await choose_option(app, pilot, "copy-branch")
         await app.workers.wait_for_complete()
@@ -1598,7 +1615,7 @@ async def test_graph_badge_context_resolves_exact_branch(branch_repo):
         table, point = await graph_point(app, pilot, tip, column="refs")
         # Badge names carry exact ref metadata; icon-only cells remain commit context.
         x, y = point
-        for offset in range(table.ordered_columns[1].width):
+        for offset in range(table.columns["refs"].width):
             style = app.screen.get_style_at(table.region.x + x + offset, table.region.y + y)
             if style.meta.get("context_ref") == "refs/heads/test":
                 await post_click(pilot, table, (x + offset, y), button=3)

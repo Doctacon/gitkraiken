@@ -84,7 +84,7 @@ async def test_workspace_replaces_bounded_older_page_and_restores_newer(git_repo
         assert _rows(app) == oracle[300:600]
         assert len(_rows(app)) == 300
         assert "fast commit 300" in str(table.get_cell(oracle[300], "subject"))
-        assert "300" in str(app.query_one("#history-caption", Static).renderable)
+        assert "300 commits" in str(app.query_one("#history-count", Static).renderable)
 
         assert await pilot.click("#history-newer")
         await settle(app, pilot)

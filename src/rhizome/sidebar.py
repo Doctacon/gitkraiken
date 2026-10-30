@@ -60,7 +60,7 @@ class _ReferenceTree(Tree[SidebarSelection | _Group]):
         super().__init__(Text("References"), id="refs-tree")
         self.owner = owner
         self.show_root = False
-        self.show_guides = True
+        self.show_guides = False
         self.guide_depth = 2
         self.auto_expand = False
         self.root.expand()
@@ -139,8 +139,12 @@ class ReferenceSidebar(Widget):
         padding: 0;
         background: $panel;
         color: $text;
+        /* Keep long branch names and diagnostics reachable without popups. */
+        overflow-x: auto;
         scrollbar-size-vertical: 1;
         scrollbar-size-horizontal: 1;
+        scrollbar-background: $panel;
+        scrollbar-color: $foreground-muted 35%;
     }
     ReferenceSidebar > Tree > .tree--guides { color: $text-muted; }
     ReferenceSidebar > Tree > .tree--guides-hover { color: $text; }
@@ -474,8 +478,11 @@ class ReferenceSidebar(Widget):
     def _group(
         self, parent: TreeNode, key: str, label: str, *, default: bool, tooltip: str = ""
     ) -> TreeNode:
+        text = Text(label, no_wrap=True, overflow=self._overflow)
+        if parent is self._tree.root:
+            text.stylize(f"bold {self._palette.muted}")
         node = parent.add(
-            Text(label, no_wrap=True, overflow=self._overflow),
+            text,
             _Group(key, label, tooltip),
             expand=self._expanded.get(key, default),
         )
@@ -779,9 +786,12 @@ class ReferenceSidebar(Widget):
         # State leads so unavailable/current status remains visible in narrow panes;
         # the complete branch and path remain available through filtering and tooltip.
         separator = " | " if self._plain_glyphs else " · "
+        # The path remains the stable target and tooltip, but a rail should name
+        # the worktree rather than turn into a horizontally scrolling path dump.
+        short_path = path.name or str(path)
         label = (
             (f"{', '.join(markers)}{separator}" if markers else "")
-            + f"{detail}{separator}{path}"
+            + f"{detail}{separator}{short_path}"
             + (f"{separator}{reason}" if reason else "")
         )
         return SidebarSelection(str(path), "linked-worktree", label, str(path), head)

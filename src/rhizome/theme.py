@@ -34,7 +34,10 @@ class Palette:
     bg_colors: Mapping[str, str]
 
 
-_LIGHT_GRAPH = (
+# These were emitted by early renderers and remain valid Rich input. Keep the
+# translation table separate from the curated palette so old diff/ref spans stay
+# readable after a theme switch.
+_LEGACY_LIGHT_GRAPH = (
     "#006d77",
     "#7049a8",
     "#9a5a00",
@@ -48,40 +51,65 @@ _LIGHT_GRAPH = (
     "#806000",
     "#08717c",
 )
+
+_LIGHT_GRAPH = (
+    "#246b68",
+    "#70549b",
+    "#87520a",
+    "#33703f",
+    "#a64350",
+    "#2d6694",
+    "#934d78",
+    "#1f6b52",
+    "#8c4e1e",
+    "#565f9e",
+    "#76631c",
+    "#206a74",
+)
 _LIGHT_PROVIDERS = {
-    "GitHub": "#7049a8",
-    "Azure DevOps": "#1266a8",
-    "GitLab": "#9a5a00",
-    "Git": "#1266a8",
+    "GitHub": "#70549b",
+    "Azure DevOps": "#2d6694",
+    "GitLab": "#87520a",
+    "Git": "#2d6694",
 }
 _LIGHT_FG = {
-    "#14232c": "#14232c",
-    "#48616c": "#48616c",
-    "#36505b": "#36505b",
-    "#006d77": "#006d77",
+    "#172729": "#172729",
+    "#556568": "#556568",
+    "#3e5154": "#3e5154",
+    "#246b68": "#246b68",
+    # Earlier neutral roles remain legible in light mode too.
+    "#14232c": "#172729",
+    "#48616c": "#556568",
+    "#36505b": "#3e5154",
     **{color: color for color in _LIGHT_GRAPH},
+    **dict(zip(_LEGACY_LIGHT_GRAPH, _LIGHT_GRAPH, strict=True)),
 }
 _LIGHT_BG = {
-    "#f7fbfc": "#f7fbfc",
-    "#f8fbfb": "#f8fbfb",
+    "#f6f7f4": "#f6f7f4",
+    "#f8f9f6": "#f8f9f6",
     "#ffffff": "#ffffff",
-    "#edf4f5": "#edf4f5",
-    "#f3f8f9": "#f3f8f9",
-    "#d8eeee": "#d8eeee",
+    "#eeefeb": "#eeefeb",
+    "#f2f4f0": "#f2f4f0",
+    "#dce8e4": "#dce8e4",
+    "#f7fbfc": "#f6f7f4",
+    "#f8fbfb": "#f8f9f6",
+    "#edf4f5": "#eeefeb",
+    "#f3f8f9": "#f2f4f0",
+    "#d8eeee": "#dce8e4",
 }
 
 LIGHT = Palette(
-    "#14232c",
-    "#48616c",
-    "#36505b",
-    "#006d77",
-    "#f7fbfc",
+    "#172729",
+    "#556568",
+    "#3e5154",
+    "#246b68",
+    "#f6f7f4",
     "#ffffff",
-    "#edf4f5",
-    "#d8eeee",
-    "#28733a",
-    "#b13a48",
-    "#9a5a00",
+    "#eeefeb",
+    "#dce8e4",
+    "#33703f",
+    "#a64350",
+    "#87520a",
     _LIGHT_GRAPH,
     _LIGHT_PROVIDERS,
     _LIGHT_FG,
@@ -124,15 +152,19 @@ DARK = Palette(
     _DARK_PROVIDERS,
     {
         **dict(zip(_LIGHT_GRAPH, _DARK_GRAPH, strict=True)),
-        "#14232c": "#edf4f5",
+        **dict(zip(_LEGACY_LIGHT_GRAPH, _DARK_GRAPH, strict=True)),
+        "#172729": "#edf4f5",
+        "#14232c": "#edf4f5",  # Legacy rich renderers.
         "#18323a": "#edf4f5",
         "#10242b": "#edf4f5",
+        "#556568": "#b3c5ca",
         "#48616c": "#b3c5ca",
+        "#3e5154": "#d0dce0",
         "#36505b": "#d0dce0",
         "#6b4300": "#ffbd66",
         "#8d2635": "#ff9ca7",
     },
-    {**{key: "#1d252b" for key in _LIGHT_BG}, "#d8eeee": "#263b43"},
+    {**{key: "#1d252b" for key in _LIGHT_BG}, "#d8eeee": "#263b43", "#dce8e4": "#263b43"},
 )
 
 _HC_GRAPH = (
@@ -171,15 +203,19 @@ HIGH_CONTRAST = Palette(
     _HC_PROVIDERS,
     {
         **dict(zip(_LIGHT_GRAPH, _HC_GRAPH, strict=True)),
-        "#14232c": "#ffffff",
+        **dict(zip(_LEGACY_LIGHT_GRAPH, _HC_GRAPH, strict=True)),
+        "#172729": "#ffffff",
+        "#14232c": "#ffffff",  # Legacy rich renderers.
         "#18323a": "#ffffff",
         "#10242b": "#ffffff",
+        "#556568": "#e1e1e1",
         "#48616c": "#e1e1e1",
+        "#3e5154": "#ffffff",
         "#36505b": "#ffffff",
         "#6b4300": "#ffd37f",
         "#8d2635": "#ffb3bd",
     },
-    {**{key: "#000000" for key in _LIGHT_BG}, "#d8eeee": "#303030"},
+    {**{key: "#000000" for key in _LIGHT_BG}, "#d8eeee": "#303030", "#dce8e4": "#303030"},
 )
 
 PALETTES = {"rhizome-light": LIGHT, "rhizome-dark": DARK, "rhizome-high-contrast": HIGH_CONTRAST}

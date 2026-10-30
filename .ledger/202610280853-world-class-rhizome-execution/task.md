@@ -25,6 +25,18 @@ M3/M4 remain out of scope. Earlier commit/push permission was specific to M1 val
 were confirmed earlier in `plan.md`. The earlier existing-checks-only choice applied
 to the completed initial composer increment, not this M1 acceptance-closure work.
 
+## Current priority: aesthetics and UX
+
+The operator elevated the aesthetics/UX pass above remaining roadmap work after
+reviewing the live workspace screenshot. The working tree now includes a
+history-first shell, responsive pane/metadata priorities, quieter palettes and
+navigation, grouped large-commit inspection, and new visual/interaction coverage.
+All **242 targeted UI regressions pass** in disjoint bounded partitions; root lint,
+formatting and whitespace checks pass. Current light/dark/narrow/review/composer
+renders are linked from README. See `aesthetics-design.md` and
+`aesthetics-validation-manifest.json`. This is a UI iteration, not M2 acceptance or
+publication authority; no commit or push is implied.
+
 ## Current M2 state
 
 - Investigation, bounded captured history/search, comparison/file investigation,

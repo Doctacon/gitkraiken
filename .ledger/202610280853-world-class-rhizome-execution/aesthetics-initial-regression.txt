@@ -1,0 +1,301 @@
+.........FF...........F...................F.....F..........FF........... [ 52%]
+................................................F..F.............        [100%]
+=================================== FAILURES ===================================
+________ test_opening_modal_cancels_mouse_resize_capture[#graph-table] _________
+
+demo_repo = PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1762/test_opening_modal_cancels_mou1/demo/tidal')
+selector = '#graph-table'
+
+    @pytest.mark.parametrize("selector", ["#refs-splitter", "#graph-table"])
+    async def test_opening_modal_cancels_mouse_resize_capture(demo_repo, selector):
+        app = RhizomeApp(demo_repo)
+        async with app.run_test(size=(170, 50)) as pilot:
+            await settle(app, pilot)
+            widget = app.query_one(selector)
+>           point = header_grip(widget, "author") if selector == "#graph-table" else (0, 3)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_app.py:380: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/ui_helpers.py:32: in header_grip
+    index = table.get_column_index(key)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = HistoryTable(id='graph-table'), column_key = 'author'
+
+    def get_column_index(self, column_key: ColumnKey | str) -> int:
+        """Return the current index for the column identified by column_key.
+    
+        Args:
+            column_key: The column key to find the current index of.
+    
+        Returns:
+            The current index of the specified column key.
+    
+        Raises:
+            ColumnDoesNotExist: If the column key does not exist.
+        """
+        if column_key not in self._column_locations:
+>           raise ColumnDoesNotExist(f"No column exists for column_key={column_key!r}")
+E           textual.widgets._data_table.ColumnDoesNotExist: No column exists for column_key='author'
+
+.venv/lib/python3.13/site-packages/textual/widgets/_data_table.py:1084: ColumnDoesNotExist
+____________ test_history_column_drags_preserve_sizes_and_selection ____________
+
+demo_repo = PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1762/test_history_column_drags_pres0/demo/tidal')
+git_run = <function git_run.<locals>.run at 0x10ad632e0>
+
+    async def test_history_column_drags_preserve_sizes_and_selection(demo_repo, git_run):
+        app = RhizomeApp(demo_repo)
+        async with app.run_test(size=(240, 50)) as pilot:
+            await settle(app, pilot)
+            table = app.query_one("#graph-table", ResizableDataTable)
+            app.jump_to(app.snapshot_data.head)
+            await settle(app, pilot)
+            key, rows = app._history_key, app._graph_rows
+            widths = {}
+            for column in ("graph", "refs", "author", "date", "subject", "sha"):
+                table.scroll_to(
+                    x=table.max_scroll_x if column in ("subject", "sha") else 0, animate=False
+                )
+                await pilot.pause()
+                original = table.columns[column].width
+                await drag(pilot, table, header_grip(table, column), (4, 2))
+                widths[column] = original + 4
+>               assert table.columns[column].width == widths[column]
+E               AssertionError: assert 16 == 20
+E                +  where 16 = Column(key=<textual.widgets._data_table.ColumnKey object at 0x10a8320d0>, label=<text 'Date' [] ''>, width=16, content_width=16, auto_width=False).width
+
+tests/test_app.py:412: AssertionError
+_________________ test_branch_creation_runs_on_name_submission _________________
+
+demo_repo = PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1762/test_branch_creation_runs_on_n0/demo/tidal')
+
+    async def test_branch_creation_runs_on_name_submission(demo_repo):
+        from rhizome.dialogs import PromptDialog
+    
+        app = RhizomeApp(demo_repo)
+        async with app.run_test(size=(160, 45)) as pilot:
+            await settle(app, pilot)
+            await pilot.click("#branch")
+            await pilot.pause()
+>           assert isinstance(app.screen, PromptDialog)
+E           AssertionError: assert False
+E            +  where False = isinstance(Screen(id='_default'), <class 'rhizome.dialogs.PromptDialog'>)
+E            +    where Screen(id='_default') = RhizomeApp(title='Rhizome', classes={'-light-mode'}, pseudo_classes={'light', 'focus'}).screen
+
+tests/test_app.py:645: AssertionError
+_______ test_single_click_and_checkout_preserve_scrolled_graph_viewport ________
+
+branch_repo = PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1762/test_single_click_and_checkout0/worktree')
+git_run = <function git_run.<locals>.run at 0x10adf5080>
+
+    async def test_single_click_and_checkout_preserve_scrolled_graph_viewport(branch_repo, git_run):
+        for index in range(12):
+            git_run(branch_repo, "switch", "-c", f"parallel-{index:02}", "main")
+            git_run(branch_repo, "commit", "--allow-empty", "-m", f"Independent tip {index}")
+        git_run(branch_repo, "switch", "main")
+        app = RhizomeApp(branch_repo)
+        async with app.run_test(size=(130, 32)) as pilot:
+            await settle(app, pilot)
+            table = app.query_one("#graph-table", ResizableDataTable)
+            # Default columns now fit the viewport; explicit user sizing may scroll.
+            table.set_column_width("subject", table.size.width + 40)
+            await pilot.pause()
+            table.scroll_to(x=table.max_scroll_x, y=table.max_scroll_y, animate=False)
+            await pilot.pause()
+            position = table.scroll_offset
+            assert position.x > 0 and position.y > 0
+            cursor = table.cursor_coordinate
+            key = app._history_key
+            rows = app._graph_rows
+            geometry = [(row.commit.oid, row.graph.plain) for row in rows]
+            await click_reference(app, pilot, "refs/heads/test")
+            await settle(app, pilot)
+            assert app._graph_rows is rows
+            assert app._history_key == key
+            assert table.cursor_coordinate == cursor
+            assert table.scroll_offset == position
+            await click_reference(app, pilot, "refs/heads/test", button=3)
+            await choose_option(app, pilot, "checkout")
+            await settle(app, pilot)
+            assert app.snapshot_data.branch == "test"
+            assert [(row.commit.oid, row.graph.plain) for row in app._graph_rows] == geometry
+            assert app._history_key == key
+            assert table.cursor_coordinate == cursor
+>           assert table.scroll_offset == position
+E           AssertionError: assert Offset(x=68, y=10) == Offset(x=69, y=10)
+E             
+E             Omitting 1 identical items, use -vv to show
+E             Differing attributes:
+E             ['x']
+E             
+E             Drill down into differing attribute x:
+E               x: 68 != 69
+E             Use -v to get more diff
+
+tests/test_app.py:1148: AssertionError
+_______________ test_network_toolbar_actions_obey_m1_gates[pull] _______________
+
+branch_repo = PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1762/test_network_toolbar_actions_o1/worktree')
+bare_remote = PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1762/test_network_toolbar_actions_o1/remote.git')
+git_run = <function git_run.<locals>.run at 0x10abb7ec0>, operation = 'pull'
+
+    @pytest.mark.parametrize("operation", ["fetch", "pull", "push"])
+    async def test_network_toolbar_actions_obey_m1_gates(branch_repo, bare_remote, git_run, operation):
+        remote_before = git(bare_remote, "rev-parse", "refs/heads/main")
+        operation_tip = ""
+        if operation == "push":
+            git_run(branch_repo, "commit", "--allow-empty", "-m", "Local main advance")
+            operation_tip = git(branch_repo, "rev-parse", "HEAD")
+    
+        before_head = git(branch_repo, "rev-parse", "HEAD")
+        before_content = (branch_repo / "base.txt").read_bytes()
+        app = RhizomeApp(branch_repo)
+        async with app.run_test(size=(170, 50)) as pilot:
+            await settle(app, pilot)
+            before_refs = git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)")
+            if operation in {"fetch", "pull"}:
+                tree = git(bare_remote, "rev-parse", "refs/heads/main^{tree}")
+                operation_tip = git_run(
+                    bare_remote,
+                    "commit-tree",
+                    tree,
+                    "-p",
+                    remote_before,
+                    "-m",
+                    "Remote main advance",
+                ).stdout.strip()
+                git_run(bare_remote, "update-ref", "refs/heads/main", operation_tip)
+                assert git(branch_repo, "rev-parse", "refs/remotes/origin/main") == remote_before
+            await pilot.click(f"#{operation}")
+            await settle(app, pilot)
+            assert len(app.screen_stack) == 1
+            assert app.snapshot_data.branch == "main"
+            assert git(branch_repo, "rev-parse", "HEAD") == before_head
+            assert (branch_repo / "base.txt").read_bytes() == before_content
+            if operation == "pull":
+>               assert "pull is unavailable until its M3 guarded plan" in app._last_error
+E               AssertionError: assert 'pull is unavailable until its M3 guarded plan' in ''
+E                +  where '' = RhizomeApp(title='Rhizome', classes={'-light-mode'}, pseudo_classes={'light', 'focus'})._last_error
+
+tests/test_app.py:1280: AssertionError
+__________ test_expanded_branch_menu_copy_actions_do_not_mutate[True] __________
+
+branch_repo = PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1762/test_expanded_branch_menu_copy0/worktree')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10a2f5da0>
+native = True
+
+    @pytest.mark.parametrize("native", [True, False])
+    async def test_expanded_branch_menu_copy_actions_do_not_mutate(branch_repo, monkeypatch, native):
+        from rhizome.clipboard import CopyResult
+    
+        copied = []
+        monkeypatch.setattr(
+            "rhizome.clipboard._copy_native", lambda value: copied.append(value) or native
+        )
+        app = RhizomeApp(branch_repo)
+        async with app.run_test(size=(100, 24)) as pilot:
+            await settle(app, pilot)
+            before = app.snapshot_data.head
+            await click_reference(app, pilot, "refs/heads/main", button=3)
+>           assert isinstance(app.screen, BranchContextMenu)
+E           AssertionError: assert False
+E            +  where False = isinstance(Screen(id='_default'), BranchContextMenu)
+E            +    where Screen(id='_default') = RhizomeApp(title='Rhizome', classes={'-light-mode'}, pseudo_classes={'light', 'focus'}).screen
+
+tests/test_app.py:1488: AssertionError
+_________ test_expanded_branch_menu_copy_actions_do_not_mutate[False] __________
+
+branch_repo = PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1762/test_expanded_branch_menu_copy1/worktree')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1094203d0>
+native = False
+
+    @pytest.mark.parametrize("native", [True, False])
+    async def test_expanded_branch_menu_copy_actions_do_not_mutate(branch_repo, monkeypatch, native):
+        from rhizome.clipboard import CopyResult
+    
+        copied = []
+        monkeypatch.setattr(
+            "rhizome.clipboard._copy_native", lambda value: copied.append(value) or native
+        )
+        app = RhizomeApp(branch_repo)
+        async with app.run_test(size=(100, 24)) as pilot:
+            await settle(app, pilot)
+            before = app.snapshot_data.head
+            await click_reference(app, pilot, "refs/heads/main", button=3)
+>           assert isinstance(app.screen, BranchContextMenu)
+E           AssertionError: assert False
+E            +  where False = isinstance(Screen(id='_default'), BranchContextMenu)
+E            +    where Screen(id='_default') = RhizomeApp(title='Rhizome', classes={'-light-mode'}, pseudo_classes={'light', 'focus'}).screen
+
+tests/test_app.py:1488: AssertionError
+___ test_sidebar_is_only_filter_and_full_height_horizontally_scrollable_tree ___
+
+    async def test_sidebar_is_only_filter_and_full_height_horizontally_scrollable_tree():
+        app = SidebarApp()
+        async with app.run_test(size=(15, 20)) as pilot:
+            sidebar = app.query_one(ReferenceSidebar)
+            path = Path("/repo/a-very-long-linked-worktree-path-tail")
+            worktree = Worktree(path, "a" * 40, "topic")
+            data = Snapshot(Path("/repo"), "main", head="a" * 40, worktrees=(worktree,))
+            sidebar.update_snapshot(data, None)
+            await pilot.pause()
+    
+            assert len(sidebar.children) == 2
+            assert isinstance(sidebar.children[0], Input)
+            assert isinstance(sidebar.children[1], Tree)
+            for width in (13, 15, 18, 23, 25):
+                await pilot.resize_terminal(width, 20)
+                await pilot.pause()
+                assert sidebar._tree.region.bottom == sidebar.region.bottom
+    
+            tree = sidebar.query_one(Tree)
+            assert tree.max_scroll_x > 0
+            tree.scroll_to(x=tree.max_scroll_x, animate=False)
+            await pilot.pause()
+            visible = "\n".join(
+                strip.text
+                for strip in app.screen._compositor.render_strips()[tree.region.y : tree.region.bottom]
+            )
+>           assert "path-tail" in visible
+E           AssertionError: assert 'path-tail' in '▼ Repository             \n├ Working directory      \n└ All history            \n▼ Local (0)              \n▼ Remotes...          \n                         \n                         \n                         \n                         '
+
+tests/test_sidebar.py:471: AssertionError
+___ test_sidebar_error_is_literal_and_horizontally_scrollable_after_refresh ____
+
+    async def test_sidebar_error_is_literal_and_horizontally_scrollable_after_refresh():
+        app = SidebarApp()
+        async with app.run_test(size=(16, 20)) as pilot:
+            sidebar = app.query_one(ReferenceSidebar)
+            sidebar.update_snapshot(snapshot(), None)
+            await pilot.pause()
+            message = "GitHub CLI [gh] is required. Install gh and run gh auth login for github.com."
+            sidebar.update_pull_requests((pr_listing(error=message),))
+            await pilot.pause()
+            tree = sidebar.query_one(Tree)
+            error_node = sidebar._tree_nodes["group:prs:origin"].children[0]
+            assert error_node.label.plain == f"origin: {message}"
+            assert tree.max_scroll_x > 0
+            tree.scroll_to(x=tree.max_scroll_x, animate=False)
+            await pilot.pause()
+            visible = "".join(
+                strip.text
+                for strip in app.screen._compositor.render_strips()[tree.region.y : tree.region.bottom]
+            )
+>           assert "github.com." in visible
+E           AssertionError: assert 'github.com.' in '▼ Repository    ├ Working direct└ All history   ▼ Local (1)     └ main          ▼ Remotes (2)   ├ ▼ origin (1)  │ └ ▶...s (0) └ No linked work▼ PRs           └ ▼ origin (0)    └ origin: GitH▶ Tags (0)      ▶ Stashes (1)                   '
+
+tests/test_sidebar.py:579: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_app.py::test_opening_modal_cancels_mouse_resize_capture[#graph-table]
+FAILED tests/test_app.py::test_history_column_drags_preserve_sizes_and_selection
+FAILED tests/test_app.py::test_branch_creation_runs_on_name_submission - Asse...
+FAILED tests/test_app.py::test_single_click_and_checkout_preserve_scrolled_graph_viewport
+FAILED tests/test_app.py::test_network_toolbar_actions_obey_m1_gates[pull] - ...
+FAILED tests/test_app.py::test_expanded_branch_menu_copy_actions_do_not_mutate[True]
+FAILED tests/test_app.py::test_expanded_branch_menu_copy_actions_do_not_mutate[False]
+FAILED tests/test_sidebar.py::test_sidebar_is_only_filter_and_full_height_horizontally_scrollable_tree
+FAILED tests/test_sidebar.py::test_sidebar_error_is_literal_and_horizontally_scrollable_after_refresh
+9 failed, 128 passed in 499.37s (0:08:19)

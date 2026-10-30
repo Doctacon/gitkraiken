@@ -79,10 +79,10 @@ def test_plain_ref_badges_change_generated_markers_but_not_repository_text() -> 
     normal = build_ref_badges(snapshot)["tip"]
     plain = build_ref_badges(snapshot, f"refs/heads/{branch}", plain_glyphs=True)["tip"]
 
-    assert normal.text.plain.startswith("💻 🌳 🐙 ◇ ▣ ")
+    assert normal.text.plain.startswith("⑂ ▤ ↗ ◇ ▣ ")
     assert plain.text.plain.startswith("[L] [WT] [GH] [T] [S] ")
-    assert "💻" not in plain.description.plain
-    assert "🌳" not in plain.description.plain
+    assert "⑂" not in plain.description.plain
+    assert "▤" not in plain.description.plain
     assert f"refs/heads/{branch} -> origin/{branch}" in plain.description.plain
     assert f"[WT] Worktree: {path} | {branch} (locked: 占用)" in plain.description.plain
     assert "[S] stash@{0}: 保留 · literal → text" in plain.description.plain

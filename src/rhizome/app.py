@@ -334,34 +334,37 @@ class RhizomeApp(App[None]):
         return self._sidebar_selection.kind if self._sidebar_selection else ""
 
     def compose(self) -> ComposeResult:
-        yield Static("RHIZOME  /  Opening repository…", id="repo-header")
-        with Horizontal(id="toolbar"):
-            for ident, label in [
-                ("open", "Open"),
-                ("fetch", "Fetch"),
-                ("pull", "↓ Pull"),
-                ("push", "↑ Push"),
-                ("branch", "⑂ Branch"),
-                ("stash", "Stash"),
-                ("pop", "Pop"),
-                ("actions", "Actions ▾"),
-                ("refresh", "↻"),
-                ("help", "?"),
-            ]:
-                yield Button(label, id=ident, classes="tool primary" if ident == "push" else "tool")
+        with Horizontal(id="app-header"):
+            yield Static("RHIZOME  /  Opening repository…", id="repo-header")
+            with Horizontal(id="toolbar"):
+                for ident, label in [
+                    ("open", "Open"),
+                    ("fetch", "Fetch"),
+                    ("pull", "↓ Pull"),
+                    ("push", "↑ Push"),
+                    ("branch", "⑂ Branch"),
+                    ("stash", "Stash"),
+                    ("pop", "Pop"),
+                    ("actions", "Actions ▾"),
+                    ("refresh", "↻"),
+                    ("help", "?"),
+                ]:
+                    yield Button(label, id=ident, classes="tool")
         with Horizontal(id="workspace-nav"):
-            yield Button("Files [F2]", id="show-files")
+            yield Button("History", id="show-primary", classes="nav-active")
+            yield Button("Changes [F2]", id="show-files")
             yield Button("Commit [F3]", id="show-composer")
             yield Button("Refs", id="show-refs")
-            yield Button("Back [Esc]", id="show-primary")
+            yield Static(id="nav-spacer")
             yield Button("Activity", id="activity")
-            yield Button("Workspace [F4]", id="workspace-settings")
+            yield Button("Settings [F4]", id="workspace-settings")
         with Horizontal(id="operation-banner"):
             yield Static(id="operation-text")
             yield Button("Continue", id="continue", classes="operation-button")
             yield Button("Abort", id="abort", classes="operation-button")
         with PaneGroup(id="workspace", classes="horizontal"):
             with Vertical(id="refs-panel"):
+                yield Static("REPOSITORY", id="refs-heading")
                 yield ReferenceSidebar(id="reference-sidebar")
             yield PaneSplitter(
                 "#refs-panel", "#history-panel", minimum=15, flexible_minimum=34, id="refs-splitter"
@@ -370,7 +373,9 @@ class RhizomeApp(App[None]):
                 # Keep this mounted while a diff is open so graph position, widths,
                 # style, search, and selected commit survive the temporary view.
                 with Vertical(id="graph-workspace"):
-                    yield Static("COMMIT GRAPH", id="history-heading")
+                    with Horizontal(id="history-titlebar"):
+                        yield Static("History", id="history-heading")
+                        yield Static(id="history-count")
                     with Horizontal(id="search-bar"):
                         yield Input(
                             placeholder="Search commits, authors, refs or SHA…", id="graph-filter"
@@ -441,11 +446,9 @@ class RhizomeApp(App[None]):
                         yield Static("Summary, blank line, optional body", id="composer-guidance")
                         yield Static("Draft is empty", id="draft-status")
                         yield Button("Commit", id="commit", variant="primary")
-        yield Static("Ready", id="status-line")
-        yield Static(
-            "Ctrl+P actions   / search   g graph   Ctrl+R refresh   ? help   Ctrl+Q quit",
-            id="key-hint",
-        )
+        with Horizontal(id="status-bar"):
+            yield Static("Ready", id="status-line")
+            yield Static("Ctrl+P actions   / search   ? help", id="key-hint")
 
     def on_mount(self) -> None:
         try:
@@ -472,8 +475,9 @@ class RhizomeApp(App[None]):
         wip_table.add_column("File", key="file")
         self._configure_history_columns()
         self.query_one("#history-heading", Static).tooltip = Text(
-            "💻 Local branch / HEAD · 🌳 Linked worktree · 🐙 GitHub · ☁ Azure DevOps · 🦊 GitLab · ↗ Other remote\n"
+            "⑂ Local branch / HEAD · ▤ Linked worktree · ↗ Remote tracking ref · ◇ Tag\n"
             "Markers share a commit when branch, worktree, and remote tips agree.\n"
+            "╴│╶ crossing, not a join · ↑ parent shown above\n"
             f"Remote refresh interval: {self.REMOTE_REFRESH_INTERVAL}s; settings can pause network access."
         )
         self.set_interval(self.LOCAL_REFRESH_INTERVAL, self.poll_repository)
@@ -718,9 +722,9 @@ class RhizomeApp(App[None]):
         workspace = self.screen_stack[0]
         workspace.refresh_bindings()
         for ident, label, command_id in (
-            ("show-files", "Files", "show_files"),
+            ("show-files", "Changes", "show_files"),
             ("show-composer", "Commit", "show_composer"),
-            ("workspace-settings", "Workspace", "workspace_settings"),
+            ("workspace-settings", "Settings", "workspace_settings"),
         ):
             shortcut = self._shortcut(command_id)
             workspace.query_one(f"#{ident}", Button).label = (
@@ -1183,29 +1187,49 @@ class RhizomeApp(App[None]):
     def _configure_history_columns(self) -> None:
         table = self.query_one("#graph-table", HistoryTable)
         table.clear(columns=True)
-        # Never crop away graph lanes, even when manually shrinking the column.
-        graph_minimum = max(5, max((row.width for row in self._graph_rows), default=3) + 1)
+        # The story comes first. Reveal secondary metadata only when it leaves
+        # a useful message column; full metadata is always in the inspector.
+        # Explicit user widths still win and may intentionally require scrolling.
+        graph_minimum = max(3, max((row.width for row in self._graph_rows), default=2) + 1)
         table.column_minimums["graph"] = graph_minimum
-        available = max(36, table.size.width)
+        table.column_minimums["subject"] = 24
+        # Reserve the rail even before rows make it visible; otherwise a full
+        # history creates a horizontal scrollbar and clips the last column.
+        available = max(34, table.size.width - table.styles.scrollbar_size_vertical)
         width = table.preferred_column_width
         graph_width = width("graph", graph_minimum)
-        ref_width = width("refs", min(23, max(12, available // 5)))
-        author_width = width("author", min(20, max(10, available // 7)))
-        self._show_sha = available >= 80
-        date_width = width("date", 16)  # YYYY-MM-DD HH:MM, in the local timezone.
-        sha_width = width("sha", 8) if self._show_sha else 0
-        padding = 2 * table.cell_padding * (6 if self._show_sha else 5)
+        metadata = []
+        if available >= 58:
+            metadata.append(("refs", "Branches", width("refs", min(26, available // 5))))
+        if available >= 116:
+            metadata.append(("author", "Author", width("author", 14)))
+        if available >= 90:
+            metadata.append(("date", "Date", width("date", 16)))
+        if available >= 145:
+            metadata.append(("sha", "SHA", width("sha", 8)))
+        padding = 2 * table.cell_padding
+        # Dense merge graphs may need more lanes than the normal width budget.
+        # Drop secondary columns rather than obscure the subject behind them.
+        while metadata and (
+            available
+            - graph_width
+            - sum(item[2] for item in metadata)
+            - padding * (2 + len(metadata))
+            < 24
+        ):
+            metadata.pop()
+        self._show_sha = any(key == "sha" for key, _, _ in metadata)
         subject_width = max(
             24,
-            available - graph_width - ref_width - author_width - date_width - sha_width - padding,
+            available
+            - graph_width
+            - sum(item[2] for item in metadata)
+            - padding * (2 + len(metadata)),
         )
-        table.add_column("GRAPH", width=graph_width, key="graph")
-        table.add_column("BRANCH / TAG", width=ref_width, key="refs")
-        table.add_column("AUTHOR", width=author_width, key="author")
-        table.add_column("DATE / TIME", width=date_width, key="date")
-        table.add_column("COMMIT", width=subject_width, key="subject")
-        if self._show_sha:
-            table.add_column("SHA", width=sha_width, key="sha")
+        table.add_column("", width=graph_width, key="graph")
+        table.add_column("Commit", width=subject_width, key="subject")
+        for key, label, column_width in metadata:
+            table.add_column(label, width=column_width, key=key)
 
     def on_history_table_viewport_changed(self, event: HistoryTable.ViewportChanged) -> None:
         event.stop()
@@ -1226,6 +1250,9 @@ class RhizomeApp(App[None]):
         workspace.set_class(width < 140, "compact")
         workspace.set_class(width < 105, "narrow")
         workspace.set_class(width <= 60, "pane-tight")
+        # A medium terminal keeps history + inspection legible instead of
+        # dividing its width between three permanently squeezed panes.
+        workspace.set_class(85 <= width < 120 and self._task_view != "refs", "refs-auto-hidden")
 
         # At narrow tmux widths the three pane minima cannot coexist. Keep the
         # graph (the primary workspace) whole, initially borrowing the inspector.
@@ -1545,22 +1572,22 @@ class RhizomeApp(App[None]):
         self._detail_token += 1
         self._diff_token += 1
         self.snapshot_data = snapshot
-        header = Text(" RHIZOME ", style=f"bold {TEAL}")
+        header = Text("rhizome", style=f"bold {TEAL}", no_wrap=True, overflow="ellipsis")
         if "DEMO" in self.title:
-            header.append(" DEMO ", style="bold #9a5a00")
-        header.append(f" / {snapshot.root.name}  ", style=f"bold {TEXT}")
+            header.append(" DEMO", style="bold #9a5a00")
+        header.append("  /  ", style=MUTED)
+        header.append(f"{snapshot.root.name}   ", style=f"bold {TEXT}")
         plain = self._settings["plain_glyphs"]
         header.append(
             f"{'branch' if plain else '⑂'} {snapshot.branch or 'detached HEAD'}", style=TEAL
         )
-        header.append(
-            f"   ahead {snapshot.ahead} behind {snapshot.behind}"
-            if plain
-            else f"   ↑{snapshot.ahead} ↓{snapshot.behind}",
-            style=MUTED,
-        )
-        if snapshot.upstream:
-            header.append(f"   {snapshot.upstream}", style=MUTED)
+        if snapshot.ahead or snapshot.behind:
+            header.append(
+                f"   ahead {snapshot.ahead} behind {snapshot.behind}"
+                if plain
+                else f"   ↑{snapshot.ahead} ↓{snapshot.behind}",
+                style=MUTED,
+            )
         self.query_one("#repo-header", Static).update(theme_text(header, self._palette))
         previous = self._sidebar_selection
         self._sidebar_selection = self.query_one(ReferenceSidebar).update_snapshot(
@@ -1663,6 +1690,8 @@ class RhizomeApp(App[None]):
             palette=self._palette,
         )
         table = self.query_one("#graph-table", DataTable)
+        if "refs" not in table.columns:
+            return
         for oid in self._commits:
             if oid in table.rows and old.get(oid) != self._ref_badges.get(oid):
                 badges = self._ref_badges.get(oid)
@@ -2294,7 +2323,7 @@ class RhizomeApp(App[None]):
             or event.key not in self._commits
         ):
             return
-        self.inspect_commit(self._commits[event.key])
+        self.select_row("graph-table", event.key, explicit=True)
         self.status("Inspecting commit · use Checkout in Actions or the context menu to switch")
 
     def repaint_history(self) -> None:
@@ -2316,12 +2345,7 @@ class RhizomeApp(App[None]):
                 palette=self._palette,
             )
             self._graph_cache_key = cache_key
-        heading = Text("COMMIT GRAPH", no_wrap=True, overflow="ellipsis")
-        if any("╴" in row.graph.plain for row in self._graph_rows):
-            heading.append("   ╴│╶ crossing, not a join", style=MUTED)
-        if any("↑ parent " in row.graph.plain for row in self._graph_rows):
-            heading.append("   ↑ parent shown above", style=MUTED)
-        self.query_one("#history-heading", Static).update(theme_text(heading, self._palette))
+        self.query_one("#history-heading", Static).update(Text("History"))
         dirty = len(self.snapshot_data.files)
         wip_height = 2 if self.graph_style == "smooth" else 1
         geometry = (("wip", wip_height),) if dirty else ()
@@ -2333,35 +2357,27 @@ class RhizomeApp(App[None]):
         self._graph_geometry = geometry
         self._configure_history_columns()
         self._commits = {}
+        columns = [str(column.key.value) for column in table.ordered_columns]
         if dirty:
-            table.add_row(
-                Text(
+            cells = {
+                "graph": Text(
                     (" *" if self.graph_style == "smooth" else "*")
                     if plain
                     else (" ◉" if self.graph_style == "smooth" else "◉"),
                     style=self._palette.teal,
                 ),
-                Text("WIP", style=self._palette.teal),
-                "",  # Working changes have no commit author.
-                "",  # Working changes have no commit timestamp.
-                Text(
-                    f"Working directory · {dirty} changed files", style=f"bold {self._palette.teal}"
+                "refs": Text("Uncommitted", style=self._palette.muted),
+                "subject": Text(
+                    f"Working directory · {dirty} changed file{'s' if dirty != 1 else ''}",
+                    style=f"bold {self._palette.teal}",
+                    no_wrap=True,
+                    overflow="ellipsis",
                 ),
-                *([""] if self._show_sha else []),
-                height=wip_height,
-                key="wip",
-            )
+            }
+            table.add_row(*(cells.get(key, "") for key in columns), height=wip_height, key="wip")
         for index, row in enumerate(self._graph_rows):
             if not row.commit:
-                table.add_row(
-                    row.graph,
-                    "",
-                    "",
-                    "",
-                    "",
-                    *([""] if self._show_sha else []),
-                    key=f"connector-{index}",
-                )
+                table.add_row(row.graph, *([""] * (len(columns) - 1)), key=f"connector-{index}")
                 continue
             commit = row.commit
             self._commits[commit.oid] = commit
@@ -2370,11 +2386,14 @@ class RhizomeApp(App[None]):
             message = Text(
                 commit.subject, style=self._palette.text, no_wrap=True, overflow="ellipsis"
             )
-            table.add_row(
-                row.graph,
-                refs,
-                Text(commit.author, style=self._palette.muted, no_wrap=True, overflow="ellipsis"),
-                Text(
+            cells = {
+                "graph": row.graph,
+                "subject": message,
+                "refs": refs,
+                "author": Text(
+                    commit.author, style=self._palette.muted, no_wrap=True, overflow="ellipsis"
+                ),
+                "date": Text(
                     format_commit_date(commit.date),
                     style=Style(
                         color=self._palette.muted,
@@ -2382,11 +2401,9 @@ class RhizomeApp(App[None]):
                     ),
                     no_wrap=True,
                 ),
-                message,
-                *([Text(commit.short_id, style=self._palette.muted)] if self._show_sha else []),
-                height=row.height,
-                key=commit.oid,
-            )
+                "sha": Text(commit.short_id, style=self._palette.muted),
+            }
+            table.add_row(*(cells[key] for key in columns), height=row.height, key=commit.oid)
         # A clean checkout has no synthetic node. Prefer its actual HEAD when
         # the old selection disappears; HEAD may be outside the loaded limit.
         key = next(
@@ -2478,9 +2495,18 @@ class RhizomeApp(App[None]):
                 if explicit or changed_history:
                     self.back_to_graph()
                     self.query_one("#inspector-tabs", TabbedContent).active = "wip-tab"
+                if explicit:
+                    self.action_show_files()
             elif key in self._commits:
                 self._history_key = key
                 self.inspect_commit(self._commits[key])
+                if explicit:
+                    self._task_view = "primary"
+                    self.query_one("#inspector-panel").remove_class("collapsed")
+                    self.query_one("#inspector-splitter").remove_class("collapsed")
+                    self._display_primary_panel("inspector")
+                    if self.screen_stack[0].has_class("pane-constrained"):
+                        self.call_after_refresh(self.query_one(CommitFileTree).focus)
         elif table_id == "wip-table" and key in self._file_rows:
             self._selected_file = self._file_rows[key]
             self.update_controls()
@@ -2539,9 +2565,8 @@ class RhizomeApp(App[None]):
                 if token != self._detail_token or generation != self._generation:
                     return
                 local_date = format_commit_date(commit.date, full=True)
-                text = Text(
-                    commit.subject + "\n", style=f"bold {TEXT}", no_wrap=True, overflow="ellipsis"
-                )
+                text = Text(no_wrap=True, overflow="ellipsis")
+                text.append(commit.subject + "\n\n", style=f"bold {TEXT}")
                 text.append(f"{commit.author} · {commit.short_id}\n{local_date}", style=MUTED)
                 metadata = Text(
                     f"{commit.subject}\n{commit.author} <{commit.email}>\n{local_date}\n{commit.oid}"
@@ -2765,7 +2790,11 @@ class RhizomeApp(App[None]):
             if self._history_scope and self._history_scope.kind == "focused"
             else "All refs + HEAD"
         )
-        caption = f"{scope_label} · {len(self._commits)} commits"
+        count = len(self._commits)
+        self.query_one("#history-count", Static).update(
+            Text(f"{count} commit{'s' if count != 1 else ''}")
+        )
+        caption = scope_label
         if query is not None:
             progress = page.examined_total if page else 0
             state = (
@@ -3212,6 +3241,7 @@ class RhizomeApp(App[None]):
         elif ident == "show-refs":
             self.action_show_refs()
         elif ident == "show-primary":
+            self.back_to_graph()
             self.action_show_primary()
         elif ident == "back-to-graph":
             self.back_to_graph()
@@ -3805,7 +3835,7 @@ class RhizomeApp(App[None]):
         if self._settings_error:
             suffix += " · Settings unavailable: " + self._settings_error
         self.screen_stack[0].query_one("#status-line", Static).update(
-            Text(self._status_message + suffix)
+            Text(self._status_message + suffix, no_wrap=True, overflow="ellipsis")
         )
 
     def show_error(self, message: str) -> None:
@@ -3938,6 +3968,16 @@ class RhizomeApp(App[None]):
 
     def _display_primary_panel(self, panel: str) -> None:
         workspace = self.screen_stack[0]
+        for task, ident in (
+            ("primary", "show-primary"),
+            ("files", "show-files"),
+            ("composer", "show-composer"),
+            ("refs", "show-refs"),
+        ):
+            workspace.query_one(f"#{ident}", Button).set_class(
+                self._task_view == task, "nav-active"
+            )
+        workspace.set_class(85 <= self.size.width < 120 and panel != "refs", "refs-auto-hidden")
         if workspace.has_class("pane-constrained"):
             workspace.remove_class(
                 "responsive-inspector", "responsive-refs", "responsive-history-only"
@@ -3997,6 +4037,12 @@ class RhizomeApp(App[None]):
 
     def action_toggle_refs(self) -> None:
         workspace = self.screen_stack[0]
+        if 85 <= self.size.width < 120:
+            if workspace.has_class("refs-auto-hidden"):
+                self.action_show_refs()
+            else:
+                self.action_show_primary()
+            return
         if workspace.has_class("pane-constrained"):
             if workspace.has_class("responsive-refs"):
                 self.action_show_primary()

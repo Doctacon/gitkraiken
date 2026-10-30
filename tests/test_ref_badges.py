@@ -22,12 +22,12 @@ def test_aligned_local_and_github_tips_show_both_markers_before_long_names():
         worktrees=(Worktree(Path("/demo"), "tip", name, current=True, primary=True),),
     )
     badge = build_ref_badges(snapshot)["tip"]
-    assert badge.text.plain.startswith("💻 🐙 ")
-    assert "🌳" not in badge.text.plain
+    assert badge.text.plain.startswith("⑂ ↗ ")
+    assert "▤" not in badge.text.plain
     assert "Worktree:" not in badge.description.plain
     clipped = badge.text.copy()
     clipped.truncate(12, overflow="ellipsis")
-    assert "💻" in clipped.plain and "🐙" in clipped.plain
+    assert "⑂" in clipped.plain and "↗" in clipped.plain
     assert clipped.plain.endswith("…")
     assert f"refs/heads/{name}" in badge.description.plain
     assert f"refs/remotes/origin/{name}" in badge.description.plain
@@ -45,8 +45,8 @@ def test_primary_checkout_does_not_add_worktree_marker(git_repo, git_run, checko
 
     badge = build_ref_badges(snapshot)[snapshot.head]
 
-    assert badge.text.plain.startswith("💻 ")
-    assert "🌳" not in badge.text.plain
+    assert badge.text.plain.startswith("⑂ ")
+    assert "▤" not in badge.text.plain
     assert "Worktree:" not in badge.description.plain
 
 
@@ -67,10 +67,10 @@ def test_linked_worktree_marker_is_independent_of_open_checkout(
     for root in (git_repo, linked):
         badges = build_ref_badges(Repository(root).snapshot())
 
-        assert "💻" in badges[primary_head].text.plain
-        assert "🌳" not in badges[primary_head].text.plain
+        assert "⑂" in badges[primary_head].text.plain
+        assert "▤" not in badges[primary_head].text.plain
         assert "Worktree:" not in badges[primary_head].description.plain
-        assert "🌳" in badges[linked_head].text.plain
+        assert "▤" in badges[linked_head].text.plain
         assert str(linked) in badges[linked_head].description.plain
         assert ("(current)" in badges[linked_head].description.plain) == (root == linked)
 
@@ -96,14 +96,14 @@ def test_worktree_marker_shares_local_and_remote_tip_without_repeating_names():
     badges = build_ref_badges(snapshot)
     assert list(badges) == ["tip"]
     badge = badges["tip"]
-    assert badge.text.plain == "💻 🌳 🐙 main · origin/main"
+    assert badge.text.plain == "⑂ ▤ ↗ main · origin/main"
     clipped = badge.text.copy()
     clipped.truncate(12, overflow="ellipsis")
-    assert all(icon in clipped.plain for icon in ("💻", "🌳", "🐙"))
+    assert all(icon in clipped.plain for icon in ("⑂", "▤", "↗"))
     assert "Worktree: /demo" not in badge.description.plain
-    assert "🌳 Worktree: /linked-topic · topic" in badge.description.plain
+    assert "▤ Worktree: /linked-topic · topic" in badge.description.plain
     assert (
-        "🌳 Worktree: /linked [literal] · detached HEAD (locked: in use)" in badge.description.plain
+        "▤ Worktree: /linked [literal] · detached HEAD (locked: in use)" in badge.description.plain
     )
     assert "refs/heads/main" in badge.description.plain
     assert "refs/remotes/origin/main" in badge.description.plain
@@ -113,10 +113,10 @@ def test_detached_worktree_uses_its_registered_head_without_inventing_a_local_re
     worktree = Worktree(Path("/demo/detached"), "detached-tip", detached=True)
     snapshot = Snapshot(Path("/demo"), "main", head="main-tip", worktrees=(worktree,))
     badge = build_ref_badges(snapshot)["detached-tip"]
-    assert badge.text.plain == "🌳 detached"
+    assert badge.text.plain == "▤ detached"
     assert "detached HEAD" in badge.description.plain
     assert "/demo/detached" in badge.description.plain
-    assert "🌳" not in build_ref_badges(snapshot)["main-tip"].text.plain
+    assert "▤" not in build_ref_badges(snapshot)["main-tip"].text.plain
     assert not any(
         hasattr(span.style, "meta") and "context_ref" in span.style.meta
         for span in badge.text.spans
@@ -127,7 +127,7 @@ def test_detached_worktree_path_cannot_introduce_extra_graph_lines():
     path = Path("/demo/line\nbreak\t[tree]")
     snapshot = Snapshot(Path("/demo"), "main", worktrees=(Worktree(path, "tip", detached=True),))
     badge = build_ref_badges(snapshot)["tip"]
-    assert badge.text.plain == r"🌳 line\nbreak\t[tree]"
+    assert badge.text.plain == r"▤ line\nbreak\t[tree]"
     assert str(path) in badge.description.plain
 
 
@@ -139,16 +139,16 @@ def test_worktree_markers_follow_head_moves_and_registration_removal():
         refs=(Ref("main", "refs/heads/main", "old-tip", "local"),),
         worktrees=(worktree,),
     )
-    assert "🌳" in build_ref_badges(snapshot)["old-tip"].text.plain
+    assert "▤" in build_ref_badges(snapshot)["old-tip"].text.plain
     moved = replace(
         snapshot, worktrees=(replace(worktree, head="new-tip", detached=True, branch=""),)
     )
     badges = build_ref_badges(moved)
-    assert "🌳" not in badges["old-tip"].text.plain
-    assert badges["new-tip"].text.plain == "🌳 linked"
+    assert "▤" not in badges["old-tip"].text.plain
+    assert badges["new-tip"].text.plain == "▤ linked"
     removed = build_ref_badges(replace(moved, worktrees=()))
     assert set(removed) == {"old-tip"}
-    assert "🌳" not in removed["old-tip"].text.plain
+    assert "▤" not in removed["old-tip"].text.plain
 
 
 def test_unborn_and_bare_worktrees_do_not_add_badges_and_prunable_state_is_explicit():
@@ -163,7 +163,7 @@ def test_unborn_and_bare_worktrees_do_not_add_badges_and_prunable_state_is_expli
     )
     badges = build_ref_badges(snapshot)
     assert set(badges) == {"tip"}
-    assert badges["tip"].text.plain == "🌳 missing"
+    assert badges["tip"].text.plain == "▤ missing"
     assert "prunable: missing path" in badges["tip"].description.plain
 
 
@@ -189,14 +189,14 @@ def test_local_and_remote_move_independently_and_reunite_after_fetch():
         remotes=(Remote("origin", "https://github.com/example/demo.git", provider="GitHub"),),
     )
     badges = build_ref_badges(snapshot)
-    assert "💻" in badges["local-tip"].text.plain
-    assert "🐙" not in badges["local-tip"].text.plain
-    assert "🐙" in badges["remote-tip"].text.plain
-    assert "💻" not in badges["remote-tip"].text.plain
+    assert "⑂" in badges["local-tip"].text.plain
+    assert "↗" not in badges["local-tip"].text.plain
+    assert "↗" in badges["remote-tip"].text.plain
+    assert "⑂" not in badges["remote-tip"].text.plain
     updated = replace(snapshot, refs=(local, replace(remote, oid="local-tip")))
     badges = build_ref_badges(updated)
     assert set(badges) == {"local-tip"}
-    assert badges["local-tip"].text.plain.startswith("💻 🐙 ")
+    assert badges["local-tip"].text.plain.startswith("⑂ ↗ ")
 
 
 def test_typed_refs_keep_colliding_short_names_and_exact_slash_remote_provider():
@@ -222,7 +222,7 @@ def test_typed_refs_keep_colliding_short_names_and_exact_slash_remote_provider()
         ),
     )
     badge = build_ref_badges(snapshot)["tip"]
-    assert badge.text.plain.startswith("💻 🐙 ☁ ")
+    assert badge.text.plain.startswith("⑂ ↗ ")
     assert "Local: refs/heads/origin/main" in badge.description.plain
     assert "GitHub remote: refs/remotes/origin/main" in badge.description.plain
     assert "Azure DevOps remote: refs/remotes/team/origin/main" in badge.description.plain
@@ -261,7 +261,7 @@ def test_detached_head_tags_stashes_and_unassigned_remote_refs_are_honest():
         stashes=(Stash("stash@{2}", "stash-tip", "[literal] work"),),
     )
     badges = build_ref_badges(snapshot)
-    assert badges["detached"].text.plain.startswith("💻 ◇ HEAD")
+    assert badges["detached"].text.plain.startswith("⑂ ◇ HEAD")
     assert "Detached HEAD" in badges["detached"].description.plain
     assert badges["remote"].text.plain.startswith("↗ ")
     assert badges["stash-tip"].text.plain == "▣ stash@{2}"

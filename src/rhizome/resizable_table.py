@@ -72,8 +72,10 @@ class ResizableDataTable(DataTable):
         component = (
             "resizable-table--grip-active" if key == self._resize_key else "resizable-table--grip"
         )
+        # A faint dotted grip advertises resizing without drawing spreadsheet
+        # rules down the reading surface.
         grip = Segment(
-            "│",
+            "┊",
             self.get_component_rich_style(component, partial=True)
             + Style(meta={"row": -1, "column": column_index, "resize_column": key})
             + base_style.background_style,

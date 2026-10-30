@@ -7,6 +7,7 @@ and use :class:`CommitFileTree.FileSelected` to load a diff.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 from rich.text import Text
 from textual import events, on
@@ -53,7 +54,7 @@ class CommitFileTree(Tree[FileChange | _Directory]):
     def __init__(self, *, id: str | None = None) -> None:
         super().__init__(Text("CHANGED FILES (0)"), id=id)
         self.show_root = True
-        self.show_guides = True
+        self.show_guides = False
         self.guide_depth = 2
         self.auto_expand = False
         self.root.expand()
@@ -231,12 +232,16 @@ class CommitFileTree(Tree[FileChange | _Directory]):
         self._path_nodes.clear()
         self._files = {self._key_for(file): file for file in files}
 
-        trie: dict[str, object] = {"dirs": {}, "files": []}
+        trie: dict[str, object] = {"dirs": {}, "files": [], "count": 0}
         for file in files:
             branch = trie
+            branch["count"] = cast(int, branch["count"]) + 1
             parts = [part for part in file.path.split("/") if part]
             for part in parts[:-1]:
-                branch = branch["dirs"].setdefault(part, {"dirs": {}, "files": []})  # type: ignore[index]
+                branch = branch["dirs"].setdefault(  # type: ignore[index]
+                    part, {"dirs": {}, "files": [], "count": 0}
+                )
+                branch["count"] = cast(int, branch["count"]) + 1
             branch["files"].append(file)  # type: ignore[index]
         self._add_branch(self.root, trie, "", "")
         self.get_node_at_line(0)
@@ -263,10 +268,16 @@ class CommitFileTree(Tree[FileChange | _Directory]):
             directories = branch["dirs"]  # type: ignore[assignment]
         if prefix:
             key = f"dir:{prefix}"
+            large_commit = len(self._files) > 20
+            folder_label = Text(label, no_wrap=True, overflow="ellipsis")
+            if large_commit:
+                folder_label.append(f" ({branch['count']})", style=self._palette.muted)
             folder = parent.add(
-                Text(label, no_wrap=True, overflow="ellipsis"),
+                folder_label,
                 _Directory(key, prefix),
-                expand=self._expanded.get(key, True),
+                # Large commits open as a navigable summary, not a wall of
+                # paths. Once opened, nested folders are ready to inspect.
+                expand=self._expanded.get(key, not large_commit or parent is not self.root),
             )
             self._path_nodes[key] = folder
             parent = folder

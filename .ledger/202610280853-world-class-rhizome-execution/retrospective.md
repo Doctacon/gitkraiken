@@ -57,5 +57,18 @@ Measure before optimizing: eliminating a duplicate snapshot materially improved
 refresh without weakening post-fetch reconciliation. Keep the residual startup
 miss explicit; do not redefine targets or change history semantics to manufacture
 acceptance. Similarly, distinguish baseline formatter debt, prepared CI, automated
-terminal checks and real-user/platform acceptance. M1 remains unaccepted and M2
-has not started.
+terminal checks and real-user/platform acceptance. M1 remained unaccepted and M2
+had not started at the time of that increment.
+
+## Interim lesson: aesthetics needs interaction evidence
+
+Change information priority before choosing colors: subject-first history and a
+smaller persistent command surface made the larger difference. Inspect real
+rendered light/dark/narrow/diff/composer views; presence assertions missed clipped
+labels and redundant framing. Do not solve visual clutter by making long paths
+or diagnostics inaccessible.
+
+Focus is geometry, not only color, in Textual: a border on a one-line input moved
+the tree between MouseDown and Click. The exact context-menu regression identified
+the wrong-branch risk, and a stable filter content box fixed it. Keep both visual
+review and end-to-end target-identity assertions in a styling pass.

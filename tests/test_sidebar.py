@@ -599,7 +599,8 @@ async def test_selected_worktree_path_and_pr_error_stay_in_tree_and_tooltip():
         tree, point = await hit_point(sidebar, pilot, str(worktree.path))
         region = tree.region
         node = sidebar._tree_nodes[str(worktree.path)]
-        assert str(worktree.path) in node.label.plain
+        assert worktree.path.name in node.label.plain
+        assert str(worktree.path.parent) not in node.label.plain
         await pilot.hover(tree, offset=point)
         assert tree.tooltip.plain == str(worktree.path)
         await click(pilot, tree, point)

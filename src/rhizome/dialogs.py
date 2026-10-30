@@ -356,7 +356,7 @@ class HelpDialog(ModalScreen[None]):
                         "Carets / Space fold sections, remotes and namespaces.\n"
                         "Sidebar search reveals matches without changing history;\n"
                         "clear it to restore folds. Escape clears that search first.\n"
-                        "💻 local/HEAD · 🌳 linked worktree · 🐙 GitHub · ☁ Azure · 🦊 GitLab · ↗ other\n"
+                        "⑂ local/HEAD · ▤ linked worktree · ↗ remote tracking · ◇ tag\n"
                         "Markers share a commit when branch, worktree and remote tips agree.\n"
                         "Remote markers show last-fetched state, not live servers.\n"
                         "Fetch validates cache scope; unsafe ref/pruning settings are refused.\n"

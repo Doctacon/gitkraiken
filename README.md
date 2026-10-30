@@ -1,100 +1,41 @@
 # Rhizome
 
-A local-first Git workspace for your terminal. Browse without changing your
-checkout, review mixed edits, stage exact hunks or line ranges, and commit with a
-mouse or keyboard. **Runs standalone; tmux is optional.** Git uses your existing
-authentication.
+A local-first Git workspace for your terminal. Browse branches and commits,
+review diffs, stage exact hunks or lines, and commit with a mouse or keyboard.
+**Runs standalone; tmux is optional.** Uses your existing Git authentication.
 
-![Rhizome's branches, commit graph, and changed files](docs/assets/workspace.png)
+![Rhizome's history-first workspace](docs/assets/workspace-light.png)
 
-## M1 — Focused precision core
+## Run
 
-M1 is **complete and accepted for a full release**, with explicit validation
-[coverage and deferrals](docs/validation/m1-release-acceptance.md). This readiness
-record does not itself publish a GitHub release. M2 investigation and personalization
-are in development; integration and hosted-review milestones remain deferred.
-
-Ordinary staged commits use a reviewed-index transaction and native Git hooks/signing.
-The workspace temporarily hands the terminal to Git and returns afterward; failures
-retain the draft. The screenshot above predates the precision workspace; see the
-current [wide precision view](docs/assets/m1-precision-wide.png) and
-[80×24 composer](docs/assets/m1-composer-80x24.png).
-
-Run an inspected development checkout with Python 3.13+, Git 2.36+, and
-[uv](https://docs.astral.sh/uv/):
+macOS, Linux, and WSL2. Requires **Git 2.36+**, **Python 3.13+**, and
+[uv](https://docs.astral.sh/uv/).
 
 ```sh
-uv sync --locked
+git clone https://github.com/Doctacon/rhizome.git
+cd rhizome
 uv run --locked rhizome /path/to/repository
-# Or explore a disposable real Git repository with a local-only remote:
-uv run --locked rhizome --demo
 ```
 
-The target is macOS, Linux, and WSL2, including SSH/tmux, at **80×24 or larger**.
-Wide terminals show the three-panel workspace; narrow terminals summon one primary
-task panel. Platform, minimum-version, real-terminal, and human usability validation
-must not be inferred from the local headless tests.
+Try `uv run --locked rhizome --demo` for a disposable, local-only demo.
+Use a terminal at **80×24 or larger**; wider terminals show more detail.
+For a managed install with updates and rollback, see [installation](docs/installation.md).
 
-## M2 development: investigation and personalization
+## Use
 
-The development checkout adds captured, paged history without a total commit ceiling,
-complete-scope search, explicit Focus, comparison/file investigation, split inspection,
-and curated themes/keymaps. See [semantics, controls and limitations](docs/investigation.md).
-M2 is not yet an accepted release: reference-scale refresh performance and remaining
-terminal/visual evidence are still being evaluated.
+- Select a commit to inspect it without changing your checkout.
+- Activate a changed file to view its diff; **Esc** returns to the previous view.
+- **Changes / F2** opens working changes. In a diff, **v** marks a line range;
+  **s** stages it and **u** unstages it.
+- **Commit / F3** opens the composer; drafts are saved locally.
+- **Ctrl+P** opens actions, **/** searches, **F4** opens settings,
+  **?** shows help, and **Ctrl+Q** quits.
+- For optional tmux integration, see the [tmux guide](docs/usage.md#tmux).
 
-## Precision workflow
+Automatic fetch is optional; push is explicit and never forced. Pull, reset,
+and discard are currently unavailable.
 
-1. **Files / F2** opens working changes. Activate a file to inspect its captured diff.
-2. Press **v**, extend a contiguous range with arrows, then **s** to stage or **u**
-   to unstage. Mouse/Shift-click ranges and hunk controls are also available.
-3. Search, expand context, or show whitespace without changing the canonical patch.
-4. **Commit / F3** opens the durable composer. On repository open, saved drafts take
-   priority over configured Git templates. Edit the message and choose **Commit**
-   to commit staged content with Git-owned cleanup and encoding. Hooks/signing can
-   request input while the workspace is suspended. **Back / Esc** restores the prior
-   review view.
-
-Browsing and double-clicking never check out a branch. Use an explicit **Checkout**
-action. If a reviewed file changes externally, the captured review remains visible
-and becomes stale: refresh and select again before applying it.
-
-By default, **Ctrl+P** opens actions, **Ctrl+L / Activity** shows queued/running/completed Git
-work, **F4 / Workspace** opens core preferences, saved-state controls and local
-diagnostics, **?** shows help, and **Ctrl+Q** quits. Closing Activity does not cancel Git.
-See [workspace controls](docs/usage.md#drafts-and-core-preferences) for global offline,
-plain glyphs, session-only exclusion and exact-preview diagnostic export.
-
-## Safety and network behavior
-
-Unproven destructive/integration workflows are intentionally unavailable—not routed
-around their guards. This currently includes discard, resets, rewriting, stash
-mutations, pull, deletion, external-patch application, and Continue/Abort. Use an
-explicit external Git/editor workflow for those tasks and refresh afterward;
-Rhizome does not promise recovery for external actions.
-
-Fetch validates configured destinations before updating remote-tracking caches;
-unsafe mappings, tag pruning, and resolving user-ref aliases into affected caches
-are refused. Native non-force tag auto-follow and explicit `--no-tags` are honored.
-Optional automatic fetch and hosted metadata refresh use a configurable
-**60-second** interval and pause for inactive terminals or user work. Local polling
-remains separate from network requests. Offline mode disables network actions;
-non-force push remains deliberate. No force-push or telemetry is added.
-
-## Installation and integration
-
-The inspectable bootstrap accepts **only a full Git commit**, provisions a private
-pinned uv/Python environment, and provides explicit update, rollback, and uninstall
-commands. It never edits shell, Git, or tmux configuration. Real lifecycle checks
-pass on macOS ARM64 and Linux ARM64/AMD64 (AMD64 under emulation); this is not a
-claim that every platform or network environment was tested. See
-[installation and ownership boundaries](docs/installation.md).
-
-Optional tmux integration: `rhizome --tmux /path/to/repository` with tmux 3.2+.
-The [tmux guide](docs/usage.md#tmux) explains the opt-in persistent pane hotkey.
-
-[Usage](docs/usage.md) · [Pull requests](docs/pull-requests.md) ·
-[Development and checks](docs/usage.md#development-and-checks) ·
-[Validation plan](docs/design/validation-plan.md)
+[Full usage](docs/usage.md) · [Investigation](docs/investigation.md) ·
+[Pull requests](docs/pull-requests.md) · [Development](docs/usage.md#development-and-checks)
 
 An independent terminal adaptation, not an official GitKraken product.

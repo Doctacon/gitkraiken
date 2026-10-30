@@ -140,6 +140,36 @@ async def test_empty_and_same_identity_refresh_preserve_fold_and_file() -> None:
 
 
 @pytest.mark.asyncio
+async def test_large_commit_starts_grouped_and_preserves_explicit_expansion() -> None:
+    app = FileTreeApp()
+    files = tuple(FileChange(f"src/package/file_{i}.py", index="M") for i in range(24))
+    files += (FileChange("docs/guide.md", index="A"),)
+    async with app.run_test(size=(42, 20)) as pilot:
+        tree = app.query_one(CommitFileTree)
+        tree.set_files(files, identity="large")
+        await pilot.pause()
+        folder = tree._path_nodes["dir:src/package"]
+        assert folder.is_collapsed
+        assert folder.label.plain == "src/package (24)"
+        assert tree._path_nodes["dir:docs"].label.plain == "docs (1)"
+        assert not app.selected
+        tree.focus()
+        tree.move_cursor(folder)
+        await pilot.press("enter")
+        assert folder.is_expanded
+        await pilot.press("down", "enter")
+        assert app.selected[-1].file == files[0]
+        tree.set_files(files, identity="large")
+        await pilot.pause()
+        assert tree._path_nodes["dir:src/package"].is_expanded
+        assert tree.selected_file == files[0]
+        tree.set_files(files, identity="different")
+        await pilot.pause()
+        assert tree._path_nodes["dir:src/package"].is_collapsed
+        assert tree.selected_file is None
+
+
+@pytest.mark.asyncio
 async def test_root_toggle_select_file_and_stale_nodes_are_inert() -> None:
     app = FileTreeApp()
     file = FileChange("models/marts/finance/fact_core_metric.sql", index="M")

@@ -15,9 +15,9 @@ _LOCAL = TEAL
 _WORKTREE = "#28733a"
 _MUTED = MUTED
 _PROVIDERS = {
-    "GitHub": ("🐙", "[GH]", PROVIDER_COLORS["GitHub"]),
-    "Azure DevOps": ("☁", "[AZ]", PROVIDER_COLORS["Azure DevOps"]),
-    "GitLab": ("🦊", "[GL]", PROVIDER_COLORS["GitLab"]),
+    "GitHub": ("↗", "[GH]", PROVIDER_COLORS["GitHub"]),
+    "Azure DevOps": ("↗", "[AZ]", PROVIDER_COLORS["Azure DevOps"]),
+    "GitLab": ("↗", "[GL]", PROVIDER_COLORS["GitLab"]),
     "Git": ("↗", "[R]", PROVIDER_COLORS["Git"]),
 }
 
@@ -68,8 +68,8 @@ def build_ref_badges(
         text = Text(no_wrap=True, overflow="crop" if plain_glyphs else "ellipsis")
         description = Text()
         is_head = oid == snapshot.head
-        local_marker = "[L]" if plain_glyphs else "💻"
-        worktree_marker = "[WT]" if plain_glyphs else "🌳"
+        local_marker = "[L]" if plain_glyphs else "⑂"
+        worktree_marker = "[WT]" if plain_glyphs else "▤"
         tag_marker = "[T]" if plain_glyphs else "◇"
         stash_marker = "[S]" if plain_glyphs else "▣"
         separator = " | " if plain_glyphs else " · "
@@ -85,9 +85,15 @@ def build_ref_badges(
             for ref in refs
             if ref.kind == "remote"
         }
-        for provider, (icon, plain_marker, color) in _PROVIDERS.items():
-            if provider in providers or (provider == "Git" and providers - _PROVIDERS.keys()):
-                text.append((plain_marker if plain_glyphs else icon) + " ", style=color)
+        # One stable, single-cell remote mark keeps provider emoji and repeated
+        # logos out of the history. Exact providers remain in the description;
+        # plain mode retains its explicit ASCII role labels.
+        if providers and not plain_glyphs:
+            text.append("↗ ", style=_MUTED)
+        elif plain_glyphs:
+            for provider, (_, plain_marker, color) in _PROVIDERS.items():
+                if provider in providers or (provider == "Git" and providers - _PROVIDERS.keys()):
+                    text.append(plain_marker + " ", style=color)
         if any(ref.kind == "tag" for ref in refs):
             text.append(tag_marker + " ", style="#9a5a00")
         if stashes[oid]:
