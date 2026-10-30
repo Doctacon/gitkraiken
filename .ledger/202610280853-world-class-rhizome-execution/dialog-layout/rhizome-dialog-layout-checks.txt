@@ -1,0 +1,93 @@
+.......F.........F....                                                   [100%]
+=================================== FAILURES ===================================
+_ test_utility_dialogs_use_available_space_and_keep_footer_clickable[ctrl+l-activity-dialog-activity-close-size3] _
+
+git_repo = PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1777/test_utility_dialogs_use_avail7/worktree')
+size = (80, 24), shortcut = 'ctrl+l', frame_id = 'activity-dialog'
+close_id = 'activity-close'
+
+    @pytest.mark.parametrize("size", [(270, 80), (170, 48), (100, 32), (80, 24)])
+    @pytest.mark.parametrize(
+        ("shortcut", "frame_id", "close_id"),
+        [
+            ("f4", "workspace-controls-dialog", "controls-close"),
+            ("ctrl+l", "activity-dialog", "activity-close"),
+        ],
+    )
+    async def test_utility_dialogs_use_available_space_and_keep_footer_clickable(
+        git_repo, size, shortcut, frame_id, close_id
+    ):
+        app = RhizomeApp(git_repo)
+        async with app.run_test(size=size) as pilot:
+            await settle(app, pilot)
+            await pilot.press(shortcut)
+            await pilot.pause()
+            frame = app.screen.query_one(f"#{frame_id}")
+            assert frame.region.width >= int(size[0] * 0.8)
+            assert frame.region.height >= int(size[1] * 0.8)
+            assert 0 <= frame.region.x < frame.region.right <= size[0]
+            assert 0 <= frame.region.y < frame.region.bottom <= size[1]
+            if shortcut == "f4":
+                body = app.screen.query_one("#controls-body")
+                assert body.size.height >= max(8, int(frame.size.height * 0.55))
+                scope = app.screen.query_one("#controls-scope", Select)
+                current = scope.query_one("SelectCurrent")
+                assert current.region.bottom <= scope.parent.region.bottom
+                assert current.content_size.width >= len("This workspace") + 2
+            else:
+                minimum = int(frame.size.height * 0.45) if size[0] > 100 else 3
+>               assert app.screen.query_one("#activity-list").size.height >= minimum
+E               AssertionError: assert 1 >= 3
+E                +  where 1 = Size(width=68, height=1).height
+E                +    where Size(width=68, height=1) = OptionList(id='activity-list').size
+E                +      where OptionList(id='activity-list') = query_one('#activity-list')
+E                +        where query_one = ActivityDialog().query_one
+E                +          where ActivityDialog() = RhizomeApp(title='Rhizome', classes={'-light-mode'}, pseudo_classes={'light', 'focus'}).screen
+
+tests/test_workspace_dialog_layout.py:44: AssertionError
+_______ test_f4_controls_expose_all_actions_and_diagnostics_by_keyboard ________
+
+git_repo = PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1777/test_f4_controls_expose_all_ac0/worktree')
+
+    async def test_f4_controls_expose_all_actions_and_diagnostics_by_keyboard(git_repo):
+        app = RhizomeApp(git_repo)
+        action_ids = {
+            "reset-overrides",
+            "clear-drafts",
+            "reset-view",
+            "forget-workspace",
+            "toggle-exclusion",
+            "diagnostics",
+            "reset-global",
+        }
+        async with app.run_test(size=(80, 24)) as pilot:
+            await app.workers.wait_for_complete()
+            await pilot.press("f4")
+            await pilot.pause()
+    
+            dialog = app.screen
+            assert isinstance(dialog, WorkspaceControlsDialog)
+            assert dialog.query_one("#controls-body").display
+            assert dialog.query_one("#controls-apply").display
+            assert "session-only" in str(dialog.query_one(".dialog-detail", Static).renderable).lower()
+            assert all(dialog.query_one(f"#{action_id}", Button).display for action_id in action_ids)
+    
+            # The scroll region's tab sequence reaches every action at 80x24,
+            # including controls currently below the short viewport.
+            focused_ids: set[str] = set()
+            for _ in range(16):
+                if app.focused and app.focused.id:
+                    focused_ids.add(str(app.focused.id))
+                await pilot.press("tab")
+>           assert action_ids <= focused_ids
+E           AssertionError: assert {'clear-draft...et-view', ...} <= {'clear-draft...indings', ...}
+E             
+E             Extra items in the left set:
+E             'toggle-exclusion'
+E             'forget-workspace'
+
+tests/test_m1_visuals.py:129: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_workspace_dialog_layout.py::test_utility_dialogs_use_available_space_and_keep_footer_clickable[ctrl+l-activity-dialog-activity-close-size3]
+FAILED tests/test_m1_visuals.py::test_f4_controls_expose_all_actions_and_diagnostics_by_keyboard
+2 failed, 20 passed in 64.14s (0:01:04)

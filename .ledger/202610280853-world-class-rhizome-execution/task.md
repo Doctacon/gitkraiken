@@ -37,6 +37,13 @@ renders are linked from README. See `aesthetics-design.md` and
 `aesthetics-validation-manifest.json`. This is a UI iteration, not M2 acceptance or
 publication authority; no commit or push is implied.
 
+The follow-up Settings/Activity sizing request is also implemented: viewport-sized
+frames, responsive content layouts, pinned footers, and repaired Select geometry.
+**49 targeted regressions pass**, with reviewed wide/narrow/light/dark captures.
+See `dialog-layout-validation.md`. These remain headless UI checks, not human or
+platform acceptance. HEAD advanced externally during the follow-up; this session
+did not issue a commit or push.
+
 ## Current M2 state
 
 - Investigation, bounded captured history/search, comparison/file investigation,

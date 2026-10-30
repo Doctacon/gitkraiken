@@ -1,0 +1,47 @@
+F
+=================================== FAILURES ===================================
+_ test_utility_dialogs_use_available_space_and_keep_footer_clickable[f4-workspace-controls-dialog-controls-close-size0] _
+
+git_repo = PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1774/test_utility_dialogs_use_avail0/worktree')
+size = (270, 80), shortcut = 'f4', frame_id = 'workspace-controls-dialog'
+close_id = 'controls-close'
+
+    @pytest.mark.parametrize("size", [(270, 80), (170, 48), (100, 32), (80, 24)])
+    @pytest.mark.parametrize(
+        ("shortcut", "frame_id", "close_id"),
+        [
+            ("f4", "workspace-controls-dialog", "controls-close"),
+            ("ctrl+l", "activity-dialog", "activity-close"),
+        ],
+    )
+    async def test_utility_dialogs_use_available_space_and_keep_footer_clickable(
+        git_repo, size, shortcut, frame_id, close_id
+    ):
+        app = RhizomeApp(git_repo)
+        async with app.run_test(size=size) as pilot:
+            await settle(app, pilot)
+            await pilot.press(shortcut)
+            await pilot.pause()
+            frame = app.screen.query_one(f"#{frame_id}")
+            assert frame.region.width >= int(size[0] * 0.8)
+            assert frame.region.height >= int(size[1] * 0.8)
+            assert 0 <= frame.region.x < frame.region.right <= size[0]
+            assert 0 <= frame.region.y < frame.region.bottom <= size[1]
+            if shortcut == "f4":
+                body = app.screen.query_one("#controls-body")
+                assert body.size.height >= max(8, int(frame.size.height * 0.55))
+                scope = app.screen.query_one("#controls-scope", Select)
+                current = scope.query_one("SelectCurrent")
+>               assert current.region.bottom <= scope.parent.region.bottom
+E               AssertionError: assert 17 <= 16
+E                +  where 17 = Region(x=227, y=14, width=24, height=3).bottom
+E                +    where Region(x=227, y=14, width=24, height=3) = SelectCurrent().region
+E                +  and   16 = Region(x=16, y=13, width=237, height=3).bottom
+E                +    where Region(x=16, y=13, width=237, height=3) = Horizontal().region
+E                +      where Horizontal() = Select(id='controls-scope').parent
+
+tests/test_workspace_dialog_layout.py:40: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_workspace_dialog_layout.py::test_utility_dialogs_use_available_space_and_keep_footer_clickable[f4-workspace-controls-dialog-controls-close-size0]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 2.88s

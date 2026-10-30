@@ -202,6 +202,7 @@ class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
     }
     WorkspaceControlsDialog Input { width: 10; min-width: 10; }
     WorkspaceControlsDialog Switch { width: 9; min-width: 9; }
+    WorkspaceControlsDialog .setting-row Button { height: 3; }
     WorkspaceControlsDialog #settings-columns { height: auto; margin-top: 1; }
     WorkspaceControlsDialog .settings-column { width: 1fr; height: auto; padding-right: 2; }
     WorkspaceControlsDialog #settings-columns.-narrow { layout: vertical; }

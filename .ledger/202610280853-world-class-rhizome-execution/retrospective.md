@@ -72,3 +72,13 @@ Focus is geometry, not only color, in Textual: a border on a one-line input move
 the tree between MouseDown and Click. The exact context-menu regression identified
 the wrong-branch risk, and a stable filter content box fixed it. Keep both visual
 review and end-to-end target-identity assertions in a styling pass.
+
+## Interim lesson: modal scale is usable content, not just frame size
+
+Compare the same dialog at large and baseline terminal sizes. Fixed modal caps
+made most of a large terminal unavailable; fixed preambles and enclosing borders
+then consumed the small-terminal reading area. Scale the frame, allocate flexible
+content, keep the footer outside scrolling, and test actual visible rows and clicks.
+Select owns its visible border in SelectCurrent; a second focus border and global
+same-ID toolbar CSS can silently clip form fields. Check selected text geometry,
+not merely that a Select exists.

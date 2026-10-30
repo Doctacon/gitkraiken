@@ -37,6 +37,8 @@ async def test_utility_dialogs_use_available_space_and_keep_footer_clickable(
         if shortcut == "f4":
             body = app.screen.query_one("#controls-body")
             assert body.size.height >= max(8, int(frame.size.height * 0.55))
+            refresh = app.screen.query_one("#remote-refresh-enabled")
+            assert body.region.y <= refresh.region.y < refresh.region.bottom <= body.region.bottom
             for control_id in ("controls-scope", "graph-style", "diff-layout", "theme"):
                 field = app.screen.query_one(f"#{control_id}", Select)
                 if control_id == "diff-layout":
@@ -52,6 +54,8 @@ async def test_utility_dialogs_use_available_space_and_keep_footer_clickable(
                     body.region.y <= current.region.y < current.region.bottom <= body.region.bottom
                 )
                 assert label.size.width >= cell_len(str(label.renderable))
+            keybindings = app.screen.query_one("#edit-keybindings", Button)
+            assert keybindings.region.height == keybindings.parent.region.height
         else:
             minimum = int(frame.size.height * 0.45) if size[0] > 100 else 3
             assert app.screen.query_one("#activity-list").size.height >= minimum
