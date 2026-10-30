@@ -12,9 +12,8 @@ macOS, Linux, and WSL2. Requires **Git 2.36+**, **Python 3.13+**, and
 [uv](https://docs.astral.sh/uv/).
 
 ```sh
-git clone https://github.com/Doctacon/rhizome.git
-cd rhizome
-uv run --locked rhizome /path/to/repository
+uv tool install --force --python 3.13 'git+https://github.com/Doctacon/rhizome.git@main'
+rhizome /path/to/repository
 ```
 
 Try `uv run --locked rhizome --demo` for a disposable, local-only demo.
