@@ -89,6 +89,52 @@ async def test_workspace_defaults_to_light_with_readable_rich_colors(git_repo):
             assert contrast(color.get_truecolor().hex, background) >= 4.5
 
 
+@pytest.mark.parametrize("preference", ["light", "dark", "high-contrast"])
+@pytest.mark.parametrize("graph_style", ["smooth", "compact"])
+async def test_history_selection_highlights_without_underlining_rows(
+    git_repo, git_run, preference, graph_style
+):
+    git_run(git_repo, "commit", "--allow-empty", "-m", "Base")
+    git_run(git_repo, "commit", "--allow-empty", "-m", "Selected commit")
+    selected = git_run(git_repo, "rev-parse", "HEAD").stdout.strip()
+    git_run(git_repo, "commit", "--allow-empty", "-m", "Newest commit")
+    WorkspaceStateStore().save("global", {"theme": preference, "graph_style": graph_style})
+    app = RhizomeApp(git_repo)
+    async with app.run_test(size=(170, 48)) as pilot:
+        await app.workers.wait_for_complete()
+        app.jump_to(selected)
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        table = app.query_one("#graph-table", DataTable)
+        row_index = table.get_row_index(selected)
+        row = table.ordered_rows[row_index]
+        assert table.cursor_row == row_index
+        assert row.height == (2 if graph_style == "smooth" else 1)
+
+        for focused in (False, True):
+            (table if focused else app.query_one("#graph-filter", Input)).focus()
+            await pilot.pause()
+            cursor = table.get_component_rich_style("datatable--cursor")
+            assert cursor.bold
+            assert cursor.bgcolor != table.rich_style.bgcolor
+            start = (
+                table.header_height
+                + sum(row.height for row in table.ordered_rows[:row_index])
+                - int(table.scroll_y)
+            )
+            # Smooth rows have a text line and a connector line. Neither should
+            # have a full-width underline; ref-badge underlines are independent.
+            for y in range(start, start + row.height):
+                segments = [
+                    segment
+                    for segment in table.render_line(y)
+                    if segment.text and segment.style and segment.style.meta.get("row") == row_index
+                ]
+                assert segments
+                assert all(segment.style.bgcolor == cursor.bgcolor for segment in segments)
+                assert all(not segment.style.underline for segment in segments)
+
+
 @pytest.mark.parametrize("preference", ["dark", "high-contrast"])
 async def test_saved_dark_palettes_reach_actual_history_spans_and_editor(
     git_repo, git_run, preference

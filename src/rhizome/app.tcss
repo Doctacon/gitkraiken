@@ -188,7 +188,7 @@ Input:focus, TextArea:focus, Select:focus { border: tall $primary; }
 #graph-table > .datatable--cursor {
     background: $primary-muted;
     color: $text;
-    text-style: bold underline;
+    text-style: bold;
 }
 #graph-table > .datatable--hover { background: $surface; }
 #history-navigation { height: 1; min-height: 1; }
