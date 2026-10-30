@@ -1,4 +1,4 @@
-"""Real controlling-terminal coverage for the public native-commit seam."""
+"""Real controlling-terminal coverage for the native Git write runners."""
 
 from __future__ import annotations
 
@@ -42,12 +42,14 @@ def _process_group_states(process_group: int) -> list[str]:
 
 
 @pytest.mark.parametrize("prompt_stream", ("terminal", "stderr", "ssh-signing"))
+@pytest.mark.parametrize("runner", ("reviewed-commit", "integration"))
 def test_public_commit_hook_can_read_the_controlling_terminal(
     git_repo,
     git_run,
     tmp_path,
     monkeypatch,
     prompt_stream,
+    runner,
 ):
     """A public commit should retain the foreground-terminal access native Git has."""
     # Fixed identities and dates make the native and Repository commits exact
@@ -169,14 +171,26 @@ def test_public_commit_hook_can_read_the_controlling_terminal(
 
                 def observe_commit(command, *args, **kwargs):
                     process = real_popen(command, *args, **kwargs)
-                    if "commit" in command and kwargs.get("env", {}).get("GIT_INDEX_FILE"):
+                    if "commit" in command and kwargs.get("process_group") == 0:
                         spawned.append(process)
                         product_pid_path.write_text(f"{process.pid}\n")
                     return process
 
                 subprocess.Popen = observe_commit
                 try:
-                    result = Repository(git_repo).execute(Action("commit", message="terminal hook"))
+                    repository = Repository(git_repo)
+                    if runner == "integration":
+                        # Merge Continue invokes this same native commit/hook/
+                        # signing path; observe the new integration runner's
+                        # actual terminal lease, not only the shared helper.
+                        completed = repository._run_integration(
+                            ["commit", "-m", "terminal hook"], operation="integration terminal test"
+                        )
+                        if completed.returncode:
+                            raise AssertionError(completed.stderr.decode("utf-8", "replace"))
+                        result = completed.stdout.decode("utf-8", "replace")
+                    else:
+                        result = repository.execute(Action("commit", message="terminal hook"))
                     product_outcome_path.write_text(
                         json.dumps(
                             {

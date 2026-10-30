@@ -4,6 +4,7 @@ import subprocess
 
 import pytest
 from textual.widgets import (
+    Button,
     DataTable,
     Input,
     OptionList,
@@ -1249,7 +1250,9 @@ async def test_compact_commit_header_gives_space_to_file_tree(git_repo, git_run,
 
 
 @pytest.mark.parametrize("operation", ["fetch", "pull", "push"])
-async def test_network_toolbar_actions_obey_m1_gates(branch_repo, bare_remote, git_run, operation):
+async def test_network_toolbar_actions_obey_current_modes(
+    branch_repo, bare_remote, git_run, operation
+):
     remote_before = git(bare_remote, "rev-parse", "refs/heads/main")
     operation_tip = ""
     if operation == "push":
@@ -1261,7 +1264,6 @@ async def test_network_toolbar_actions_obey_m1_gates(branch_repo, bare_remote, g
     app = RhizomeApp(branch_repo)
     async with app.run_test(size=(170, 50)) as pilot:
         await settle(app, pilot)
-        before_refs = git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)")
         if operation in {"fetch", "pull"}:
             tree = git(bare_remote, "rev-parse", "refs/heads/main^{tree}")
             operation_tip = git_run(
@@ -1275,30 +1277,31 @@ async def test_network_toolbar_actions_obey_m1_gates(branch_repo, bare_remote, g
             ).stdout.strip()
             git_run(bare_remote, "update-ref", "refs/heads/main", operation_tip)
             assert git(branch_repo, "rev-parse", "refs/remotes/origin/main") == remote_before
-        if operation == "pull":
-            # Infrequent/gated actions now live in the command menu.
+        if operation == "fetch":
+            # The primary segment follows its saved mode; explicitly choose Fetch All.
+            await pilot.click("#pull-menu")
+            await choose_option(app, pilot, "fetch-all")
+            await pilot.click("#fetch")
+        elif operation == "pull":
             await pilot.click("#actions")
             await choose_option(app, pilot, "pull")
         else:
-            await pilot.click(f"#{operation}")
+            await pilot.click("#push")
         await settle(app, pilot)
         assert len(app.screen_stack) == 1
         assert app.snapshot_data.branch == "main"
-        assert git(branch_repo, "rev-parse", "HEAD") == before_head
         assert (branch_repo / "base.txt").read_bytes() == before_content
-        if operation == "pull":
-            assert "pull is unavailable until its M3 guarded plan" in app._last_error
-            assert (
-                git(branch_repo, "for-each-ref", "--format=%(refname) %(objectname)") == before_refs
-            )
-            assert git(branch_repo, "rev-parse", "refs/remotes/origin/main") == remote_before
+        assert not app._last_error
+        if operation == "fetch":
+            assert git(branch_repo, "rev-parse", "HEAD") == before_head
+            assert git(branch_repo, "rev-parse", "refs/remotes/origin/main") == operation_tip
             assert git(bare_remote, "rev-parse", "refs/heads/main") == operation_tip
-        elif operation == "fetch":
-            assert not app._last_error
+        elif operation == "pull":
+            assert git(branch_repo, "rev-parse", "HEAD") == operation_tip
             assert git(branch_repo, "rev-parse", "refs/remotes/origin/main") == operation_tip
             assert git(bare_remote, "rev-parse", "refs/heads/main") == operation_tip
         else:
-            assert not app._last_error
+            assert git(branch_repo, "rev-parse", "HEAD") == before_head
             assert git(bare_remote, "rev-parse", "refs/heads/main") == operation_tip
 
 
@@ -1466,9 +1469,16 @@ async def test_external_rebase_conflict_finish_is_gated_without_altering_operati
         before_index = git(rebase_repo, "ls-files", "--stage")
         before_status = git(rebase_repo, "status", "--porcelain=v1")
         before_content = (rebase_repo / "base.txt").read_bytes()
+        assert app.query_one(f"#{finish}", Button).disabled
         await pilot.click(f"#{finish}")
         await settle(app, pilot)
+        assert not app._last_error
 
+        # Disabled banner controls must not be the only protection: the
+        # explicit Actions path also refuses an externally owned operation.
+        await pilot.press("ctrl+p")
+        await choose_option(app, pilot, finish)
+        await settle(app, pilot)
         assert len(app.screen_stack) == 1
         assert f"{finish} is unavailable until its M3 guarded plan" in app._last_error
         assert app.snapshot_data.operation == "rebase"

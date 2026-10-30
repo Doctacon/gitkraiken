@@ -69,6 +69,14 @@ CURATED_SETTINGS = (
     "graph_order",
     "keymap",
     "diff_layout",
+    "pull_fetch_default",
+)
+
+PULL_FETCH_OPTIONS = (
+    ("Fetch All", "fetch-all"),
+    ("Pull (fast-forward if possible)", "pull-ff"),
+    ("Pull (fast-forward only)", "pull-ff-only"),
+    ("Pull (rebase)", "pull-rebase"),
 )
 
 _COMMAND_IDS = frozenset(command.id for command in COMMANDS)
@@ -229,6 +237,7 @@ def validate_preferences(mapping: Mapping[str, Any]) -> dict[str, Any]:
         "graph_style": {"smooth", "compact"},
         "graph_order": {"topo", "chronological"},
         "diff_layout": {"unified", "split"},
+        "pull_fetch_default": {value for _label, value in PULL_FETCH_OPTIONS},
     }
     for name, values in choices.items():
         if name in result and (type(result[name]) is not str or result[name] not in values):

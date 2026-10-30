@@ -281,3 +281,4 @@ class Action:
     expected_head: str = ""  # Require both this HEAD and expected_branch before mutation.
     expected_push_url: str = ""  # Redacted destination shown by the remote-deletion picker.
     expected_ref: str = ""  # Ref captured independently of target for an exact OID guard.
+    pull_mode: str = ""  # ff, ff-only or rebase; empty retains legacy ff-only policy.

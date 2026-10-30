@@ -975,7 +975,7 @@ def test_remote_checkout_preserves_dirty_worktree_on_switch_failure(
     assert (git_repo / "tracked.txt").read_text() == "dirty\n"
 
 
-def test_local_remote_push_tracking_clone_checkout_and_pull(
+def test_local_remote_push_tracking_clone_fetch_and_checkout(
     git_repo: Path, bare_remote: Path, git_run, tmp_path: Path
 ) -> None:
     commit_file(git_run, git_repo, "shared.txt", "one\n", "one")
@@ -991,10 +991,11 @@ def test_local_remote_push_tracking_clone_checkout_and_pull(
     clone = Repository(clone_path)
     assert clone.snapshot().branch == "main"
 
-    commit_file(git_run, git_repo, "shared.txt", "two\n", "two")
+    updated = commit_file(git_run, git_repo, "shared.txt", "two\n", "two")
     source.execute(Action("push"))
-    clone.execute(Action("pull"))
-    assert (clone_path / "shared.txt").read_text() == "two\n"
+    clone.execute(Action("fetch"))
+    assert git_run(clone_path, "rev-parse", "refs/remotes/origin/main").stdout.strip() == updated
+    assert (clone_path / "shared.txt").read_text() == "one\n"
 
     git_run(git_repo, "switch", "-c", "remote-topic")
     commit_file(git_run, git_repo, "topic.txt", "topic\n", "topic")
@@ -1004,6 +1005,11 @@ def test_local_remote_push_tracking_clone_checkout_and_pull(
     clone_snapshot = clone.snapshot()
     assert clone_snapshot.branch == "remote-topic"
     assert clone_snapshot.upstream == "origin/remote-topic"
+
+
+def test_direct_pull_requires_guarded_coordinator_path(git_repo: Path) -> None:
+    with pytest.raises(GitError, match="guarded coordinator review path"):
+        Repository(git_repo).execute(Action("pull"))
 
 
 def test_remote_redaction_and_error_validation(

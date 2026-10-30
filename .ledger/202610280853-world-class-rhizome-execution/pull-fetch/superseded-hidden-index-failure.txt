@@ -1,0 +1,31 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___ test_abort_rejects_new_hidden_index_flags_before_touching_private_edits ____
+
+pull_pair = (PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1870/test_abort_rejects_...izome.operations.OperationCoordinator object at 0x107279fd0>, <rhizome.recovery.RecoveryJournal object at 0x10709a270>)
+git_run = <function git_run.<locals>.run at 0x1073699e0>
+
+    def test_abort_rejects_new_hidden_index_flags_before_touching_private_edits(pull_pair, git_run):
+        root, writer, coordinator, _journal = pull_pair
+        remote_advance(git_run, writer, "hidden.txt")
+        coordinator.submit_pull(coordinator.prepare_pull(Action("pull", pull_mode="ff-only")))
+        commit_file(git_run, root, "base.txt", "local conflict\n")
+        commit_file(git_run, writer, "base.txt", "remote conflict\n")
+        commit_file(git_run, writer, "hidden.txt", "upstream changed this\n")
+        git_run(writer, "push", "origin", "main")
+        coordinator.submit_pull(
+            coordinator.prepare_pull(Action("pull", pull_mode="rebase")), confirmed=True
+        )
+        paused_head = git_run(root, "rev-parse", "HEAD").stdout.strip()
+        private = root / "hidden.txt"
+        private.write_text("do not lose these hidden edits\n")
+        git_run(root, "update-index", "--assume-unchanged", "hidden.txt")
+    
+>       with pytest.raises(GitError):
+             ^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE GitError
+
+tests/test_pull_safety.py:186: Failed
+=========================== short test summary info ============================
+FAILED tests/test_pull_safety.py::test_abort_rejects_new_hidden_index_flags_before_touching_private_edits
+1 failed, 14 deselected in 11.92s

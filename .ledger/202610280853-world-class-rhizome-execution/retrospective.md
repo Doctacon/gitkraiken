@@ -1,6 +1,6 @@
 Status: pending
 Created: 2026-10-28
-Updated: 2026-10-29
+Updated: 2026-10-30
 
 # Retrospective
 
@@ -82,3 +82,25 @@ content, keep the footer outside scrolling, and test actual visible rows and cli
 Select owns its visible border in SelectCurrent; a second focus border and global
 same-ID toolbar CSS can silently clip form fields. Check selected text geometry,
 not merely that a Select exists.
+
+## Interim lesson: a real split action needs a full guarded journey
+
+A saved mode is not a working feature until the primary click, review, conflict
+resolution, restart and refusal paths run through the actual app. Real TUI journeys
+caught silent cancellation of automatic FF/Continue and a blanket lease guard that
+prevented staging resolutions. Parent-bound click tests caught a menu that clipped
+its final choices despite plausible widget geometry.
+
+Early green backend suites did not establish safety. Independent review required
+current finish-ref baselines, mixed stage-0 preimages, paused rebase eligibility,
+exact merge shape, transient replay obstruction checks and whole-mutation
+cross-process serialization. Record fresh adversarial cases for each, not just a
+larger aggregate number. Keep one raw-object identity policy through integration,
+finish and recovery. Actual Git 2.36 caught an unsupported flag; real PTYs verified
+both write runners, including disposable-key SSH signing.
+
+Refuse unsupported untracked/hidden-index finish states before mutation instead
+of completing Git and then labelling the expected state uncertain. Retain useful
+recovery details in Activity after restart. Preserve the distinction between this
+narrow pull workflow and generic M3/M4 tooling, and between local automated proof
+and human, large-history, platform or release acceptance.

@@ -162,6 +162,8 @@ class ActivityDialog(ModalScreen[None]):
         return Text(f"{record.state.upper():9} {record.operation}  ·  {self._elapsed(record)}")
 
     def _elapsed(self, record: OperationActivity) -> str:
+        if record.state == "blocked":
+            return "not timed"
         elapsed = record.elapsed
         if record.state in {"queued", "running"}:
             elapsed = max(elapsed, (datetime.now(UTC) - record.started).total_seconds())

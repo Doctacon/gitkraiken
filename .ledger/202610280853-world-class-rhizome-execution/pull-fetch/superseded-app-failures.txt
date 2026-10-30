@@ -1,0 +1,225 @@
+....F................................................................FF. [ 73%]
+..........................                                               [100%]
+=================================== FAILURES ===================================
+_____ test_owned_rebase_conflict_restarts_and_abort_requires_confirmation ______
+
+pull_repositories = PullRepositories(remote=PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1.../var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1868/test_owned_rebase_conflict_res0/local'))
+git_run = <function git_run.<locals>.run at 0x10bd707c0>
+
+    async def test_owned_rebase_conflict_restarts_and_abort_requires_confirmation(
+        pull_repositories: PullRepositories, git_run
+    ) -> None:
+        _disable_automatic_fetch()
+        repos = pull_repositories
+        git_run(repos.local, "switch", "-c", "topic")
+        git_run(repos.local, "branch", "--set-upstream-to=origin/main", "topic")
+        original = _commit(git_run, repos.local, "local\n", "Local conflict")
+        _commit(git_run, repos.writer, "remote\n", "Remote conflict")
+        git_run(repos.writer, "push", "origin", "main")
+        tracking_before = _oid(git_run, repos.local, "refs/remotes/origin/main")
+    
+        first = RhizomeApp(repos.local)
+        async with first.run_test(size=(120, 38)) as pilot:
+            await settle(first, pilot)
+            await _choose_pull_mode(first, pilot, "pull-rebase")
+            # Selecting a mode is preference-only; the main click performs transport.
+            assert _oid(git_run, repos.local, "refs/remotes/origin/main") == tracking_before
+            assert await pilot.click("#fetch")
+            for _ in range(100):
+                await pilot.pause(0.05)
+                if isinstance(first.screen, PullReviewDialog) or (not first.busy and first._last_error):
+                    break
+            assert isinstance(first.screen, PullReviewDialog), (
+                first._last_error,
+                first._status_message,
+            )
+            assert first.screen.plan.kind == "rebase"
+>           assert await pilot.click("#pull-review-confirm")
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_pull_app.py:234: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.13/site-packages/textual/pilot.py:234: in click
+    return await self._post_mouse_events(
+.venv/lib/python3.13/site-packages/textual/pilot.py:417: in _post_mouse_events
+    target_widget = app.query_one(widget)
+                    ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = RhizomeApp(title='Rhizome', classes={'-light-mode'}, pseudo_classes={'light', 'focus'})
+selector = '#pull-review-confirm', expect_type = None
+
+    def query_one(
+        self,
+        selector: str | type[QueryType],
+        expect_type: type[QueryType] | None = None,
+    ) -> QueryType | Widget:
+        """Get a widget from this widget's children that matches a selector or widget type.
+    
+        Args:
+            selector: A selector or widget type.
+            expect_type: Require the object be of the supplied type, or None for any type.
+    
+        Raises:
+            WrongType: If the wrong type was found.
+            NoMatches: If no node matches the query.
+    
+        Returns:
+            A widget matching the selector.
+        """
+        _rich_traceback_omit = True
+    
+        if isinstance(selector, str):
+            query_selector = selector
+        else:
+            query_selector = selector.__name__
+    
+        try:
+            selector_set = parse_selectors(query_selector)
+        except TokenError:
+            raise InvalidQueryFormat(
+                f"Unable to parse {query_selector!r} as a query; check for syntax errors"
+            ) from None
+    
+        if all(selectors.is_simple for selectors in selector_set):
+            cache_key = (self._nodes._updates, query_selector, expect_type)
+            cached_result = self._query_one_cache.get(cache_key)
+            if cached_result is not None:
+                return cached_result
+        else:
+            cache_key = None
+    
+        for node in walk_depth_first(self, with_root=False):
+            if not match(selector_set, node):
+                continue
+            if expect_type is not None and not isinstance(node, expect_type):
+                continue
+            if cache_key is not None:
+                self._query_one_cache[cache_key] = node
+            return node
+    
+>       raise NoMatches(f"No nodes match {selector!r} on {self!r}")
+E       textual.css.query.NoMatches: No nodes match '#pull-review-confirm' on RhizomeApp(title='Rhizome', classes={'-light-mode'}, pseudo_classes={'light', 'focus'})
+
+.venv/lib/python3.13/site-packages/textual/dom.py:1473: NoMatches
+_ test_external_rebase_conflict_finish_is_gated_without_altering_operation[abort] _
+
+rebase_repo = PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1868/test_external_rebase_conflict_0/worktree')
+git_run = <function git_run.<locals>.run at 0x10be60f40>, finish = 'abort'
+
+    @pytest.mark.parametrize("finish", ["abort", "continue"])
+    async def test_external_rebase_conflict_finish_is_gated_without_altering_operation(
+        rebase_repo, git_run, finish
+    ):
+        (rebase_repo / "base.txt").write_text("feature version\n")
+        git_run(rebase_repo, "add", ".")
+        git_run(rebase_repo, "commit", "-m", "Feature changes base")
+        feature_ref = git(rebase_repo, "rev-parse", "refs/heads/feature/payments")
+        git_run(rebase_repo, "switch", "test")
+        (rebase_repo / "base.txt").write_text("test version\n")
+        git_run(rebase_repo, "add", ".")
+        git_run(rebase_repo, "commit", "-m", "Teammate changes base")
+        git_run(rebase_repo, "switch", "feature/payments")
+        result = subprocess.run(
+            ["git", "-C", str(rebase_repo), "rebase", "test"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode != 0
+        assert git(rebase_repo, "ls-files", "-u", "--", "base.txt")
+        rebase_state = rebase_repo / git(rebase_repo, "rev-parse", "--git-path", "rebase-merge")
+        assert rebase_state.is_dir()
+    
+        app = RhizomeApp(rebase_repo)
+        async with app.run_test(size=(170, 50), notifications=True) as pilot:
+            await settle(app, pilot)
+            assert app.snapshot_data.operation == "rebase"
+            assert app.snapshot_data.conflicts
+            assert app.query_one("#operation-banner").display
+    
+            if finish == "continue":
+                (rebase_repo / "base.txt").write_text("resolved together\n")
+                git_run(rebase_repo, "add", "base.txt")
+                app.action_refresh()
+                await settle(app, pilot)
+                assert app.snapshot_data.operation == "rebase"
+                assert not app.snapshot_data.conflicts
+    
+            before_head = git(rebase_repo, "rev-parse", "HEAD")
+            before_refs = git(rebase_repo, "for-each-ref", "--format=%(refname) %(objectname)")
+            before_index = git(rebase_repo, "ls-files", "--stage")
+            before_status = git(rebase_repo, "status", "--porcelain=v1")
+            before_content = (rebase_repo / "base.txt").read_bytes()
+            await pilot.click(f"#{finish}")
+            await settle(app, pilot)
+    
+            assert len(app.screen_stack) == 1
+>           assert f"{finish} is unavailable until its M3 guarded plan" in app._last_error
+E           AssertionError: assert 'abort is unavailable until its M3 guarded plan' in ''
+E            +  where '' = RhizomeApp(title='Rhizome', classes={'-light-mode'}, pseudo_classes={'light', 'focus'})._last_error
+
+tests/test_app.py:1475: AssertionError
+_ test_external_rebase_conflict_finish_is_gated_without_altering_operation[continue] _
+
+rebase_repo = PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1868/test_external_rebase_conflict_1/worktree')
+git_run = <function git_run.<locals>.run at 0x10be61c60>, finish = 'continue'
+
+    @pytest.mark.parametrize("finish", ["abort", "continue"])
+    async def test_external_rebase_conflict_finish_is_gated_without_altering_operation(
+        rebase_repo, git_run, finish
+    ):
+        (rebase_repo / "base.txt").write_text("feature version\n")
+        git_run(rebase_repo, "add", ".")
+        git_run(rebase_repo, "commit", "-m", "Feature changes base")
+        feature_ref = git(rebase_repo, "rev-parse", "refs/heads/feature/payments")
+        git_run(rebase_repo, "switch", "test")
+        (rebase_repo / "base.txt").write_text("test version\n")
+        git_run(rebase_repo, "add", ".")
+        git_run(rebase_repo, "commit", "-m", "Teammate changes base")
+        git_run(rebase_repo, "switch", "feature/payments")
+        result = subprocess.run(
+            ["git", "-C", str(rebase_repo), "rebase", "test"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode != 0
+        assert git(rebase_repo, "ls-files", "-u", "--", "base.txt")
+        rebase_state = rebase_repo / git(rebase_repo, "rev-parse", "--git-path", "rebase-merge")
+        assert rebase_state.is_dir()
+    
+        app = RhizomeApp(rebase_repo)
+        async with app.run_test(size=(170, 50), notifications=True) as pilot:
+            await settle(app, pilot)
+            assert app.snapshot_data.operation == "rebase"
+            assert app.snapshot_data.conflicts
+            assert app.query_one("#operation-banner").display
+    
+            if finish == "continue":
+                (rebase_repo / "base.txt").write_text("resolved together\n")
+                git_run(rebase_repo, "add", "base.txt")
+                app.action_refresh()
+                await settle(app, pilot)
+                assert app.snapshot_data.operation == "rebase"
+                assert not app.snapshot_data.conflicts
+    
+            before_head = git(rebase_repo, "rev-parse", "HEAD")
+            before_refs = git(rebase_repo, "for-each-ref", "--format=%(refname) %(objectname)")
+            before_index = git(rebase_repo, "ls-files", "--stage")
+            before_status = git(rebase_repo, "status", "--porcelain=v1")
+            before_content = (rebase_repo / "base.txt").read_bytes()
+            await pilot.click(f"#{finish}")
+            await settle(app, pilot)
+    
+            assert len(app.screen_stack) == 1
+>           assert f"{finish} is unavailable until its M3 guarded plan" in app._last_error
+E           AssertionError: assert 'continue is unavailable until its M3 guarded plan' in ''
+E            +  where '' = RhizomeApp(title='Rhizome', classes={'-light-mode'}, pseudo_classes={'light', 'focus'})._last_error
+
+tests/test_app.py:1475: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_pull_app.py::test_owned_rebase_conflict_restarts_and_abort_requires_confirmation
+FAILED tests/test_app.py::test_external_rebase_conflict_finish_is_gated_without_altering_operation[abort]
+FAILED tests/test_app.py::test_external_rebase_conflict_finish_is_gated_without_altering_operation[continue]
+3 failed, 95 passed in 569.81s (0:09:29)

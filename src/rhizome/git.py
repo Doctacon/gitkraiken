@@ -988,6 +988,159 @@ class Repository:
             index_file=index_file,
         )
 
+    def _run_integration(
+        self,
+        args: list[str],
+        *,
+        operation: str,
+        on_spawn: Callable[[int], None] | None = None,
+    ) -> subprocess.CompletedProcess[bytes]:
+        """Run one reviewed local integration command under native Git.
+
+        The coordinator owns argv construction and outcome policy. This seam only
+        provides native terminal/hook behavior and returns ordinary Git failures
+        unchanged so the coordinator can distinguish a conflict from other exits.
+        Once process construction is attempted, exceptions are uncertain and the
+        process group is never signalled, cancelled, or automatically retried.
+        """
+        argv = ["git", *args]
+        env = _git_environment()
+        search_path = os.pathsep.join(
+            os.fspath(self.root / entry) if not os.path.isabs(entry) else entry
+            for entry in env.get("PATH", os.defpath).split(os.pathsep)
+        )
+        if shutil.which("git", path=search_path) is None:
+            raise GitError(f"Could not start Git {operation}: Git executable is unavailable.")
+
+        started = False
+        process: subprocess.Popen[bytes] | None = None
+        try:
+            with (
+                _commit_terminal(argv) as (command, terminal_fds),
+                tempfile.TemporaryFile() as stdin,
+                tempfile.TemporaryFile() as stdout,
+                tempfile.TemporaryFile() as stderr,
+            ):
+                if not stat.S_ISREG(os.fstat(stdin.fileno()).st_mode):
+                    raise GitError(f"Could not prepare regular Git {operation} input.")
+                # No Popen context manager: exceptional exits must neither wait for
+                # nor implicitly kill a Git process or one of its hooks/signers.
+                started = True
+                process = subprocess.Popen(
+                    command,
+                    cwd=self.root,
+                    env=env,
+                    stdin=stdin,
+                    stdout=stdout,
+                    stderr=stderr,
+                    process_group=0,
+                    pass_fds=terminal_fds,
+                )
+                if on_spawn is not None:
+                    on_spawn(process.pid)
+
+                if terminal_fds:
+                    offset = 0
+
+                    def show_diagnostics() -> None:
+                        nonlocal offset
+                        end = os.fstat(stderr.fileno()).st_size
+                        mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTTOU})
+                        try:
+                            while offset < end:
+                                chunk = os.pread(
+                                    stderr.fileno(), min(_MAX_ERROR_BYTES, end - offset), offset
+                                )
+                                if not chunk:
+                                    break
+                                offset += len(chunk)
+                                remaining = memoryview(chunk)
+                                while remaining:
+                                    remaining = remaining[os.write(terminal_fds[0], remaining) :]
+                        finally:
+                            signal.pthread_sigmask(signal.SIG_SETMASK, mask)
+
+                    while True:
+                        try:
+                            returncode = process.wait(timeout=0.05)
+                        except subprocess.TimeoutExpired:
+                            # Poll only to display diagnostics; there is no
+                            # mutation deadline, cancellation, or retry here.
+                            show_diagnostics()
+                        else:
+                            show_diagnostics()
+                            break
+                else:
+                    returncode = process.wait()
+
+                if returncode < 0:
+                    while True:
+                        try:
+                            # A signal-terminated leader is always uncertain. Probe
+                            # only to preserve whether inherited writers remain.
+                            os.killpg(process.pid, 0)
+                        except InterruptedError:
+                            continue
+                        except ProcessLookupError:
+                            group_state = "is absent"
+                            break
+                        except OSError as error:
+                            raise GitOutcomeUncertain(
+                                f"Native Git {operation} was terminated by signal {-returncode}; "
+                                f"could not inspect process/group {process.pid}: {error}"
+                            ) from error
+                        group_state = "is still present"
+                        break
+                    raise GitOutcomeUncertain(
+                        f"Native Git {operation} was terminated by signal {-returncode}; "
+                        f"process/group {process.pid} {group_state}. Repository state and "
+                        "child-process quiescence must be inspected before retrying."
+                    )
+
+                while True:
+                    try:
+                        # Signal zero only probes for inherited writers.
+                        os.killpg(process.pid, 0)
+                    except InterruptedError:
+                        continue
+                    except ProcessLookupError:
+                        break
+                    except OSError as error:
+                        raise GitOutcomeUncertain(
+                            "Could not establish native process-group quiescence "
+                            f"after Git {operation}: {error}"
+                        ) from error
+                    raise GitOutcomeUncertain(
+                        f"Native Git {operation} returned but its process group is still "
+                        "present; hook or signer writers may remain active."
+                    )
+
+                stdout.seek(0)
+                stderr.seek(0)
+                output = stdout.read(_MAX_ERROR_BYTES + 1)
+                diagnostic = stderr.read(_MAX_ERROR_BYTES + 1)
+                if len(output) > _MAX_ERROR_BYTES:
+                    output = output[:_MAX_ERROR_BYTES] + b"\n[Git output truncated by Rhizome]\n"
+                if len(diagnostic) > _MAX_ERROR_BYTES:
+                    diagnostic = diagnostic[:_MAX_ERROR_BYTES] + (
+                        b"\n[Git error output truncated by Rhizome]\n"
+                    )
+                return subprocess.CompletedProcess(argv, returncode, output, diagnostic)
+        except GitOutcomeUncertain:
+            raise
+        except BaseException as error:
+            if started:
+                pid = process.pid if process is not None else "(unobserved)"
+                raise GitOutcomeUncertain(
+                    f"Git {operation} outcome is uncertain after native spawn; "
+                    f"process/group: {pid}. Inspect the repository before retrying: {error}"
+                ) from error
+            if isinstance(error, GitError):
+                raise
+            if isinstance(error, (KeyboardInterrupt, SystemExit)):
+                raise
+            raise GitError(f"Could not run Git {operation}: {error}") from error
+
     def _attribute_snapshot(self, paths: tuple[str, ...], *, source: str = "") -> bytes:
         """Read effective attributes at a captured tree without changing the real index.
 
@@ -3373,7 +3526,12 @@ class Repository:
                 destinations.append((scope.remote, refspec.destination))
         return scopes
 
-    def _execute_fetch(self, requested_remote: str = "") -> subprocess.CompletedProcess[bytes]:
+    def _execute_fetch(
+        self,
+        requested_remote: str = "",
+        *,
+        disable_submodule_recursion: bool = False,
+    ) -> subprocess.CompletedProcess[bytes]:
         scopes = self._validate_fetch_scope(requested_remote)
         result = subprocess.CompletedProcess(["git", "fetch"], 0, b"", b"")
         for scope in scopes:
@@ -3382,10 +3540,12 @@ class Repository:
                 "fetch.pruneTags=false",
                 "-c",
                 f"remote.{scope.remote}.pruneTags=false",
-                "fetch",
-                "--no-force",
-                "--no-prune-tags",
             ]
+            if disable_submodule_recursion:
+                command.extend(["-c", "submodule.recurse=false"])
+            command.extend(["fetch", "--no-force", "--no-prune-tags"])
+            if disable_submodule_recursion:
+                command.append("--no-recurse-submodules")
             command.append("--refmap=")
             if scope.no_tags:
                 command.append("--no-tags")
@@ -3956,6 +4116,8 @@ class Repository:
         operation = action.operation
         if operation not in allowed:
             raise GitError(f"Unsupported Git action: {operation or '(empty)'}")
+        if operation == "pull":
+            raise GitError("Pull requires the guarded coordinator review path.")
 
         self._preflight_context(action)
         fallback = f"Git {operation} completed."
@@ -4127,16 +4289,6 @@ class Repository:
             result = self._git(["apply"], operation="apply patch", input_bytes=patch)
         elif operation == "fetch":
             result = self._execute_fetch(action.remote)
-        elif operation == "pull":
-            command = ["pull", "--ff-only"]
-            if action.remote:
-                remote = self._remote(action.remote)
-                command.append(remote)
-                if action.target:
-                    command.append(self._validate_branch(action.target, "Remote branch name"))
-            elif action.target:
-                raise GitError("A pull target requires an explicit remote.")
-            result = self._git(command, timeout=_NETWORK_TIMEOUT, operation="pull")
         elif operation == "set-upstream":
             if not action.target.startswith("refs/heads/"):
                 raise GitError("Set upstream target must be a full refs/heads ref.")

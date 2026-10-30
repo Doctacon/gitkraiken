@@ -27,7 +27,12 @@ ModalScreen Input:focus { border: tall $primary; }
 }
 .tool:hover, .tool:focus, #open:hover, #open:focus, #help:hover, #help:focus,
 #refresh:hover, #refresh:focus { background: $primary-muted; color: $text; }
-.tool.primary, #refresh { background: $primary; color: $surface; text-style: bold; }
+.tool.primary, #refresh, #fetch { background: $primary; color: $surface; text-style: bold; }
+/* Fetch is the primary segment of a compact split control. The small chevron
+   opens a preference-only radio menu; Pull remains an Actions fallback. */
+#fetch { margin-left: 1; padding-right: 0; }
+#pull-menu { margin-left: 0; padding-left: 0; color: $surface; background: $primary; }
+#fetch:hover, #fetch:focus, #pull-menu:hover, #pull-menu:focus { background: $primary-muted; color: $text; }
 /* These stay available through Actions; the daily surface remains uncluttered. */
 #pull, #stash, #pop, #branch { display: none; }
 
@@ -156,7 +161,7 @@ PrecisionDiff #precision-lines {
 .pane-constrained #repo-header, .pane-constrained #toolbar { height: 1; padding: 0; }
 .pane-constrained #repo-header { padding-left: 1; }
 .pane-constrained #toolbar .tool { margin-left: 0; padding: 0 1; }
-.pane-constrained #fetch, .pane-constrained #push, .pane-constrained #help { display: none; }
+.pane-constrained #push, .pane-constrained #help { display: none; }
 .pane-constrained #workspace-nav { height: 1; padding: 0; border-bottom: none; }
 .pane-constrained #workspace-nav Button { height: 1; margin-right: 0; padding: 0; }
 /* The active underline would consume the compact button's only content row. */
@@ -173,7 +178,7 @@ PrecisionDiff #precision-lines {
 .pane-constrained.task-composer #commit-message { height: 1fr; min-height: 4; }
 .pane-tight #inspector-panel { width: 25; }
 .pane-tight .wip-actions Button { min-width: 0; width: 1fr; margin-right: 0; padding: 0; }
-.pane-tight #fetch { display: none; }
+/* Pull/fetch remains a first-class split button even at 80 columns. */
 .pane-tight #actions { width: 9; min-width: 9; }
 
 ModalScreen { align: center middle; background: $foreground-muted 28%; }

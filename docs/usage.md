@@ -37,9 +37,10 @@ priority; **Refs** summons the reference rail. Below 85 columns, **Changes / F2*
 **Commit / F3**, and **Refs** summon one primary task. **History** returns to the
 graph; **Esc** returns to the previous review view.
 
-The repository header holds frequent actions; branch creation, stash controls and
-Pull remain in **Actions / Ctrl+P** with their existing safety gates. **Settings /
-F4** includes light, dark and high-contrast themes. The active task is highlighted.
+The repository header includes the saved **Pull/Fetch** split button. Branch
+creation and stash controls remain in **Actions / Ctrl+P** with their existing
+safety gates. **Settings / F4** includes light, dark and high-contrast themes.
+The active task is highlighted.
 
 ## Browse without checking out
 
@@ -92,6 +93,73 @@ Drag pane dividers or column-header grips to resize. Session widths, folds and
 scroll positions survive ordinary refresh. Narrowing limits visible panes;
 expanding restores explicit side-panel preferences. Hover popup tooltips are
 suppressed in the workspace.
+
+## Fetch and pull
+
+The main **Pull/Fetch** button runs the saved mode. Its adjacent arrow opens four
+choices; selecting one only saves the preference—it never starts Git work.
+Keyboard arrows/Enter select a choice; Escape or clicking outside closes the menu.
+The same default is configurable in **Settings / F4**, with ordinary global,
+workspace and session-only preference rules.
+
+- **Fetch All:** refresh validated remote-tracking caches without integrating into
+  the current branch.
+- **Pull (fast-forward if possible)** — the initial default: fast-forward when
+  behind; review and confirm an exact-target merge when histories diverge.
+- **Pull (fast-forward only):** refuse divergent history without changing the local
+  branch. The preceding fetch may still have refreshed caches.
+- **Pull (rebase):** fast-forward when behind; on divergence, review a bounded,
+  linear local range on an unprotected branch. Commits reachable from known remote refs,
+  known default/protected branches, shallow ambiguity and non-linear ranges are
+  refused. This is not proof that an unfetched server has never seen a commit.
+
+Pull uses the current checked-out branch's configured remote upstream, not the
+selected graph row. It requires a born, attached branch and a clean index/worktree;
+there is no automatic stash. Hidden index flags and obstructing ignored/untracked
+files fail closed. Pull fetches the upstream remote through the existing validated
+fetch path, then freezes the exact upstream commit. Local-ahead or equal history
+needs no integration. Canceling a review leaves fetched caches intact.
+
+Divergent merges/rebases show original HEAD, exact target, incoming/outgoing counts
+and consequences before confirmation. They require a private history checkpoint.
+Native hooks/signing still run; Rhizome hands over the terminal when needed. A
+change to the reviewed branch, target, policy or tracked content invalidates the action. The
+branch context-menu Pull is explicitly **fast-forward only**, independent of the
+saved split-button default.
+
+### Conflicts and recovery
+
+An owned pull conflict stays paused across restart. Resolve files in your editor,
+stage them in Rhizome, then choose **Continue**. Move any remaining untracked files
+aside before Continue or Abort; hidden index flags must also be cleared. These
+unsupported finish states are refused before a finish mutation, not removed automatically.
+**Abort** requires confirmation, preserves resolution preimages and restores the
+original branch. Earlier resolutions
+remain recoverable when a rebase encounters further conflicts. Externally started
+operations are never adopted; finish those using Git and refresh.
+
+Pull recovery lives separately under `pull-recovery/` in the private state
+location. It can contain source/history and distinct index/worktree copies; file
+permissions are private, not encryption. Completed backups follow size/age limits;
+active or uncertain recovery is protected. Forgetting preferences or excluding a
+workspace does **not** delete these recovery copies. Excluded workspaces cannot
+start divergent pulls, and saving policy cannot change while pull ownership is
+paused or unresolved. Fast-forward and fetch remain usable without history backups.
+
+An interrupted or uncertain native writer leaves a private
+`rhizome-pull-lease.json` in the common Git directory. It blocks cooperating Rhizome
+mutations, including linked worktrees, until inspected; restart does not replay or
+clear it. **Activity / Ctrl+L** exposes the retained guard and PID/path details even
+when Git has no ordinary operation marker. Do not remove a guard merely to retry:
+inspect the process, repository and recovery material first. There is no universal
+Undo or automatic recovery supervisor.
+
+Offline mode prevents pull/fetch transport; owned Continue/Abort are local actions.
+Rhizome never automatically retries or kills an unfinished native integration.
+Hooks, filters and signing programs remain trusted native code, not a sandbox;
+background writers that escape Git's process group are outside this guard.
+Cooperating Rhizome writers serialize; arbitrary external Git/editor writes are
+not locked out, so avoid concurrent external mutations during integration.
 
 ## Craft a precise commit
 
@@ -183,8 +251,9 @@ Settings includes:
   Confirmations explain what is removed; Git files are never cleared by these controls.
 - **Exclude workspace** removes its saved state and stops further workspace saves
   and diagnostic recording. Current text remains session-only, with an explicit
-  label. Only an opaque exclusion marker is retained. Re-enabling saves the current
-  session, never an old discarded draft. Removal failures are reported explicitly.
+  label. An opaque exclusion marker is retained; existing pull recovery is kept
+  separately, as described above. Re-enabling saves the current session, never an
+  old discarded draft. Removal failures are reported explicitly.
 
 Graph/ref filters, loaded history limit, selected history row, pane sizes/visibility
 and current task/tab can resume. Git actions and captured patch selections are not
@@ -200,7 +269,8 @@ Review the preview before sharing it yourself. Rhizome never uploads it.
 The state location and installation are [separate](installation.md#locations-and-ownership).
 `settings.json` is a versioned editable file in that state location. Existing core
 preferences include `graph_style`, `offline`, `remote_refresh_enabled`,
-`remote_refresh_interval`, `plain_glyphs`, `diagnostics_enabled`, and
+`remote_refresh_interval`, `plain_glyphs`, `diagnostics_enabled`,
+`pull_fetch_default` (`fetch-all`, `pull-ff`, `pull-ff-only`, `pull-rebase`), and
 `protected_branches`. For example:
 
 ```json
@@ -224,8 +294,8 @@ core controls.
 ## Safety during the implementation transition
 
 Routine supported actions currently include stage/unstage, ordinary commits, explicit
-checkout, branch/tag/worktree creation, upstream selection, validated fetch and
-non-force push. Fetch evaluates active refspecs, pruning settings and symbolic
+checkout, branch/tag/worktree creation, upstream selection, validated fetch,
+non-force push and the guarded pull workflows described above. Fetch evaluates active refspecs, pruning settings and symbolic
 aliases before transport. It refuses configured refspec destinations outside remote-tracking caches,
 tag pruning, unsupported explicit tag modes, and updates that could move an
 existing user-owned symbolic ref through a cache. Native non-force tag auto-follow
@@ -238,12 +308,12 @@ Plans capture relevant identity, targets, configuration and content, then
 revalidate under common-repository mutation serialization. They cannot be replayed
 or silently retargeted.
 
-The current workspace deliberately refuses **discard, resets, history rewrites,
-merge/rebase/cherry-pick/revert, stash mutations, pull, ref deletion, external-patch
-application, Continue and Abort** while their guided protection/recovery flows
-remain unproven. Some existing menus/prompts remain visible, but submission explains
-the gate and does not execute Git. Selecting a hard-reset mode is not an exception.
-Protected/default refs cannot bypass these guards.
+Outside the narrowly owned pull workflow, the workspace deliberately refuses
+**discard, resets, generic history rewrites, merge/rebase/cherry-pick/revert, stash
+mutations, ref deletion, external-patch application, and external Continue/Abort**
+while their guided protection/recovery flows remain unproven. Some menus/prompts
+remain visible, but submission explains the gate without executing Git. A visible
+hard-reset choice is not an exception. Protected/default refs cannot bypass guards.
 
 For a gated workflow, inspect `git status` and use Git or your editor explicitly in
 another terminal, then refresh Rhizome. An externally started conflict remains
@@ -273,7 +343,8 @@ killed to make room. Captured reviews remain stable during summary refresh.
 **Activity / Ctrl+L** shows queued/planning, running and bounded completed Git work,
 elapsed time, redacted result detail, and checkpoint IDs when applicable. Background
 read status is separate. Keyboard arrows or mouse selection inspect a record.
-**Close/Escape only closes Activity—it never cancels or retries Git.**
+**Close/Escape only closes Activity—it never cancels or retries Git.** A retained
+pull recovery guard appears as **BLOCKED**, with no invented operation duration.
 
 ## Controls
 

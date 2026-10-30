@@ -11,6 +11,7 @@ import threading
 import time
 import weakref
 from collections import OrderedDict, deque
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -19,6 +20,8 @@ from typing import Any
 from .git import GitError, GitOutcomeUncertain, Repository, _redact
 from .models import Action
 from .patches import PatchDocument, PatchService
+from .pull import ManagedPull, PullBackend, PullPlan
+from .pull_lease import PullLease, PullLeaseError, PullWriterGuard, PullWriterGuardError
 from .recovery import RecoveryError, RecoveryJournal
 
 _ROUTINE_OPERATIONS = frozenset(
@@ -181,12 +184,15 @@ class OperationCoordinator:
         repo: Repository,
         *,
         journal: RecoveryJournal | None = None,
+        pull_journal: RecoveryJournal | None = None,
         protected_branches: tuple[str, ...] = (),
     ) -> None:
         if not isinstance(repo, Repository):
             raise TypeError("repo must be a Repository")
         if journal is not None and not isinstance(journal, RecoveryJournal):
             raise TypeError("journal must be a RecoveryJournal or None")
+        if pull_journal is not None and not isinstance(pull_journal, RecoveryJournal):
+            raise TypeError("pull_journal must be a RecoveryJournal or None")
         if not isinstance(protected_branches, tuple) or not all(
             isinstance(value, str) and value for value in protected_branches
         ):
@@ -196,13 +202,37 @@ class OperationCoordinator:
 
         self.repository = repo
         self.journal = journal
+        self.pull_journal = pull_journal
         self.protected_branches = protected_branches
         self._identity = self._read_identity()
         self._mutation_lock = _repository_lock(self._identity.lock_key)
+        self._pull_lease = PullLease(
+            Path(self._identity.common_path),
+            repository=self._identity.common_path,
+            worktree=self._identity.root_path,
+        )
+        self._pull_writer_guard = PullWriterGuard(Path(self._identity.common_path))
         self._pending_lock = threading.Lock()
         self._pending: OrderedDict[str, _PendingPlan] = OrderedDict()
         self._activity_lock = threading.Lock()
         self._activities: deque[OperationActivity] = deque(maxlen=_MAX_ACTIVITY)
+        self._pull = PullBackend(self, journal=pull_journal)
+
+    def prepare_pull(self, action: Action) -> PullPlan:
+        """Fetch and review one exact guarded pull request."""
+        return self._pull.prepare(action)
+
+    def submit_pull(self, plan: PullPlan, *, confirmed: bool = False) -> str:
+        """Consume and execute one coordinator-owned pull plan."""
+        return self._pull.submit(plan, confirmed=confirmed)
+
+    def cancel_pull(self, plan: PullPlan) -> None:
+        """Consume a pull plan without integrating its fetched target."""
+        self._pull.cancel(plan)
+
+    def managed_pull(self) -> ManagedPull | None:
+        """Return a trusted paused pull-owned operation, if one exists."""
+        return self._pull.managed()
 
     def plan(
         self,
@@ -293,7 +323,8 @@ class OperationCoordinator:
         mutation_started = False
         checkpoint_outcome_uncertain = False
         try:
-            with self._mutation_lock:
+            with self._mutation_lock, self._writer_guard():
+                self._assert_pull_lease_clear(plan.action)
                 self._update_activity(
                     activity_id,
                     state="running",
@@ -1008,6 +1039,36 @@ class OperationCoordinator:
             common_inode=common_info.st_ino,
         )
 
+    @contextmanager
+    def _writer_guard(self):
+        try:
+            with self._pull_writer_guard.hold():
+                yield
+        except PullWriterGuardError as error:
+            raise GitError(f"Cannot acquire common-repository writer guard: {error}") from error
+
+    def _assert_pull_lease_clear(self, action: Action) -> None:
+        try:
+            lease = self._pull_lease.read()
+        except PullLeaseError as error:
+            raise GitError(f"Cannot verify durable pull writer lease: {error}") from error
+        if (
+            lease is not None
+            and lease.phase == "paused"
+            and action.operation in {"stage", "unstage"}
+            and self._pull.managed() is not None
+        ):
+            # A verified paused pull has no live native writer. Permit only
+            # resolution staging in its owning worktree, not other mutations
+            # or a lease whose exact recovery ownership cannot be established.
+            return
+        if lease is not None:
+            raise GitError(
+                f"Repository mutations are blocked by a durable {lease.phase} pull writer lease "
+                f"at {self._pull_lease.path}. Inspect PID/PGID {lease.pid} and repository state; "
+                "Rhizome will not kill, retry, or clear it automatically."
+            )
+
     def _assert_identity(self) -> None:
         if self._read_identity() != self._identity:
             raise GitError(
@@ -1101,6 +1162,37 @@ class OperationCoordinator:
                 "Save index and worktree preimages in the recovery journal first.",
             )
         return (f"{operation or 'Unknown operation'} remains gated in M1.",)
+
+    def _start_pull_activity(self, operation: str, message: str) -> tuple[str, float]:
+        activity_id = secrets.token_hex(12)
+        self._add_activity(
+            OperationActivity(
+                id=activity_id,
+                operation=operation,
+                state="running",
+                message=_safe_activity_message(message),
+                started=datetime.now(UTC),
+                elapsed=0.0,
+            )
+        )
+        return activity_id, time.monotonic()
+
+    def _update_pull_activity(
+        self,
+        activity_id: str,
+        began: float,
+        *,
+        state: str,
+        message: str,
+        checkpoint_id: str | None = None,
+    ) -> None:
+        self._update_activity(
+            activity_id,
+            state=state,
+            message=message,
+            elapsed=time.monotonic() - began,
+            checkpoint_id=checkpoint_id,
+        )
 
     def _add_activity(self, record: OperationActivity) -> None:
         with self._activity_lock:

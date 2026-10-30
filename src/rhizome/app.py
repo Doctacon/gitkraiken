@@ -66,6 +66,8 @@ from .persistence import (
     WorkspaceStateStore,
 )
 from .precision_diff import PrecisionDiff
+from .pull import ManagedPull, PullPlan
+from .pull_controls import PullModeMenu, PullReviewDialog, pull_mode_label
 from .pull_request_dialog import PullRequestDetailsDialog, PullRequestDialog
 from .pull_requests import (
     PullRequestError,
@@ -73,6 +75,7 @@ from .pull_requests import (
     PullRequestPlan,
     hosted_repository,
 )
+from .recovery import RecoveryError, RecoveryJournal
 from .ref_badges import RefBadges, build_ref_badges
 from .resizable_table import ResizableDataTable
 from .settings import COMMANDS, CURATED_SETTINGS, validate_preferences
@@ -249,6 +252,9 @@ class RhizomeApp(App[None]):
         self.path = Path(path)
         self.repo: Repository | None = None
         self._operations: OperationCoordinator | None = None
+        self._managed_pull: ManagedPull | None = None
+        self._pull_attention = ""
+        self._pull_attention_started: datetime | None = None
         self._pending_operation: tuple[str, datetime] | None = None
         self.snapshot_data: Snapshot | None = None
         self._investigation: InvestigationService | None = None
@@ -339,7 +345,11 @@ class RhizomeApp(App[None]):
             with Horizontal(id="toolbar"):
                 for ident, label in [
                     ("open", "Open"),
-                    ("fetch", "Fetch"),
+                    # The primary segment deliberately retains #fetch: it is the
+                    # established toolbar target while its saved behavior is now a
+                    # pull/fetch choice. The chevron never starts Git work.
+                    ("fetch", "Pull"),
+                    ("pull-menu", "▾"),
                     ("pull", "↓ Pull"),
                     ("push", "↑ Push"),
                     ("branch", "⑂ Branch"),
@@ -535,6 +545,7 @@ class RhizomeApp(App[None]):
                 self._settings["offline"] = True
                 self.notify(escape(str(error)), severity="warning")
             self._apply_core_settings()
+            self._configure_pull_coordinator(repo)
             try:
                 self._pending_view = (
                     self._validated_view(state["view"]) if state.get("view") else {}
@@ -577,6 +588,34 @@ class RhizomeApp(App[None]):
             self._restoring_draft = False
             editor.read_only = False
             self._update_composer_guidance()
+
+    def _configure_pull_coordinator(self, repo: Repository) -> None:
+        """Give guarded pull its own recovery storage, without enabling discard.
+
+        The coordinator is rebuilt only after exclusion and workspace identity are
+        known. Pending reviews cannot exist while workspace settings are open; a
+        paused integration is rediscovered from the durable pull journal.
+        """
+        journal: RecoveryJournal | None = None
+        if (
+            not self._state_excluded
+            and self._state_store is not None
+            and self._workspace_identity_key
+        ):
+            try:
+                journal = RecoveryJournal(
+                    self._state_store.root / "pull-recovery" / self._workspace_identity_key
+                )
+            except (RecoveryError, OSError) as error:
+                self._record_diagnostic(
+                    "pull.recovery_unavailable", {"error": type(error).__name__}
+                )
+                self.status("Pull recovery is unavailable; divergent pull is disabled.")
+        self._operations = OperationCoordinator(
+            repo,
+            pull_journal=journal,
+            protected_branches=tuple(self._settings["protected_branches"]),
+        )
 
     async def _seed_commit_template(self, repo: Repository, editor: TextArea) -> None:
         try:
@@ -712,6 +751,10 @@ class RhizomeApp(App[None]):
     def _apply_core_settings(self) -> None:
         # Global offline is a master stop; a repository cannot opt out of it.
         self._settings["offline"] = self._global_settings["offline"] or self._settings["offline"]
+        if self._operations is not None and self._operations.repository is self.repo:
+            # Reloading branch protection must affect the next pull/Continue
+            # without replacing the coordinator that owns a paused session.
+            self._operations.protected_branches = tuple(self._settings["protected_branches"])
         self.REMOTE_REFRESH_INTERVAL = self._settings["remote_refresh_interval"]
         self.graph_style = self._settings["graph_style"]
         self.set_keymap(
@@ -754,11 +797,13 @@ class RhizomeApp(App[None]):
             ("branch", "⑂ Branch", "Branch"),
             ("refresh", "↻", "Refresh"),
             ("actions", "Actions ▾", "Actions"),
+            ("pull-menu", "▾", ">"),
         ):
             button = workspace.query_one(f"#{ident}", Button)
             button.label = fallback if plain else normal
             # Textual 1.0 label changes repaint but don't invalidate auto width.
             button.refresh(layout=True)
+        self._update_pull_button()
         self._graph_cache_key = None
         self._next_remote_refresh = 0.0
         if self._active_diff:
@@ -922,11 +967,11 @@ class RhizomeApp(App[None]):
         descriptions = {
             "clear-drafts": "Clear this worktree's commit and PR drafts? Git files are unchanged.",
             "reset-view": "Reset this workspace's navigation and layout? Drafts are kept.",
-            "forget-workspace": "Forget this worktree's saved drafts, view and overrides? Git files are unchanged.",
+            "forget-workspace": "Forget this worktree's saved drafts, view and overrides? Git files and pull recovery checkpoints are kept.",
             "toggle-exclusion": (
                 "Resume saving this worktree's current session? Old saved state will not be restored."
                 if self._state_excluded
-                else "Stop saving this worktree and remove its saved drafts, view and overrides? Current text stays session-only."
+                else "Stop saving this worktree and remove its saved drafts, view and overrides? Current text stays session-only. Existing pull recovery is kept; divergent pulls will be unavailable."
             ),
             "reset-global": "Reset global preferences to defaults? Exclusion choices are kept.",
         }
@@ -969,6 +1014,16 @@ class RhizomeApp(App[None]):
             elif action == "reset-overrides":
                 self._persist_workspace({**self._workspace_state, "preferences": {}})
             elif action == "toggle-exclusion":
+                try:
+                    managed = self._operations.managed_pull() if self._operations else None
+                except GitError as error:
+                    raise StateValidationError(
+                        f"Workspace saving cannot change while pull ownership needs inspection: {error}"
+                    ) from error
+                if managed is not None:
+                    raise StateValidationError(
+                        "Finish or abort the paused guarded pull before changing workspace saving."
+                    )
                 key = self._workspace_identity_key
                 if not key:
                     raise StateValidationError(
@@ -988,6 +1043,8 @@ class RhizomeApp(App[None]):
                 self._global_settings = settings
                 self._state_excluded = key in excluded
                 self._workspace_key = key
+                if self.repo is not None:
+                    self._configure_pull_coordinator(self.repo)
                 if self._state_excluded:
                     try:
                         store.clear(key)
@@ -1611,15 +1668,43 @@ class RhizomeApp(App[None]):
         )
         self.repaint_history()
         self.paint_wip(snapshot.files)
+        coordinator = self._operations
+        self._managed_pull = None
+        pull_attention = ""
+        if coordinator is not None and coordinator.repository is self.repo:
+            try:
+                self._managed_pull = await asyncio.to_thread(coordinator.managed_pull)
+            except Exception as error:
+                # A crashed or uncertain native writer may leave no ordinary
+                # Git operation marker. Never silently treat it as absent.
+                pull_attention = str(error) or "Pull recovery ownership could not be verified."
+        if pull_attention != self._pull_attention:
+            self._pull_attention_started = datetime.now(UTC) if pull_attention else None
+            if pull_attention:
+                self.show_error(pull_attention)
+        self._pull_attention = pull_attention
+        managed = self._managed_pull
         banner = self.query_one("#operation-banner")
-        banner.display = bool(snapshot.operation or snapshot.conflicts)
-        self.query_one("#operation-text", Static).update(
-            Text(
-                f"{snapshot.operation.upper() or 'CONFLICTS'}  ·  {len(snapshot.conflicts)} unresolved files"
-                "  ·  Resolve in your editor, stage, then continue"
+        banner.display = bool(pull_attention or managed or snapshot.operation or snapshot.conflicts)
+        banner.tooltip = pull_attention or None
+        if pull_attention:
+            self.query_one("#operation-text", Static).update(
+                Text("PULL BLOCKED · Activity (Ctrl+L) has recovery details")
             )
-        )
-        self.query_one("#continue", Button).disabled = bool(snapshot.conflicts)
+        elif managed:
+            kind = managed.kind.upper()
+            self.query_one("#operation-text", Static).update(
+                Text(f"PULL {kind} PAUSED  ·  Resolve, stage, then Continue or Abort")
+            )
+        else:
+            self.query_one("#operation-text", Static).update(
+                Text(
+                    f"{snapshot.operation.upper() or 'CONFLICTS'}  ·  {len(snapshot.conflicts)} unresolved files"
+                    "  ·  External operation: finish it in Git, then refresh"
+                )
+            )
+        self.query_one("#continue", Button).disabled = not bool(managed) or bool(snapshot.conflicts)
+        self.query_one("#abort", Button).disabled = not bool(managed)
         self._update_history_controls()
         # Reconcile details without treating polling as an explicit graph click.
         # In particular, a clean checkout can show Working directory while the
@@ -1991,6 +2076,21 @@ class RhizomeApp(App[None]):
                 exit_on_error=False,
             )
         elif operation in {"pull", "push"}:
+            if operation == "pull":
+                # A context menu is explicitly the conservative, ff-only path;
+                # it never borrows the saved split-button default or its target.
+                if self.repo is repo and self.snapshot_data is snapshot:
+                    self.run_pull(
+                        Action(
+                            "pull",
+                            pull_mode="ff-only",
+                            expected_branch=snapshot.branch,
+                            expected_head=snapshot.head,
+                            expected_ref=target.revision,
+                            expected_oid=target.oid,
+                        )
+                    )
+                return
             if operation == "push" and not snapshot.upstream and len(snapshot.remotes) > 1:
                 self.push_screen(
                     ActionPicker(
@@ -3263,7 +3363,11 @@ class RhizomeApp(App[None]):
             )
         elif ident == "pop":
             self.choose_stash("stash-pop")
-        elif ident in {"fetch", "pull", "push"}:
+        elif ident == "pull-menu":
+            self.open_pull_menu(event.button)
+        elif ident == "fetch":
+            self.run_saved_pull_fetch()
+        elif ident in {"pull", "push"}:
             self.network_action(ident)
         elif ident in {"stage", "unstage", "discard", "stage-all", "unstage-all"}:
             self.wip_action(ident)
@@ -3271,8 +3375,8 @@ class RhizomeApp(App[None]):
             self.action_workspace_settings()
         elif ident == "commit":
             self.commit_changes()
-        elif ident in {"continue", "abort"}:
-            self.run_mutation(Action(ident))
+        elif ident in {"continue", "abort"} and self._managed_pull:
+            self.run_pull(Action(ident))
 
     def action_command_picker(self) -> None:
         if self.busy or len(self.screen_stack) > 1:
@@ -3362,7 +3466,7 @@ class RhizomeApp(App[None]):
             [
                 ("stash", "Stash working changes"),
                 ("fetch", "Fetch all remotes"),
-                ("pull", "Pull upstream (fast-forward only)"),
+                ("pull", pull_mode_label(self.pull_fetch_mode())),
                 ("push", "Push branch (never force)"),
             ]
         )
@@ -3431,7 +3535,11 @@ class RhizomeApp(App[None]):
             self.action_compare_history(branch_review=operation == "review-branch")
         elif operation in {"file-history", "blame"}:
             self.action_file_investigation("history" if operation == "file-history" else "blame")
-        elif operation in {"fetch", "pull", "push"}:
+        elif operation == "pull":
+            self.run_saved_pull_fetch()
+        elif operation in {"continue", "abort"} and self._managed_pull:
+            self.run_pull(Action(operation))
+        elif operation in {"fetch", "push"}:
             self.network_action(operation)
         elif operation in {"create-branch", "tag", "rename-branch"}:
             self.push_screen(
@@ -3565,7 +3673,145 @@ class RhizomeApp(App[None]):
                 selected,
             )
 
-    def network_action(self, operation: str) -> None:
+    def pull_fetch_mode(self) -> str:
+        """Return a defensive default while a user settings file is being repaired."""
+        mode = self._settings.get("pull_fetch_default", "pull-ff")
+        return (
+            mode if mode in {"fetch-all", "pull-ff", "pull-ff-only", "pull-rebase"} else "pull-ff"
+        )
+
+    def open_pull_menu(self, button: Button) -> None:
+        if self.busy or len(self.screen_stack) > 1:
+            return
+
+        def selected(mode: str | None) -> None:
+            # This is intentionally only a preference write: no fetch, plan, or
+            # integration is scheduled by choosing from the menu.
+            if mode is not None:
+                self._save_view_preference("pull_fetch_default", mode)
+                self._update_pull_button()
+                self.status(f"Default pull/fetch action: {pull_mode_label(mode)}")
+
+        self.push_screen(
+            PullModeMenu(
+                self.pull_fetch_mode(),
+                screen_x=button.region.x,
+                screen_y=button.region.y + button.region.height,
+                plain=self._settings["plain_glyphs"],
+            ),
+            selected,
+        )
+
+    def _update_pull_button(self) -> None:
+        if not self.is_mounted:
+            return
+        button = self.screen_stack[0].query_one("#fetch", Button)
+        mode = self.pull_fetch_mode()
+        button.label = "Fetch" if mode == "fetch-all" else "Pull"
+        button.tooltip = pull_mode_label(mode) + ". Use the adjacent menu to change it."
+        button.refresh(layout=True)
+
+    def run_saved_pull_fetch(self) -> None:
+        mode = self.pull_fetch_mode()
+        if mode == "fetch-all":
+            self.network_action("fetch")
+            return
+        self.run_pull(Action("pull", pull_mode=mode.removeprefix("pull-")))
+
+    def run_pull(self, action: Action) -> None:
+        """Fetch and freeze an exact guarded plan while the review owns the UI."""
+        if self.busy or not self.repo or len(self.screen_stack) > 1:
+            return
+        if action.operation == "pull" and self._settings["offline"]:
+            self.status(
+                "Offline mode: network actions are unavailable until re-enabled in settings."
+            )
+            return
+        self._mutation_epoch += 1
+        self.set_busy(
+            True,
+            "Fetching and reviewing the configured upstream…"
+            if action.operation == "pull"
+            else f"Reviewing pull {action.operation}…",
+        )
+        self.run_worker(
+            self.prepare_pull(action, self.repo), group="repository", exit_on_error=False
+        )
+
+    async def prepare_pull(self, action: Action, repo: Repository) -> None:
+        coordinator = self._operations
+        try:
+            if coordinator is None or coordinator.repository is not repo:
+                raise GitError("No current operation coordinator; reopen the repository.")
+            plan: PullPlan = await asyncio.to_thread(coordinator.prepare_pull, action)
+            if self.repo is not repo:
+                await asyncio.to_thread(coordinator.cancel_pull, plan)
+                self.set_busy(False)
+                return
+            if not plan.available:
+                await asyncio.to_thread(coordinator.cancel_pull, plan)
+                self.show_error(plan.reason or "This pull is unavailable.")
+                self.set_busy(False)
+                await self.load_snapshot(quiet=True)
+                return
+            if not plan.requires_confirmation:
+                await self.complete_pull(plan, True, repo)
+                return
+            self.push_screen(
+                PullReviewDialog(plan), lambda confirm: self.finish_pull(plan, confirm, repo)
+            )
+        except Exception as error:
+            self.show_error(str(error))
+            self.set_busy(False)
+            # Fetch may have safely moved tracking refs before a later review
+            # failure, so always redraw the current caches.
+            await self.load_snapshot(quiet=True)
+
+    def finish_pull(self, plan: PullPlan, confirm: bool, repo: Repository) -> None:
+        if self.repo is not repo:
+            self.set_busy(False)
+            return
+        self.run_worker(
+            self.complete_pull(plan, confirm, repo), group="repository", exit_on_error=False
+        )
+
+    async def complete_pull(self, plan: PullPlan, confirm: bool, repo: Repository) -> None:
+        coordinator = self._operations
+        try:
+            if coordinator is None or coordinator.repository is not repo:
+                raise GitError("No current operation coordinator; reopen the repository.")
+            if not confirm:
+                await asyncio.to_thread(coordinator.cancel_pull, plan)
+                self.status("Pull review cancelled; fetched tracking refs were retained.")
+                return
+            # Integration can run hooks or request native input. Never let a
+            # Textual repaint compete with that terminal transaction.
+            if not self.is_headless:
+                failure: BaseException | None = None
+                with self.suspend():
+                    try:
+                        result = coordinator.submit_pull(
+                            plan, confirmed=plan.requires_confirmation and confirm
+                        )
+                    except BaseException as error:
+                        failure = error
+                if failure is not None:
+                    raise failure
+            else:
+                result = await asyncio.to_thread(
+                    coordinator.submit_pull, plan, confirmed=plan.requires_confirmation and confirm
+                )
+            self._last_error = ""
+            self.status(result)
+            self.notify(escape(result))
+        except Exception as error:
+            self.show_error(str(error))
+        finally:
+            self._mutation_epoch += 1
+            self.set_busy(False)
+            await self.load_snapshot(quiet=True)
+
+    def network_action(self, operation: str, *, pull_mode: str = "") -> None:
         if self._settings["offline"]:
             self.status(
                 "Offline mode: network actions are unavailable until re-enabled in settings."
@@ -3580,7 +3826,10 @@ class RhizomeApp(App[None]):
 
         def run(remote: str | None = "") -> None:
             if remote is not None:
-                self.run_mutation(Action(operation, remote=remote))
+                values = {"remote": remote}
+                if pull_mode:
+                    values["pull_mode"] = pull_mode
+                self.run_mutation(Action(operation, **values))
 
         if (
             operation == "push"
@@ -3804,12 +4053,14 @@ class RhizomeApp(App[None]):
                 or bool(self.snapshot_data.conflicts)
                 or bool(self.snapshot_data.operation)
             )
-            workspace.query_one("#continue", Button).disabled = self.busy or bool(
-                self.snapshot_data.conflicts
+            workspace.query_one("#continue", Button).disabled = (
+                self.busy or self._managed_pull is None or bool(self.snapshot_data.conflicts)
             )
+            workspace.query_one("#abort", Button).disabled = self.busy or self._managed_pull is None
             workspace.query_one("#fetch", Button).disabled = (
                 self.busy or not self.snapshot_data.remotes or self._settings["offline"]
             )
+            workspace.query_one("#pull-menu", Button).disabled = self.busy
             for ident in ("pull", "push"):
                 workspace.query_one(f"#{ident}", Button).disabled = (
                     self.busy or not self.snapshot_data.remotes
@@ -4094,6 +4345,20 @@ class RhizomeApp(App[None]):
 
         def activity() -> tuple[OperationActivity, ...]:
             records = coordinator.activity() if coordinator else ()
+            if coordinator is self._operations and self._pull_attention:
+                records += (
+                    OperationActivity(
+                        id="workspace-pull-recovery",
+                        operation="pull recovery",
+                        state="blocked",
+                        message=(
+                            "Retained pull ownership discovered in this workspace, not a new Git operation.\n\n"
+                            + self._pull_attention
+                        ),
+                        started=self._pull_attention_started or datetime.now(UTC),
+                        elapsed=0.0,
+                    ),
+                )
             pending = self._pending_operation
             if pending and coordinator is self._operations:
                 operation, started = pending

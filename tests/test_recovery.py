@@ -64,6 +64,30 @@ def test_prepare_and_recover_aside_preserve_distinct_index_and_worktree_preimage
     assert "Current checkout was not changed" in result.summary
 
 
+def test_index_preimage_uses_raw_blob_oid_despite_replace_ref(
+    git_repo: Path, git_run, tmp_path: Path
+) -> None:
+    _commit_file(git_repo, git_run, "tracked.txt", b"base\n", "base")
+    tracked = git_repo / "tracked.txt"
+    tracked.write_bytes(b"true staged preimage\n")
+    git_run(git_repo, "add", "tracked.txt")
+    index_oid = git_run(git_repo, "ls-files", "-s", "tracked.txt").stdout.split()[1]
+    replacement_source = git_repo / "replacement-source"
+    replacement_source.write_bytes(b"replacement content must not be captured\n")
+    replacement_oid = git_run(git_repo, "hash-object", "-w", "replacement-source").stdout.strip()
+    replacement_source.unlink()
+    git_run(git_repo, "replace", index_oid, replacement_oid)
+
+    journal = RecoveryJournal(tmp_path / "private")
+    checkpoint = journal.prepare(Repository(git_repo), operation="protect", paths=("tracked.txt",))
+    recovered = journal.recover_aside(Repository(git_repo), checkpoint.id)
+
+    assert recovered.directory is not None
+    assert (recovered.directory / "index" / "tracked.txt").read_bytes() == (
+        b"true staged preimage\n"
+    )
+
+
 def test_history_bundle_survives_source_ref_deletion_and_recovers_new_branch(
     git_repo: Path, git_run, tmp_path: Path
 ) -> None:
@@ -231,6 +255,55 @@ def test_history_capture_refuses_before_bundling_when_preflight_cannot_fit(
     with pytest.raises(RecoveryError, match="before bundling"):
         journal.prepare(Repository(git_repo), operation="rewrite", history=True)
     assert journal.list() == ()
+
+
+def test_pull_session_metadata_is_private_single_use_and_active_when_uncertain(
+    git_repo: Path, git_run, tmp_path: Path
+) -> None:
+    head = _commit_file(git_repo, git_run, "tracked.txt", b"base\n", "base")
+    root = tmp_path / "private"
+    journal = RecoveryJournal(root)
+    checkpoint = journal.prepare(Repository(git_repo), operation="pull-merge", history=True)
+
+    session = journal.start_pull_session(
+        checkpoint.id,
+        repository=str(git_repo),
+        kind="merge",
+        branch="main",
+        original_head=head,
+        target_oid=head,
+        outgoing=1,
+        lease_token="a" * 64,
+        other_refs="b" * 64,
+    )
+    assert session.phase == "prepared"
+    with pytest.raises(RecoveryError, match="single-use"):
+        journal.start_pull_session(
+            checkpoint.id,
+            repository=str(git_repo),
+            kind="merge",
+            branch="main",
+            original_head=head,
+            target_oid=head,
+            outgoing=1,
+            lease_token="a" * 64,
+            other_refs="b" * 64,
+        )
+
+    restarted = RecoveryJournal(root)
+    assert restarted.pull_sessions(str(git_repo)) == (session,)
+    metadata = root / "checkpoints" / checkpoint.id / "checkpoint.json"
+    assert stat.S_IMODE(metadata.stat().st_mode) == 0o600
+
+    running = restarted.update_pull_session(checkpoint.id, phase="running", pid=4321)
+    assert running.pid == 4321
+    uncertain = restarted.update_pull_session(checkpoint.id, phase="uncertain")
+    restarted.complete(checkpoint.id, outcome="uncertain")
+    assert uncertain.phase == "uncertain"
+    assert (uncertain.pid, uncertain.pgid) == (4321, 4321)
+    retained = restarted.list(str(git_repo))[0]
+    assert retained.active is True
+    assert restarted.pull_sessions(str(git_repo))[0].phase == "uncertain"
 
 
 def test_restart_lists_without_replaying_and_explicit_purge_removes_content(

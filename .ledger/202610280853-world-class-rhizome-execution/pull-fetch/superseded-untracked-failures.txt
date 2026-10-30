@@ -1,0 +1,60 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+_ test_finish_refuses_untracked_files_before_mutation_then_can_retry[continue] _
+
+pull_pair = (PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1871/test_finish_refuses...izome.operations.OperationCoordinator object at 0x108ff5fd0>, <rhizome.recovery.RecoveryJournal object at 0x108e16270>)
+git_run = <function git_run.<locals>.run at 0x10907dd00>, finish = 'continue'
+
+    @pytest.mark.parametrize("finish", ["continue", "abort"])
+    def test_finish_refuses_untracked_files_before_mutation_then_can_retry(pull_pair, git_run, finish):
+        root, writer, coordinator, _journal = pull_pair
+        original = commit_file(git_run, root, "base.txt", "local conflict\n")
+        commit_file(git_run, writer, "base.txt", "remote conflict\n")
+        git_run(writer, "push", "origin", "main")
+        coordinator.submit_pull(
+            coordinator.prepare_pull(Action("pull", pull_mode="rebase")), confirmed=True
+        )
+        if finish == "continue":
+            (root / "base.txt").write_text("resolved\n")
+            coordinator.submit(coordinator.plan(Action("stage", paths=("base.txt",))))
+        private = root / "notes.txt"
+        private.write_text("untracked notes to retain\n")
+        head = git_run(root, "rev-parse", "HEAD").stdout.strip()
+>       with pytest.raises(GitError, match="[Uu]ntracked"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: '[Uu]ntracked'
+E         Actual message: 'Pull integration completion postconditions were not satisfied.'
+
+tests/test_pull_safety.py:185: AssertionError
+__ test_finish_refuses_untracked_files_before_mutation_then_can_retry[abort] ___
+
+pull_pair = (PosixPath('/private/var/folders/xk/pmxkhd7x635cskr6l4qw0mx00000gn/T/pytest-of-crlough/pytest-1871/test_finish_refuses...izome.operations.OperationCoordinator object at 0x108efb250>, <rhizome.recovery.RecoveryJournal object at 0x108efb750>)
+git_run = <function git_run.<locals>.run at 0x10907d120>, finish = 'abort'
+
+    @pytest.mark.parametrize("finish", ["continue", "abort"])
+    def test_finish_refuses_untracked_files_before_mutation_then_can_retry(pull_pair, git_run, finish):
+        root, writer, coordinator, _journal = pull_pair
+        original = commit_file(git_run, root, "base.txt", "local conflict\n")
+        commit_file(git_run, writer, "base.txt", "remote conflict\n")
+        git_run(writer, "push", "origin", "main")
+        coordinator.submit_pull(
+            coordinator.prepare_pull(Action("pull", pull_mode="rebase")), confirmed=True
+        )
+        if finish == "continue":
+            (root / "base.txt").write_text("resolved\n")
+            coordinator.submit(coordinator.plan(Action("stage", paths=("base.txt",))))
+        private = root / "notes.txt"
+        private.write_text("untracked notes to retain\n")
+        head = git_run(root, "rev-parse", "HEAD").stdout.strip()
+>       with pytest.raises(GitError, match="[Uu]ntracked"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: '[Uu]ntracked'
+E         Actual message: 'Pull abort did not restore the exact reviewed branch state.'
+
+tests/test_pull_safety.py:185: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_pull_safety.py::test_finish_refuses_untracked_files_before_mutation_then_can_retry[continue]
+FAILED tests/test_pull_safety.py::test_finish_refuses_untracked_files_before_mutation_then_can_retry[abort]
+2 failed, 15 deselected in 17.11s

@@ -32,6 +32,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "graph_style": "smooth",
     "graph_order": "topo",
     "diff_layout": "unified",
+    "pull_fetch_default": "pull-ff",
     "plain_glyphs": False,
     "diagnostics_enabled": True,
     "excluded_workspaces": [],

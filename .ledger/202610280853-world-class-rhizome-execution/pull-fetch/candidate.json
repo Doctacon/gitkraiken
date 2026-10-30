@@ -1,0 +1,32 @@
+{
+  "recorded_utc": "2026-10-30T17:52:27.556077+00:00",
+  "base_head": "65144077ddb763d0abfd1bb2136307fcca32e012",
+  "scope": "Uncommitted pull slice. Runtime source was unchanged throughout the final batches; later additions were tests and documentation.",
+  "sha256": {
+    "scripts/capture_workspace.py": "606d77de6126991e2b6230978d03df8b65f62cf8bbc048b3d5a5218e7e01573b",
+    "src/rhizome/activity.py": "dbf77d53f2015cd33ef143a5eaba3542dd10323ae542ad2d43ad01d3ed5dc405",
+    "src/rhizome/app.py": "31c4ab5ee355af304bf68f2372e891da3af91725919f74d69f833440bc2fd856",
+    "src/rhizome/app.tcss": "4fe2753c050f957322405c78840d46ff6af0aabeffc9ba7771941f24950379d2",
+    "src/rhizome/git.py": "25ea912f3dfb29651b06ce385ec7657cfcdbd6cde04589608ed30bf301d6c291",
+    "src/rhizome/models.py": "48049efebb2c137d2f63d71aea303b1b42c335f0adb03e82fc87caf51e71e53d",
+    "src/rhizome/operations.py": "8a77cd27ab2cd5b13e67b8ce32371e1a9d6a4b0c44592c6640bf183fc9dbf42c",
+    "src/rhizome/persistence.py": "abb39cb4da5e7ecde66163650d423a9f74e5ba69925807e780abe89aa4519f40",
+    "src/rhizome/pull.py": "52c047e9643ef52d84da8123e9dabce7d3c8e0a17109be66b9bdfe0d370b904f",
+    "src/rhizome/pull_controls.py": "ec9ffae15fbe484a6bac94633eed1a4571512cdcc2e0cb664f631970b9c28cb4",
+    "src/rhizome/pull_lease.py": "fd6c602a444225536b726fe476fd55b0a9ec881db04d9abc799c873a551acac0",
+    "src/rhizome/recovery.py": "7e95d238cc60adee800ed8d9d39976692a9b7b2549a0e808f54411f96076d4c7",
+    "src/rhizome/settings.py": "98ca3d9b5aed8a118b8596f3c0fc5251b765cd226e1a43028fc9003128ca340c",
+    "src/rhizome/workspace_controls.py": "1c886e262b214d03cadc96b7a6f2202bd4067e01d54f1412fc8efa87bde8ee02",
+    "tests/test_app.py": "397e75ea7fbac125174f7b4865ccfc32fd38c521a8c4cf1d8ac4fc34f4c7cada",
+    "tests/test_commit_terminal.py": "2124e570dca78d8461a5d45124fdff5b61efddac470725e405cde6b73d5d1cd0",
+    "tests/test_git.py": "1d0eddeca92ee730631c3ea18ff85fdf2828aabbb02599adcb1b8126b210c98f",
+    "tests/test_pull.py": "d0ad7d40c9bc95cf3df846063b371717dcb32f8ae71365e605faae12f93ceea7",
+    "tests/test_pull_app.py": "3c3b025cacb70876863ade6801a7d144538ae8d51877a7a9d05f379cd0ee5f8b",
+    "tests/test_pull_controls.py": "6e6d945a5f7e12d1992c5cb12298c3082164e606918ffbe0d0eb20abaebcf8a7",
+    "tests/test_pull_leases.py": "d4554b36e57d77ef359b795930eee17c8798cb14399e6d7496973bb141ffd0d4",
+    "tests/test_pull_preferences.py": "0db6d526b9289f0b25e09d0c3c0a10aebb4d9fdae39d44120b456059d0560ddd",
+    "tests/test_pull_process.py": "7701d7bb0e614ed3f57e4c0fdb1808052edd8fec409d7882b9977835efd03730",
+    "tests/test_pull_safety.py": "7cff0a3ebff39ea151c589ba5278c04c6cd0863663e3c1f7243fbb06f7616edb",
+    "tests/test_recovery.py": "61570a2db18e56853536fff54fd6c227a97be78b2f94b736fbd53b5a9207763b"
+  }
+}

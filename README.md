@@ -32,8 +32,8 @@ For a managed install with updates and rollback, see [installation](docs/install
   **?** shows help, and **Ctrl+Q** quits.
 - For optional tmux integration, see the [tmux guide](docs/usage.md#tmux).
 
-Automatic fetch is optional; push is explicit and never forced. Pull, reset,
-and discard are currently unavailable.
+The Pull menu saves your fetch/pull mode. Automatic fetch is optional;
+push is explicit and never forced. Reset and discard remain unavailable.
 
 [Full usage](docs/usage.md) · [Investigation](docs/investigation.md) ·
 [Pull requests](docs/pull-requests.md) · [Development](docs/usage.md#development-and-checks)

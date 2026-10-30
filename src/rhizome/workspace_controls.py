@@ -35,6 +35,7 @@ _FIELDS = (
     "graph_style",
     "graph_order",
     "diff_layout",
+    "pull_fetch_default",
     "keymap",
 )
 
@@ -48,6 +49,7 @@ _DEFAULTS = {
     "graph_style": "smooth",
     "graph_order": "topo",
     "diff_layout": "unified",
+    "pull_fetch_default": "pull-ff",
     "keymap": {},
 }
 
@@ -318,6 +320,17 @@ class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
                             [("Unified", "unified"), ("Split (read-only)", "split")],
                             values["diff_layout"],
                         )
+                        yield self._select_row(
+                            "Default pull/fetch action",
+                            "pull-fetch-default",
+                            [
+                                ("Fetch all", "fetch-all"),
+                                ("Pull — ff if possible", "pull-ff"),
+                                ("Pull — ff only", "pull-ff-only"),
+                                ("Pull — rebase", "pull-rebase"),
+                            ],
+                            values["pull_fetch_default"],
+                        )
                         with Horizontal(classes="setting-row"):
                             yield Label("Keyboard shortcuts", classes="setting-label")
                             yield Button("Edit key bindings", id="edit-keybindings")
@@ -331,7 +344,7 @@ class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
                     classes="exclusion-status dialog-detail",
                 )
                 yield Static(
-                    "Only an opaque exclusion marker is saved; Git content never changes.",
+                    "Only an exclusion marker is saved for preferences. Existing pull recovery is kept; excluded workspaces cannot start divergent pulls.",
                     classes="dialog-detail",
                 )
                 with Vertical(classes="control-actions"):
@@ -434,6 +447,7 @@ class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
             ("#graph-style", "graph_style"),
             ("#graph-order", "graph_order"),
             ("#diff-layout", "diff_layout"),
+            ("#pull-fetch-default", "pull_fetch_default"),
         ):
             self.query_one(control_id, Select).value = values[name]
 
@@ -466,6 +480,7 @@ class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
             "graph_style": str(self.query_one("#graph-style", Select).value),
             "graph_order": str(self.query_one("#graph-order", Select).value),
             "diff_layout": str(self.query_one("#diff-layout", Select).value),
+            "pull_fetch_default": str(self.query_one("#pull-fetch-default", Select).value),
             "keymap": dict(self._values_for(scope)["keymap"]),
         }
 

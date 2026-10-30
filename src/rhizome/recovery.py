@@ -58,6 +58,26 @@ class RecoveryResult:
     summary: str
 
 
+@dataclass(frozen=True)
+class PullSession:
+    """Validated durable ownership metadata for one guarded pull integration."""
+
+    checkpoint_id: str
+    repository: str
+    kind: str
+    branch: str
+    original_head: str
+    target_oid: str
+    outgoing: int
+    phase: str
+    pid: int
+    pgid: int
+    lease_token: str
+    operation_manifest: str
+    other_refs: str
+    resolution_checkpoints: tuple[str, ...]
+
+
 def _canonical_json(value: object) -> bytes:
     return (
         json.dumps(
@@ -230,6 +250,7 @@ class RecoveryJournal:
         operation: str,
         paths: tuple[str, ...] = (),
         history: bool = False,
+        worktree_only: bool = False,
     ) -> Checkpoint:
         """Durably publish a checkpoint before a protected operation may start."""
         self._validate_label(operation, "Operation")
@@ -237,6 +258,8 @@ class RecoveryJournal:
             raise RecoveryError("Recovery paths must be supplied as a tuple of strings.")
         if not isinstance(history, bool):
             raise RecoveryError("History checkpoint selection must be true or false.")
+        if not isinstance(worktree_only, bool):
+            raise RecoveryError("Worktree-only checkpoint selection must be true or false.")
         pure_paths = tuple(_safe_path(path) for path in paths)
         if len(set(pure_paths)) != len(pure_paths):
             raise RecoveryError("Recovery paths must not contain duplicates.")
@@ -268,8 +291,19 @@ class RecoveryJournal:
 
             path_entries: list[dict[str, Any]] = []
             preflight_bytes = 0
+            worktree_only_index = (
+                repo._git(
+                    ["ls-files", "--stage", "-z"],
+                    operation="review resolution checkpoint index",
+                ).stdout
+                if worktree_only
+                else b""
+            )
             for path, pure in zip(paths, pure_paths, strict=True):
-                index_state, tracked = self._index_state(repo, path, head)
+                if worktree_only:
+                    index_state, tracked = self._worktree_only_index_state(repo, path, head)
+                else:
+                    index_state, tracked = self._index_state(repo, path, head)
                 if not tracked:
                     raise RecoveryError(
                         f"Cannot checkpoint untracked path {path!r}; only requested tracked paths are supported."
@@ -301,7 +335,10 @@ class RecoveryJournal:
             # Revalidate the captured identities after all reads. A moving index,
             # worktree file, or HEAD is not a trustworthy pre-action checkpoint.
             for entry in path_entries:
-                current, _ = self._index_state(repo, entry["path"], head)
+                if worktree_only:
+                    current, _ = self._worktree_only_index_state(repo, entry["path"], head)
+                else:
+                    current, _ = self._index_state(repo, entry["path"], head)
                 recorded = entry["index"]
                 if (
                     bool(current["present"]) != bool(recorded["present"])
@@ -309,6 +346,15 @@ class RecoveryJournal:
                     or current.get("oid") != recorded.get("oid")
                 ):
                     raise RecoveryError("The Git index changed while its checkpoint was captured.")
+            if (
+                worktree_only
+                and repo._git(
+                    ["ls-files", "--stage", "-z"],
+                    operation="revalidate resolution checkpoint index",
+                ).stdout
+                != worktree_only_index
+            ):
+                raise RecoveryError("The Git index changed while its checkpoint was captured.")
             if self._head(repo) != head:
                 raise RecoveryError("HEAD changed while the recovery checkpoint was captured.")
 
@@ -317,12 +363,19 @@ class RecoveryJournal:
                 self._preflight_history(repo, available - preflight_bytes)
                 bundle_path = staging / _HISTORY
                 repo._git(
-                    ["bundle", "create", os.fspath(bundle_path), "--all", "HEAD"],
+                    [
+                        "--no-replace-objects",
+                        "bundle",
+                        "create",
+                        os.fspath(bundle_path),
+                        "--all",
+                        "HEAD",
+                    ],
                     operation="create recovery history bundle",
                 )
                 bundle_path.chmod(0o600)
                 repo._git(
-                    ["bundle", "verify", os.fspath(bundle_path)],
+                    ["--no-replace-objects", "bundle", "verify", os.fspath(bundle_path)],
                     operation="verify recovery history bundle",
                 )
                 bundle_size = bundle_path.stat().st_size
@@ -392,6 +445,134 @@ class RecoveryJournal:
         self._cleanup(0)
 
     @_serialized
+    def start_pull_session(
+        self,
+        checkpoint_id: str,
+        *,
+        repository: str,
+        kind: str,
+        branch: str,
+        original_head: str,
+        target_oid: str,
+        outgoing: int,
+        lease_token: str,
+        other_refs: str,
+    ) -> PullSession:
+        """Attach immutable pull ownership to an active history checkpoint once."""
+        directory, body = self._load_id(checkpoint_id)
+        if not body["active"] or not body["history"].get("present"):
+            raise RecoveryError("Pull ownership requires an active history checkpoint.")
+        if body["repository"] != repository or body["head"] != original_head:
+            raise RecoveryError("Pull ownership does not match its recovery checkpoint.")
+        if body["operation"] != f"pull-{kind}":
+            raise RecoveryError("Pull ownership does not match the checkpoint operation.")
+        if "pull_session" in body:
+            raise RecoveryError("Pull ownership metadata is single-use and already exists.")
+        session = {
+            "version": 1,
+            "kind": kind,
+            "branch": branch,
+            "original_head": original_head,
+            "target_oid": target_oid,
+            "outgoing": outgoing,
+            "phase": "prepared",
+            "pid": 0,
+            "pgid": 0,
+            "lease_token": lease_token,
+            "operation_manifest": "",
+            "other_refs": other_refs,
+            "resolution_checkpoints": [],
+        }
+        try:
+            self._validate_pull_session(body, session)
+        except ValueError as error:
+            raise RecoveryError("Invalid pull ownership metadata.") from error
+        body["pull_session"] = session
+        self._rewrite(directory, body)
+        return self._pull_session(body)
+
+    @_serialized
+    def update_pull_session(
+        self,
+        checkpoint_id: str,
+        *,
+        phase: str,
+        pid: int = 0,
+        operation_manifest: str | None = None,
+        resolution_checkpoint: str = "",
+    ) -> PullSession:
+        """Durably record native ownership before wait or a verified paused/uncertain state."""
+        directory, body = self._load_id(checkpoint_id)
+        if not body["active"] or "pull_session" not in body:
+            raise RecoveryError("There is no active pull ownership metadata to update.")
+        session = dict(body["pull_session"])
+        current = session["phase"]
+        transitions = {
+            "prepared": {"running", "uncertain"},
+            "running": {"paused", "uncertain", "running"},
+            "paused": {"paused", "running", "uncertain"},
+            "uncertain": {"uncertain"},
+        }
+        if phase not in transitions.get(current, set()):
+            raise RecoveryError("Invalid pull ownership metadata transition.")
+        if not isinstance(pid, int) or isinstance(pid, bool) or pid < 0:
+            raise RecoveryError("Pull process identifier must be a nonnegative integer.")
+        if phase == "running" and pid <= 0:
+            raise RecoveryError("Running pull ownership requires a native process identifier.")
+        if phase != "running" and pid == 0:
+            pid = session["pid"]
+        session.update(phase=phase, pid=pid, pgid=pid)
+        if operation_manifest is not None:
+            session["operation_manifest"] = operation_manifest
+        if resolution_checkpoint:
+            resolution_directory, resolution_body = self._load_id(resolution_checkpoint)
+            del resolution_directory
+            if (
+                not resolution_body["active"]
+                or resolution_body["repository"] != body["repository"]
+                or resolution_body["operation"] != "pull-continue-resolution"
+            ):
+                raise RecoveryError("Pull resolution checkpoint has invalid scope.")
+            if resolution_checkpoint in session["resolution_checkpoints"]:
+                raise RecoveryError("Pull resolution checkpoint is already attached.")
+            session["resolution_checkpoints"] = [
+                *session["resolution_checkpoints"],
+                resolution_checkpoint,
+            ]
+        try:
+            self._validate_pull_session(body, session)
+        except ValueError as error:
+            raise RecoveryError("Invalid pull ownership metadata update.") from error
+        body["pull_session"] = session
+        self._rewrite(directory, body)
+        return self._pull_session(body)
+
+    @_serialized
+    def pull_sessions(self, repository: str) -> tuple[PullSession, ...]:
+        """Return only trusted active pull sessions; legacy checkpoints remain valid."""
+        if not isinstance(repository, str):
+            raise RecoveryError("Repository filter must be a path string.")
+        loaded = self._load_all()
+        bodies = {body["id"]: body for _directory, body in loaded}
+        sessions = []
+        for _directory, body in loaded:
+            if body["active"] and body["repository"] == repository and "pull_session" in body:
+                session = self._pull_session(body)
+                for checkpoint_id in session.resolution_checkpoints:
+                    resolution = bodies.get(checkpoint_id)
+                    if (
+                        resolution is None
+                        or not resolution["active"]
+                        or resolution["repository"] != repository
+                        or resolution["operation"] != "pull-continue-resolution"
+                    ):
+                        raise RecoveryError(
+                            "Pull ownership references missing or inactive resolution recovery."
+                        )
+                sessions.append(session)
+        return tuple(sessions)
+
+    @_serialized
     def list(self, repository: str | None = None) -> tuple[Checkpoint, ...]:
         """Return trusted retained checkpoints, newest first."""
         if repository is not None and not isinstance(repository, str):
@@ -439,7 +620,7 @@ class RecoveryJournal:
         if history["present"]:
             bundle = directory / history["payload"]
             repo._git(
-                ["bundle", "verify", os.fspath(bundle)],
+                ["--no-replace-objects", "bundle", "verify", os.fspath(bundle)],
                 operation="verify recovery history bundle",
             )
             base = f"rhizome-recovery/{id[:12]}"
@@ -456,11 +637,11 @@ class RecoveryJournal:
             else:
                 raise RecoveryError("Could not allocate a unique recovery branch name.")
             repo._git(
-                ["bundle", "unbundle", os.fspath(bundle)],
+                ["--no-replace-objects", "bundle", "unbundle", os.fspath(bundle)],
                 operation="import recovery history objects",
             )
             repo._git(
-                ["cat-file", "-e", f"{body['head']}^{{commit}}"],
+                ["--no-replace-objects", "cat-file", "-e", f"{body['head']}^{{commit}}"],
                 operation="validate recovered history",
             )
             repo._git(
@@ -528,6 +709,63 @@ class RecoveryJournal:
                 records.append({"mode": fields[0], "oid": fields[1].lower(), "stage": fields[2]})
         return records
 
+    def _worktree_only_index_state(
+        self, repo: Repository, path: str, head: str
+    ) -> tuple[dict[str, Any], bool]:
+        result = repo._git(
+            ["ls-files", "--stage", "-z", "--", path],
+            literal_paths=True,
+            operation="inspect resolution checkpoint path",
+        )
+        try:
+            records = self._parse_index(result.stdout, path)
+        except (UnicodeDecodeError, ValueError) as error:
+            raise RecoveryError("Git returned malformed index metadata.") from error
+        stages = [record["stage"] for record in records]
+        if any(stage not in {"0", "1", "2", "3"} for stage in stages) or len(stages) != len(
+            set(stages)
+        ):
+            raise RecoveryError("Git returned malformed conflicted index metadata.")
+        if "0" in stages:
+            if len(records) != 1:
+                raise RecoveryError("Git returned mixed resolved and conflicted index stages.")
+            record = records[0]
+            if record["mode"] not in _SUPPORTED_MODES:
+                raise RecoveryError(
+                    f"Unsupported tracked representation for {path!r} (mode {record['mode']})."
+                )
+            size_result = repo._git(
+                ["--no-replace-objects", "cat-file", "-s", record["oid"]],
+                operation="size resolution checkpoint index blob",
+            )
+            try:
+                size = int(_decode(size_result.stdout).strip())
+            except ValueError as error:
+                raise RecoveryError("Git returned an invalid index blob size.") from error
+            return {
+                "present": True,
+                "mode": record["mode"],
+                "oid": record["oid"],
+                "size": size,
+            }, True
+        if any(record["mode"] not in _SUPPORTED_MODES for record in records):
+            raise RecoveryError(f"Unsupported conflicted index representation for {path!r}.")
+        tracked = bool(records)
+        if not tracked and head:
+            tree = repo._git(
+                ["--no-replace-objects", "ls-tree", "-z", "HEAD", "--", path],
+                literal_paths=True,
+                operation="inspect resolution checkpoint tracked path",
+            )
+            tracked = any(
+                raw.partition(b"\t")[2] == os.fsencode(path)
+                for raw in tree.stdout.split(b"\x00")
+                if raw
+            )
+        # Stages 1-3 have no single index blob. Their source histories remain in
+        # the active history checkpoint, while the exact worktree file is saved.
+        return {"present": False}, tracked
+
     def _index_state(self, repo: Repository, path: str, head: str) -> tuple[dict[str, Any], bool]:
         result = repo._git(
             ["ls-files", "--stage", "-z", "--", path],
@@ -545,7 +783,7 @@ class RecoveryJournal:
         head_record: dict[str, str] | None = None
         if head:
             tree = repo._git(
-                ["ls-tree", "-z", "HEAD", "--", path],
+                ["--no-replace-objects", "ls-tree", "-z", "HEAD", "--", path],
                 literal_paths=True,
                 operation="inspect checkpoint tracked path",
             )
@@ -566,7 +804,8 @@ class RecoveryJournal:
         if index is None:
             return {"present": False}, head_record is not None
         size_result = repo._git(
-            ["cat-file", "-s", index["oid"]], operation="size checkpoint index blob"
+            ["--no-replace-objects", "cat-file", "-s", index["oid"]],
+            operation="size checkpoint index blob",
         )
         try:
             size = int(_decode(size_result.stdout).strip())
@@ -643,7 +882,8 @@ class RecoveryJournal:
         if int(state["size"]) > remaining:
             raise RecoveryError("Requested index preimage exceeds the recovery content budget.")
         result = repo._git(
-            ["cat-file", "blob", state["oid"]], operation="read checkpoint index blob"
+            ["--no-replace-objects", "cat-file", "blob", state["oid"]],
+            operation="read checkpoint index blob",
         )
         data = result.stdout
         if len(data) != state["size"]:
@@ -813,7 +1053,11 @@ class RecoveryJournal:
             "paths",
             "history",
         }
-        if set(body) != required or body["version"] != _SCHEMA or body["id"] != directory.name:
+        if (
+            frozenset(body) not in {frozenset(required), frozenset(required | {"pull_session"})}
+            or body["version"] != _SCHEMA
+            or body["id"] != directory.name
+        ):
             raise ValueError("invalid checkpoint identity")
         if not isinstance(body["repository"], str) or not isinstance(body["head"], str):
             raise ValueError("invalid repository identity")
@@ -827,6 +1071,8 @@ class RecoveryJournal:
             raise ValueError("invalid retention state")
         if not isinstance(body["paths"], list) or not isinstance(body["history"], dict):
             raise ValueError("invalid payload records")
+        if "pull_session" in body:
+            self._validate_pull_session(body, body["pull_session"])
         self._validate_tree(directory, body)
         if self._tree_size(directory) != body["size_bytes"]:
             raise ValueError("retained-byte accounting mismatch")
@@ -1015,6 +1261,112 @@ class RecoveryJournal:
             )
         if eligible:
             _fsync_directory(self._checkpoints)
+
+    @staticmethod
+    def _validate_pull_session(body: dict[str, Any], session: object) -> None:
+        if not isinstance(session, dict) or set(session) != {
+            "version",
+            "kind",
+            "branch",
+            "original_head",
+            "target_oid",
+            "outgoing",
+            "phase",
+            "pid",
+            "pgid",
+            "lease_token",
+            "operation_manifest",
+            "other_refs",
+            "resolution_checkpoints",
+        }:
+            raise ValueError("invalid pull ownership metadata")
+        if session["version"] != 1 or session["kind"] not in {"merge", "rebase"}:
+            raise ValueError("invalid pull ownership kind")
+        if (
+            not isinstance(session["branch"], str)
+            or not session["branch"]
+            or len(session["branch"]) > 1024
+            or any(ord(character) < 32 or ord(character) == 127 for character in session["branch"])
+        ):
+            raise ValueError("invalid pull ownership branch")
+        oid_pattern = r"(?:[0-9a-f]{40}|[0-9a-f]{64})"
+        if not isinstance(session["original_head"], str) or not re.fullmatch(
+            oid_pattern, session["original_head"]
+        ):
+            raise ValueError("invalid pull ownership original head")
+        if not isinstance(session["target_oid"], str) or not re.fullmatch(
+            oid_pattern, session["target_oid"]
+        ):
+            raise ValueError("invalid pull ownership target")
+        if session["original_head"] != body["head"]:
+            raise ValueError("pull ownership head does not match checkpoint")
+        if body["operation"] != f"pull-{session['kind']}" or not body["history"].get("present"):
+            raise ValueError("pull ownership does not match checkpoint scope")
+        if (
+            not isinstance(session["outgoing"], int)
+            or isinstance(session["outgoing"], bool)
+            or session["outgoing"] < 1
+        ):
+            raise ValueError("invalid pull ownership outgoing count")
+        if session["phase"] not in {"prepared", "running", "paused", "uncertain"}:
+            raise ValueError("invalid pull ownership phase")
+        if not isinstance(session["lease_token"], str) or not re.fullmatch(
+            r"[0-9a-f]{64}", session["lease_token"]
+        ):
+            raise ValueError("invalid pull ownership lease token")
+        if not isinstance(session["other_refs"], str) or not re.fullmatch(
+            r"[0-9a-f]{64}", session["other_refs"]
+        ):
+            raise ValueError("invalid pull ownership ref snapshot")
+        manifest = session["operation_manifest"]
+        if not isinstance(manifest, str) or (
+            manifest and not re.fullmatch(r"[0-9a-f]{64}", manifest)
+        ):
+            raise ValueError("invalid pull operation metadata manifest")
+        if session["phase"] == "paused" and not manifest:
+            raise ValueError("paused pull ownership lacks operation metadata manifest")
+        checkpoints = session["resolution_checkpoints"]
+        if (
+            not isinstance(checkpoints, list)
+            or len(checkpoints) > 1000
+            or len(set(checkpoints)) != len(checkpoints)
+            or any(
+                not isinstance(value, str) or not _ID_RE.fullmatch(value) for value in checkpoints
+            )
+        ):
+            raise ValueError("invalid pull resolution checkpoint list")
+        if (
+            not isinstance(session["pid"], int)
+            or isinstance(session["pid"], bool)
+            or session["pid"] < 0
+            or not isinstance(session["pgid"], int)
+            or isinstance(session["pgid"], bool)
+            or session["pgid"] < 0
+            or session["pid"] != session["pgid"]
+        ):
+            raise ValueError("invalid pull process/group identifiers")
+        if session["phase"] == "running" and session["pid"] <= 0:
+            raise ValueError("running pull ownership lacks process identifier")
+
+    @staticmethod
+    def _pull_session(body: dict[str, Any]) -> PullSession:
+        session = body["pull_session"]
+        return PullSession(
+            checkpoint_id=body["id"],
+            repository=body["repository"],
+            kind=session["kind"],
+            branch=session["branch"],
+            original_head=session["original_head"],
+            target_oid=session["target_oid"],
+            outgoing=session["outgoing"],
+            phase=session["phase"],
+            pid=session["pid"],
+            pgid=session["pgid"],
+            lease_token=session["lease_token"],
+            operation_manifest=session["operation_manifest"],
+            other_refs=session["other_refs"],
+            resolution_checkpoints=tuple(session["resolution_checkpoints"]),
+        )
 
     @staticmethod
     def _checkpoint(body: dict[str, Any]) -> Checkpoint:

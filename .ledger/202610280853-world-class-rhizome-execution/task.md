@@ -21,7 +21,8 @@ platform/human/performance checks without claiming they passed. Focused validati
 committed and pushed to `origin/feat/hardening-pass` for CI. No merge, tag, release,
 unrelated provider writes, live user installation changes, or invented human/platform
 results. The former prohibition on M2 work is superseded by the new authorization;
-M3/M4 remain out of scope. Earlier commit/push permission was specific to M1 validation. Public test interfaces
+M3/M4 remain out of scope apart from the narrow pull-owned exception below.
+Earlier commit/push permission was specific to M1 validation. Public test interfaces
 were confirmed earlier in `plan.md`. The earlier existing-checks-only choice applied
 to the completed initial composer increment, not this M1 acceptance-closure work.
 
@@ -43,6 +44,22 @@ frames, responsive content layouts, pinned footers, and repaired Select geometry
 See `dialog-layout-validation.md`. These remain headless UI checks, not human or
 platform acceptance. HEAD advanced externally during the follow-up; this session
 did not issue a commit or push.
+
+## Current requested feature: Pull / Fetch split button
+
+The operator supplied the four-mode dropdown screenshot and explicitly chose
+**Implement all four modes**, including guarded merge/rebase pull and pull-owned
+conflict Continue/Abort. They also approved new persistence, coordinator/real-Git,
+native-process, and TUI tests. This is a narrow exception to the broader M3
+exclusion, not permission to enable generic rewriting, stash, reset, or external
+operation finishing. All four modes and the saved-default split control are
+implemented, including reviewed divergence, owned conflict Continue/Abort, restart
+ownership and persistent Activity recovery details. See `pull-fetch-plan.md` for
+contracts and `pull-fetch-validation.md` for scoped results and retained failures.
+Fresh adversarial regressions cover all six reviewed safety defects; current Git
+and actual Git 2.36 runs pass. Full roadmap, human, large-history and platform
+acceptance remain separate. No release, commit, push, or external network validation
+is implied.
 
 ## Current M2 state
 
@@ -105,6 +122,8 @@ did not issue a commit or push.
 
 ## Evidence and navigation
 
+- `pull-fetch-validation.md`, `pull-fetch/`: four-mode implementation, final local
+  checks, six-defect safety mapping, real terminal evidence and captures.
 - `m2-execution.md`: current bounded pieces, results, failures and remaining gates.
 - `m2-investigation-plan.md`: approved captured-scope interfaces and semantics.
 - `m2-final-regression-manifest.json`: disjoint 880-case regression partitions.
