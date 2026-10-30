@@ -34,6 +34,15 @@ async def capture(output: Path, *, width: int, height: int, theme: str, view: st
                 if view == "history":
                     app.jump_to(app.snapshot_data.head)
                     app.action_show_primary()
+                elif view == "settings":
+                    await pilot.press("f4")
+                elif view == "activity":
+                    await pilot.press("f2")
+                    await pilot.click("#stage-all")
+                    await idle(app, pilot)
+                    await pilot.click("#unstage-all")
+                    await idle(app, pilot)
+                    await pilot.press("ctrl+l")
                 else:
                     await pilot.press("f2")
                     if view == "diff":
@@ -58,7 +67,9 @@ if __name__ == "__main__":
     parser.add_argument("--height", type=int, default=42)
     parser.add_argument("--theme", choices=("light", "dark", "high-contrast"), default="light")
     parser.add_argument(
-        "--view", choices=("history", "changes", "diff", "composer"), default="history"
+        "--view",
+        choices=("history", "changes", "diff", "composer", "settings", "activity"),
+        default="history",
     )
     args = parser.parse_args()
     asyncio.run(

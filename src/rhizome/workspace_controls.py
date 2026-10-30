@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from rich.text import Text
+from textual import events
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
@@ -175,29 +176,40 @@ class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
     DEFAULT_CSS = """
     WorkspaceControlsDialog { align: center middle; background: $text-muted 28%; }
     WorkspaceControlsDialog > #workspace-controls-dialog {
-        width: 70; max-width: 100%; height: 24; max-height: 100%;
+        width: 90%; min-width: 76; max-width: 100%;
+        height: 90%; min-height: 22; max-height: 100%;
         padding: 1 2; border: round $primary-muted; background: $surface; color: $text;
     }
+    WorkspaceControlsDialog.compact-controls > #workspace-controls-dialog { padding: 0 1; }
     WorkspaceControlsDialog .dialog-title { height: 1; margin-bottom: 0; }
-    WorkspaceControlsDialog #controls-intro, WorkspaceControlsDialog #controls-offline-policy,
+    WorkspaceControlsDialog #controls-body { height: 1fr; min-height: 4; }
+    WorkspaceControlsDialog #controls-intro,
     WorkspaceControlsDialog #settings-path { height: auto; margin: 1 0; color: $text-muted; }
-    WorkspaceControlsDialog #settings-path { border-left: tall $primary-muted; padding-left: 1; }
+    WorkspaceControlsDialog #controls-offline-policy { height: auto; margin: 0 1; color: $text-muted; }
+    WorkspaceControlsDialog #settings-path, WorkspaceControlsDialog #controls-offline-policy {
+        border-left: tall $primary-muted; padding-left: 1;
+    }
     WorkspaceControlsDialog #controls-error { display: none; color: $error; text-style: bold; }
     WorkspaceControlsDialog #controls-error.-visible { display: block; height: auto; margin: 1 0; }
-    WorkspaceControlsDialog #controls-offline-policy { border-left: tall $primary-muted; padding-left: 1; }
-    WorkspaceControlsDialog #controls-body { height: 1fr; min-height: 4; }
-    /* Inputs use a tall border. Three rows prevent it being cut off at either edge. */
-    WorkspaceControlsDialog .setting-row { height: 3; min-height: 3; padding: 0 1; }
-    WorkspaceControlsDialog .setting-label { width: 1fr; content-align: left middle; }
-    WorkspaceControlsDialog Select { width: 16; min-width: 16; }
+    WorkspaceControlsDialog .setting-row {
+        height: 3; min-height: 3; padding: 0 1; align: left middle;
+    }
+    WorkspaceControlsDialog .setting-label { width: 1fr; height: 3; content-align: left middle; }
+    WorkspaceControlsDialog Select { width: 30; min-width: 30; }
+    WorkspaceControlsDialog #controls-body {
+        scrollbar-size: 1 1;
+        scrollbar-background: $surface; scrollbar-color: $foreground-muted 35%;
+    }
     WorkspaceControlsDialog Input { width: 10; min-width: 10; }
     WorkspaceControlsDialog Switch { width: 9; min-width: 9; }
+    WorkspaceControlsDialog #settings-columns { height: auto; margin-top: 1; }
+    WorkspaceControlsDialog .settings-column { width: 1fr; height: auto; padding-right: 2; }
+    WorkspaceControlsDialog #settings-columns.-narrow { layout: vertical; }
+    WorkspaceControlsDialog #settings-columns.-narrow .settings-column { width: 100%; }
     WorkspaceControlsDialog .exclusion-status {
         height: auto; margin: 1 0; padding: 0 1; border-left: tall $warning;
         background: $warning-muted; color: $text-warning; text-style: bold;
     }
-    /* These are deliberate two-column groups, not a toolbar: all labels fit
-       inside the 70-column dialog and remain tabbable in its scroll region. */
     WorkspaceControlsDialog .control-actions { height: auto; margin-top: 1; }
     WorkspaceControlsDialog .control-action-row { height: 1; margin-bottom: 1; }
     WorkspaceControlsDialog .control-action-row Button {
@@ -236,22 +248,13 @@ class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
     def compose(self) -> ComposeResult:
         values = self._values_for("workspace")
         with Vertical(id="workspace-controls-dialog"):
-            yield Label("WORKSPACE CONTROLS", classes="dialog-title")
-            yield Static(
-                "Choose local refresh and display preferences. Apply changes to this workspace or your defaults.",
-                id="controls-intro",
-            )
-            yield Static(
-                self._state_error,
-                id="controls-error",
-                classes="-visible" if self._state_error else "",
-            )
-            if self._settings_path:
-                yield Static(
-                    f"Editable user settings file: {self._settings_path}", id="settings-path"
-                )
-            yield Static("", id="controls-offline-policy")
+            yield Label("SETTINGS", classes="dialog-title")
             with VerticalScroll(id="controls-body"):
+                yield Static(
+                    self._state_error,
+                    id="controls-error",
+                    classes="-visible" if self._state_error else "",
+                )
                 with Horizontal(classes="setting-row"):
                     yield Label("Apply settings to", classes="setting-label")
                     yield Select(
@@ -260,26 +263,63 @@ class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
                         allow_blank=False,
                         id="controls-scope",
                     )
-                yield Label("Effective settings", classes="dialog-title")
-                yield self._toggle("Work offline", "offline", bool(values["offline"]))
-                yield self._toggle(
-                    "Refresh remote state automatically",
-                    "remote-refresh-enabled",
-                    bool(values["remote_refresh_enabled"]),
-                )
-                with Horizontal(classes="setting-row"):
-                    yield Label("Refresh interval (seconds)", classes="setting-label")
-                    yield Input(
-                        str(values["remote_refresh_interval"]), id="remote-refresh-interval"
-                    )
-                yield self._toggle(
-                    "Use plain text glyphs", "plain-glyphs", bool(values["plain_glyphs"])
-                )
-                yield self._toggle(
-                    "Keep local diagnostics",
-                    "diagnostics-enabled",
-                    bool(values["diagnostics_enabled"]),
-                )
+                with Horizontal(id="settings-columns"):
+                    with Vertical(classes="settings-column"):
+                        yield Label("NETWORK & PRIVACY", classes="dialog-title")
+                        yield self._toggle("Work offline", "offline", bool(values["offline"]))
+                        yield Static("", id="controls-offline-policy")
+                        yield self._toggle(
+                            "Refresh remote state automatically",
+                            "remote-refresh-enabled",
+                            bool(values["remote_refresh_enabled"]),
+                        )
+                        with Horizontal(classes="setting-row"):
+                            yield Label("Refresh interval (seconds)", classes="setting-label")
+                            yield Input(
+                                str(values["remote_refresh_interval"]), id="remote-refresh-interval"
+                            )
+                        yield self._toggle(
+                            "Keep local diagnostics",
+                            "diagnostics-enabled",
+                            bool(values["diagnostics_enabled"]),
+                        )
+                    with Vertical(classes="settings-column"):
+                        yield Label("APPEARANCE & GRAPH", classes="dialog-title")
+                        yield self._toggle(
+                            "Use plain text glyphs", "plain-glyphs", bool(values["plain_glyphs"])
+                        )
+                        yield self._select_row(
+                            "Theme",
+                            "theme",
+                            [
+                                ("Auto (light fallback)", "auto"),
+                                ("Light", "light"),
+                                ("Dark", "dark"),
+                                ("High contrast", "high-contrast"),
+                            ],
+                            values["theme"],
+                        )
+                        yield self._select_row(
+                            "Graph style",
+                            "graph-style",
+                            [("Smooth", "smooth"), ("Compact", "compact")],
+                            values["graph_style"],
+                        )
+                        yield self._select_row(
+                            "Graph order",
+                            "graph-order",
+                            [("Topology", "topo"), ("Chronological", "chronological")],
+                            values["graph_order"],
+                        )
+                        yield self._select_row(
+                            "Diff layout",
+                            "diff-layout",
+                            [("Unified", "unified"), ("Split (read-only)", "split")],
+                            values["diff_layout"],
+                        )
+                        with Horizontal(classes="setting-row"):
+                            yield Label("Keyboard shortcuts", classes="setting-label")
+                            yield Button("Edit key bindings", id="edit-keybindings")
                 yield Static(
                     "SESSION-ONLY EXCLUSION: "
                     + (
@@ -311,39 +351,14 @@ class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
                     if self._settings_path:
                         with Horizontal(classes="control-action-row control-action-single"):
                             yield Button("Reload settings", id="reload-settings")
-                yield Label("Display and graph", classes="dialog-title")
-                yield self._select_row(
-                    "Theme",
-                    "theme",
-                    [
-                        ("Auto (hint / light fallback)", "auto"),
-                        ("Light", "light"),
-                        ("Dark", "dark"),
-                        ("High contrast", "high-contrast"),
-                    ],
-                    values["theme"],
+                yield Static(
+                    "Choose local refresh and display preferences. Apply changes to this workspace or your defaults.",
+                    id="controls-intro",
                 )
-                yield self._select_row(
-                    "Graph style",
-                    "graph-style",
-                    [("Smooth", "smooth"), ("Compact", "compact")],
-                    values["graph_style"],
-                )
-                yield self._select_row(
-                    "Graph order",
-                    "graph-order",
-                    [("Topology", "topo"), ("Chronological", "chronological")],
-                    values["graph_order"],
-                )
-                yield self._select_row(
-                    "Diff layout",
-                    "diff-layout",
-                    [("Unified", "unified"), ("Split (read-only; narrow fallback)", "split")],
-                    values["diff_layout"],
-                )
-                with Horizontal(classes="setting-row"):
-                    yield Label("Keyboard shortcuts", classes="setting-label")
-                    yield Button("Edit key bindings", id="edit-keybindings")
+                if self._settings_path:
+                    yield Static(
+                        f"Editable user settings file: {self._settings_path}", id="settings-path"
+                    )
             with Horizontal(classes="dialog-buttons"):
                 yield Button("Close", id="controls-close")
                 yield Button("Apply settings", id="controls-apply", variant="primary")
@@ -365,8 +380,19 @@ class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
         )
 
     def on_mount(self) -> None:
+        self._update_settings_layout()
         self._update_offline_policy("workspace")
         self.query_one("#controls-scope", Select).focus()
+
+    def on_resize(self, event: events.Resize) -> None:
+        self._update_settings_layout()
+
+    def _update_settings_layout(self) -> None:
+        # Two columns make generous terminals easy to scan; a single column keeps
+        # every label and select legible on an 80-column terminal.
+        narrow = self.size.width < 110
+        self.set_class(narrow or self.size.height < 32, "compact-controls")
+        self.query_one("#settings-columns").set_class(narrow, "-narrow")
 
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.select.id != "controls-scope":
@@ -390,7 +416,7 @@ class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
                 "Global offline is the master stop for network work. Turning it off can resume eligible workspaces."
             )
         else:
-            policy.update("Global offline is a master stop. A workspace setting cannot bypass it.")
+            policy.update("Global offline overrides workspace settings.")
 
     def _set_values(self, values: dict) -> None:
         self.query_one("#offline", Switch).value = bool(values["offline"])

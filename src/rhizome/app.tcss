@@ -4,7 +4,11 @@ Tooltip { visibility: hidden; }
 Static, Label { color: $text; }
 Button { min-width: 0; border: none; }
 Button:focus { text-style: bold underline; }
-Input:focus, TextArea:focus, Select:focus { border: tall $primary; }
+Input:focus, TextArea:focus { border: tall $primary; }
+/* SelectCurrent owns the three-row field. A second border on Select itself
+   clips its label and shifts the form when focus moves. */
+Select:focus { border: none; }
+Select:focus > SelectCurrent { border: tall $primary; }
 Input > .input--placeholder, Input > .input--suggestion { color: $text-muted; }
 ModalScreen Input { background: $surface; color: $text; border: tall $primary-muted; }
 ModalScreen Input:focus { border: tall $primary; }
@@ -58,14 +62,15 @@ ModalScreen Input:focus { border: tall $primary; }
 #search-bar { margin: 0 1; }
 #graph-filter { width: 1fr; height: 1; padding: 0 1; border: none; background: $surface; color: $text; }
 #graph-filter:focus { background: $surface; border: none; }
-#search-controls Button, #search-criteria, #search-next, #clear-search, #graph-style {
+#search-controls Button, #search-criteria, #search-next, #clear-search, #search-bar #graph-style {
     height: 1; margin-left: 1; padding: 0; border: none; background: transparent; color: $primary;
 }
 #search-controls Button { width: 1fr; }
 #search-criteria { width: 9; min-width: 9; }
 #search-next, #clear-search { width: 6; min-width: 6; }
-#graph-style { width: auto; min-width: 12; }
-#search-controls Button:hover, #search-controls Button:focus, #graph-style:hover, #graph-style:focus { background: $primary-muted; color: $text; }
+#search-bar #graph-style { width: auto; min-width: 12; }
+#search-controls Button:hover, #search-controls Button:focus,
+#search-bar #graph-style:hover, #search-bar #graph-style:focus { background: $primary-muted; color: $text; }
 #history-caption { padding: 0 1; color: $text-muted; background: $background; }
 
 /* The graph is the primary reading surface, not a spreadsheet. */

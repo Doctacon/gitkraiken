@@ -163,9 +163,13 @@ gets its own draft. A moving source commit does not erase the draft. Successful
 creation clears that intent's saved text; a cleanup failure does not report the
 already-created PR as a failed creation.
 
-### Workspace controls — F4
+### Settings — F4
 
-Choose **Workspace / F4** (also in **Actions**) for the small M1 controls panel:
+Choose **Settings / F4** (also in **Actions**) for workspace preferences. Settings
+and Activity expand with the terminal, use a stacked layout at narrow widths, and
+keep their bottom action buttons visible while content scrolls.
+
+Settings includes:
 
 - Apply offline mode, automatic remote refresh/cadence, plain UI glyphs and local
   diagnostics preferences to this workspace or to global defaults.

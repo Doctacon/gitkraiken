@@ -122,7 +122,7 @@ async def test_f4_controls_expose_all_actions_and_diagnostics_by_keyboard(git_re
         # The scroll region's tab sequence reaches every action at 80x24,
         # including controls currently below the short viewport.
         focused_ids: set[str] = set()
-        for _ in range(16):
+        for _ in range(len(dialog.focus_chain)):
             if app.focused and app.focused.id:
                 focused_ids.add(str(app.focused.id))
             await pilot.press("tab")

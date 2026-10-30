@@ -6,6 +6,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 
 from rich.text import Text
+from textual import events
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
@@ -22,62 +23,57 @@ class ActivityDialog(ModalScreen[None]):
     _MAX_RECORDS = 20
 
     DEFAULT_CSS = """
-    ActivityDialog {
-        align: center middle;
-        background: transparent;
-    }
+    ActivityDialog { align: center middle; background: $text-muted 28%; }
     ActivityDialog > #activity-dialog {
-        width: 76;
-        max-width: 100%;
-        height: 22;
-        max-height: 100%;
-        padding: 0 2;
-        border: round $primary-muted;
-        background: $surface;
-        color: $text;
+        width: 90%; min-width: 76; max-width: 100%;
+        height: 90%; min-height: 22; max-height: 100%;
+        padding: 1 2; border: round $primary-muted;
+        background: $surface; color: $text;
     }
     ActivityDialog .dialog-title { height: 1; margin-bottom: 1; }
     ActivityDialog .activity-label {
-        height: 1;
-        color: $foreground-muted;
-        text-style: bold underline;
+        height: 1; margin-bottom: 1; color: $foreground-muted; text-style: bold;
     }
     ActivityDialog #activity-context {
-        height: 3;
-        min-height: 2;
-        margin-bottom: 1;
-        padding: 0 1;
-        border-left: tall $primary-muted;
-        color: $foreground-muted;
+        height: 3; min-height: 3; margin-bottom: 1; padding: 0 1;
+        border-left: tall $primary-muted; color: $foreground-muted;
     }
+    ActivityDialog #activity-layout { layout: horizontal; height: 1fr; min-height: 8; }
+    ActivityDialog #activity-queue { width: 2fr; height: 1fr; margin-right: 2; }
+    ActivityDialog #activity-result { width: 3fr; height: 1fr; }
     ActivityDialog #activity-list {
-        height: 1fr;
-        min-height: 3;
-        margin-bottom: 1;
-        border: round $primary-muted;
-        background: $surface;
-        color: $text;
+        height: 1fr; min-height: 3; border: round $primary-muted;
+        background: $surface; color: $text;
     }
     ActivityDialog #activity-list:focus { border: round $primary; }
     ActivityDialog #activity-list > .option-list--option-highlighted {
-        background: $primary-muted;
-        color: $text;
-        text-style: bold underline;
+        background: $primary-muted; color: $text; text-style: bold;
     }
     ActivityDialog #activity-detail {
-        height: 3;
-        min-height: 3;
-        padding: 0 1;
-        border-left: tall $primary-muted;
-        color: $foreground-muted;
+        height: 1fr; min-height: 3; padding: 0 1;
+        border: round $primary-muted; color: $foreground-muted;
     }
-    ActivityDialog #activity-notice {
-        height: 2;
-        margin-top: 0;
-        color: $warning;
+    ActivityDialog #activity-list, ActivityDialog #activity-detail {
+        scrollbar-size: 1 1;
+        scrollbar-background: $surface; scrollbar-color: $foreground-muted 35%;
     }
-    ActivityDialog .dialog-buttons { height: 3; align: right middle; }
-    ActivityDialog .dialog-buttons Button { min-width: 10; margin-left: 1; }
+    ActivityDialog #activity-notice { height: auto; color: $text-muted; }
+    ActivityDialog #activity-footer { height: 3; align: right middle; }
+    ActivityDialog #activity-footer Button { min-width: 10; margin-left: 1; }
+    ActivityDialog.compact-activity > #activity-dialog { padding: 0 1; }
+    ActivityDialog.compact-activity .activity-label { margin-bottom: 0; }
+    ActivityDialog.compact-activity #activity-list,
+    ActivityDialog.compact-activity #activity-detail {
+        border: none; border-left: tall $primary-muted;
+    }
+    ActivityDialog.compact-activity #activity-list:focus {
+        border: none; border-left: tall $primary;
+    }
+    ActivityDialog.compact-activity #activity-layout { layout: vertical; }
+    ActivityDialog.compact-activity #activity-queue,
+    ActivityDialog.compact-activity #activity-result {
+        width: 1fr; height: 1fr; min-height: 4; margin-right: 0;
+    }
     """
 
     def __init__(
@@ -96,21 +92,34 @@ class ActivityDialog(ModalScreen[None]):
             yield Label("BACKGROUND READS", classes="activity-label")
             with VerticalScroll(id="activity-context"):
                 yield Static(id="activity-context-text")
-            yield Label("GIT MUTATIONS", classes="activity-label")
-            yield OptionList(id="activity-list")
-            with VerticalScroll(id="activity-detail"):
-                yield Static("No Git mutations have been recorded.", id="activity-detail-text")
+            with Horizontal(id="activity-layout"):
+                with Vertical(id="activity-queue"):
+                    yield Label("GIT OPERATIONS", classes="activity-label")
+                    yield OptionList(id="activity-list")
+                with Vertical(id="activity-result"):
+                    yield Label("SELECTED OPERATION", classes="activity-label")
+                    with VerticalScroll(id="activity-detail"):
+                        yield Static(
+                            "No Git mutations have been recorded.", id="activity-detail-text"
+                        )
             yield Static(
-                "Read activity is separate from Git mutations. Closing never cancels a running mutation.",
+                "Closing this window never cancels a running Git operation.",
                 id="activity-notice",
             )
-            with Horizontal(classes="dialog-buttons"):
+            with Horizontal(id="activity-footer"):
                 yield Button("Close", id="activity-close", variant="primary")
 
     def on_mount(self) -> None:
+        self._fit_layout()
         self._refresh()
         self.set_interval(1, self._refresh)
         self.query_one("#activity-list", OptionList).focus()
+
+    def on_resize(self, _event: events.Resize) -> None:
+        self._fit_layout()
+
+    def _fit_layout(self) -> None:
+        self.set_class(self.size.width <= 100 or self.size.height < 32, "compact-activity")
 
     def _refresh(self) -> None:
         """Refresh snapshots without moving an operator's current inspection."""
@@ -127,6 +136,7 @@ class ActivityDialog(ModalScreen[None]):
             Option(self._record_label(record), id=record.id) for record in self._records
         )
         if not self._records:
+            options.add_option(Option("No Git operations yet", disabled=True))
             self.query_one("#activity-detail-text", Static).update(
                 "No Git mutations have been recorded. Background reads above do not mutate Git."
             )
