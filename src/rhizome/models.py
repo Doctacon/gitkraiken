@@ -1,6 +1,7 @@
 """Values shared by the Git engine and terminal interface. No UI or subprocess dependencies."""
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -80,6 +81,144 @@ class Commit:
     @property
     def short_id(self) -> str:
         return self.oid[:8]
+
+
+HistoryOrder = Literal["topology", "author-time"]
+
+
+@dataclass(frozen=True)
+class CapturedRef:
+    full_name: str
+    oid: str
+
+
+@dataclass(frozen=True)
+class InvestigationScope:
+    """Exact local commit roots; moving names are evidence, never query targets."""
+
+    repository_id: str
+    scope_id: str
+    kind: Literal["unified", "focused"]
+    label: str
+    root_oids: tuple[str, ...]
+    captured_refs: tuple[CapturedRef, ...]
+    bindings: tuple[CapturedRef, ...]
+    head_oid: str
+    branch: str
+    shallow_fingerprint: str
+    worktree_heads: tuple[CapturedRef, ...] = ()
+
+
+@dataclass(frozen=True)
+class ScopeState:
+    current: bool
+    available: bool
+    reason: str = ""
+
+
+@dataclass(frozen=True)
+class HistoryPage:
+    scope_id: str
+    order: HistoryOrder
+    commits: tuple[Commit, ...]
+    next_cursor: str | None
+    has_more: bool
+    omitted_before: int
+    state: ScopeState
+
+
+@dataclass(frozen=True)
+class SearchQuery:
+    text: str = ""
+    path: str | None = None
+    authored_from: datetime | None = None
+    authored_through: datetime | None = None
+
+
+@dataclass(frozen=True)
+class SearchHit:
+    commit: Commit
+    matched_fields: tuple[str, ...]
+    matching_refs: tuple[str, ...]
+    history_cursor: str
+
+
+@dataclass(frozen=True)
+class SearchPage:
+    scope_id: str
+    query: SearchQuery
+    order: HistoryOrder
+    hits: tuple[SearchHit, ...]
+    examined: int
+    examined_total: int
+    next_cursor: str | None
+    complete: bool
+    state: ScopeState
+
+
+ComparisonIntent = Literal["branch-review", "endpoints"]
+
+
+@dataclass(frozen=True)
+class ComparisonResult:
+    scope_id: str
+    intent: ComparisonIntent
+    left_oid: str
+    right_oid: str
+    merge_base_oid: str | None
+    diff_from_oid: str
+    diff_to_oid: str
+    files: tuple[FileChange, ...]
+    stat: str
+    patch: str
+    truncated: bool
+    state: ScopeState
+
+
+@dataclass(frozen=True)
+class FileHistoryEntry:
+    commit: Commit
+    path: str
+    previous_path: str
+    status: str
+
+
+@dataclass(frozen=True)
+class FileHistoryPage:
+    scope_id: str
+    start_oid: str
+    path: str
+    follow_renames: bool
+    entries: tuple[FileHistoryEntry, ...]
+    next_cursor: str | None
+    complete: bool
+    limitations: tuple[str, ...]
+    state: ScopeState
+
+
+@dataclass(frozen=True)
+class BlameLine:
+    commit_oid: str
+    original_path: str
+    original_line: int
+    final_line: int
+    author: str
+    email: str
+    date: str
+    text: str
+    boundary: bool
+
+
+@dataclass(frozen=True)
+class BlamePage:
+    scope_id: str
+    start_oid: str
+    path: str
+    lines: tuple[BlameLine, ...]
+    next_cursor: str | None
+    complete: bool
+    limitations: tuple[str, ...]
+    state: ScopeState
 
 
 @dataclass(frozen=True)

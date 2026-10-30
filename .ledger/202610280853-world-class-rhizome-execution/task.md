@@ -1,29 +1,47 @@
 Status: open
 Created: 2026-10-28
-Updated: 2026-10-29
+Updated: 2026-10-30
 
 # Execute the approved world-class Rhizome roadmap
 
 ## Intent and current authorization
 
 Execute the approved roadmap in `docs/design/world-class-rhizome.md` and its
-validation plan. **Current scope is M1 only; stop before M2.** The operator asked
-for remaining M1 work using engineering recommendations, then required every
-increment to stay within 15 minutes. See `m1-completion.md` for the bounded work log.
+validation plan. **Current scope is M2**, newly authorized on 2026-10-29 after M1
+acceptance. Every individual piece must take 15 minutes or less; split an oversized
+piece repeatedly until it fits. See `m2-execution.md` for current decomposition and
+evidence, and `m1-completion.md` for the completed M1 work log.
 
-The operator subsequently authorized installer repair and release validation,
-retaining the 15-minute increment limit. The latest direction is to finish a
+During M1, the operator also authorized installer repair and release validation,
+retaining the 15-minute increment limit. That phase's direction was to finish a
 **full M1 release**, not unilaterally narrow it to a preview. Linux lifecycle
 validation has now been completed through Docker's copy API. The operator then
 explicitly selected “Accept full M1 readiness,” deferring the named unrun
 platform/human/performance checks without claiming they passed. Focused validation fixes may now be
 committed and pushed to `origin/feat/hardening-pass` for CI. No merge, tag, release,
-unrelated provider writes, live user installation changes, invented human/platform
-results, or M2 settings/keymap/theme/history/split-diff work. Public test interfaces
+unrelated provider writes, live user installation changes, or invented human/platform
+results. The former prohibition on M2 work is superseded by the new authorization;
+M3/M4 remain out of scope. Earlier commit/push permission was specific to M1 validation. Public test interfaces
 were confirmed earlier in `plan.md`. The earlier existing-checks-only choice applied
 to the completed initial composer increment, not this M1 acceptance-closure work.
 
-## Current state
+## Current M2 state
+
+- Investigation, bounded captured history/search, comparison/file investigation,
+  settings/keymaps, themes and read-only split inspection are implemented in the
+  uncommitted working tree. Usage and limitations are in `docs/investigation.md`.
+- Full bounded regression: **880 passed**; two subsequent public search/Focus
+  tests also pass. Ruff, formatting, whitespace and CLI help pass. Selected-module
+  Pyright has 44 inherited errors and no new diagnostic signatures versus baseline.
+- Reference workload verifies 100k commits, 20k files, 1k refs and 200 changed files.
+  Search completes all 100k; App retains 300 commit rows. Twenty explicit warm
+  refreshes have median **1.403 s**, p95 **1.566 s** and maximum **1.633 s**—all
+  above the ≤1 s warm-workspace target. M2 is **not accepted**.
+- See `m2-execution.md` for scoped evidence, recorded timing-cap deviations and
+  remaining performance, V08/V11 and platform/human checks. No M2 publication or
+  commit/push authority is implied by the historical M1 permissions below.
+
+## Accepted M1 baseline
 
 - Validated implementation is `19086a3`. Application source is unchanged from
   `44cdd16`; subsequent fixes stabilize refresh/identity fixtures, pin the minimum
@@ -68,6 +86,10 @@ to the completed initial composer increment, not this M1 acceptance-closure work
 
 ## Evidence and navigation
 
+- `m2-execution.md`: current bounded pieces, results, failures and remaining gates.
+- `m2-investigation-plan.md`: approved captured-scope interfaces and semantics.
+- `m2-final-regression-manifest.json`: disjoint 880-case regression partitions.
+- `m2-reference-repeated.json`: raw reference run and 20 explicit warm samples.
 - `m1-completion.md`: current checklist, increment timings, commands/results and gaps.
 - `m1-composer-validation.md`: exact current/minimum Git composer results.
 - `m1-regression-*.txt`: complete bounded regression partitions and retained failures.
@@ -101,5 +123,5 @@ formatting debt is cleared, and the installer crash/retry regression passes.
 The operator explicitly deferred native Intel macOS, human-visible/WSL/SSH/clipboard,
 remaining cold-cache/slow-provider/resource measurements and the five-person pilot.
 These remain unverified, not passed. See `docs/validation/m1-release-acceptance.md`.
-This roadmap task remains open only for later, separately authorized milestones.
-No M2 work, merge, tag or publication has occurred.
+This roadmap task remains open for the newly authorized M2 work. M2 is in progress;
+no M2 completion, merge, tag or publication is claimed.

@@ -1,0 +1,734 @@
+{
+    "version": "1.1.404",
+    "time": "1793322312017",
+    "generalDiagnostics": [
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/app.py",
+            "severity": "error",
+            "message": "Method \"push_screen\" overrides class \"App\" in an incompatible manner\n  Return type mismatch: base method returns type \"AwaitMount\", override returns type \"Future[Unknown] | AwaitMount\"\n    Type \"Future[Unknown] | AwaitMount\" is not assignable to type \"AwaitMount\"\n      \"Future[Unknown]\" is not assignable to \"AwaitMount\"",
+            "range": {
+                "start": {
+                    "line": 1119,
+                    "character": 8
+                },
+                "end": {
+                    "line": 1119,
+                    "character": 19
+                }
+            },
+            "rule": "reportIncompatibleMethodOverride"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/app.py",
+            "severity": "error",
+            "message": "\"key\" is not a known attribute of \"None\"",
+            "range": {
+                "start": {
+                    "line": 1267,
+                    "character": 92
+                },
+                "end": {
+                    "line": 1267,
+                    "character": 95
+                }
+            },
+            "rule": "reportOptionalMemberAccess"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/app.py",
+            "severity": "error",
+            "message": "\"remotes\" is not a known attribute of \"None\"",
+            "range": {
+                "start": {
+                    "line": 1330,
+                    "character": 48
+                },
+                "end": {
+                    "line": 1330,
+                    "character": 55
+                }
+            },
+            "rule": "reportOptionalMemberAccess"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/app.py",
+            "severity": "error",
+            "message": "\"remote\" is possibly unbound",
+            "range": {
+                "start": {
+                    "line": 2005,
+                    "character": 65
+                },
+                "end": {
+                    "line": 2005,
+                    "character": 71
+                }
+            },
+            "rule": "reportPossiblyUnboundVariable"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/app.py",
+            "severity": "error",
+            "message": "\"remote_name\" is possibly unbound",
+            "range": {
+                "start": {
+                    "line": 2005,
+                    "character": 77
+                },
+                "end": {
+                    "line": 2005,
+                    "character": 88
+                }
+            },
+            "rule": "reportPossiblyUnboundVariable"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/app.py",
+            "severity": "error",
+            "message": "\"source\" is possibly unbound",
+            "range": {
+                "start": {
+                    "line": 2012,
+                    "character": 42
+                },
+                "end": {
+                    "line": 2012,
+                    "character": 48
+                }
+            },
+            "rule": "reportPossiblyUnboundVariable"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/app.py",
+            "severity": "error",
+            "message": "\"remote_name\" is possibly unbound",
+            "range": {
+                "start": {
+                    "line": 2012,
+                    "character": 82
+                },
+                "end": {
+                    "line": 2012,
+                    "character": 93
+                }
+            },
+            "rule": "reportPossiblyUnboundVariable"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/app.py",
+            "severity": "error",
+            "message": "\"source\" is possibly unbound",
+            "range": {
+                "start": {
+                    "line": 2022,
+                    "character": 37
+                },
+                "end": {
+                    "line": 2022,
+                    "character": 43
+                }
+            },
+            "rule": "reportPossiblyUnboundVariable"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/app.py",
+            "severity": "error",
+            "message": "\"remote_name\" is possibly unbound",
+            "range": {
+                "start": {
+                    "line": 2023,
+                    "character": 39
+                },
+                "end": {
+                    "line": 2023,
+                    "character": 50
+                }
+            },
+            "rule": "reportPossiblyUnboundVariable"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/app.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"_graph_cache_key\" for class \"RhizomeApp*\"\n  Type \"tuple[tuple[HistoryLine, ...], GraphStyle, Any | Unknown]\" is not assignable to type \"tuple[tuple[HistoryLine, ...], GraphStyle] | None\"\n    \"tuple[tuple[HistoryLine, ...], GraphStyle, Any | Unknown]\" is not assignable to \"tuple[tuple[HistoryLine, ...], GraphStyle]\"\n      Tuple size mismatch; expected 2 but received 3\n    \"tuple[tuple[HistoryLine, ...], GraphStyle, Any | Unknown]\" is not assignable to \"None\"",
+            "range": {
+                "start": {
+                    "line": 2087,
+                    "character": 36
+                },
+                "end": {
+                    "line": 2087,
+                    "character": 45
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/app.py",
+            "severity": "error",
+            "message": "\"detail\" is not a known attribute of \"None\"",
+            "range": {
+                "start": {
+                    "line": 2299,
+                    "character": 58
+                },
+                "end": {
+                    "line": 2299,
+                    "character": 64
+                }
+            },
+            "rule": "reportOptionalMemberAccess"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/app.py",
+            "severity": "error",
+            "message": "\"diff\" is not a known attribute of \"None\"",
+            "range": {
+                "start": {
+                    "line": 2407,
+                    "character": 61
+                },
+                "end": {
+                    "line": 2407,
+                    "character": 65
+                }
+            },
+            "rule": "reportOptionalMemberAccess"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/app.py",
+            "severity": "error",
+            "message": "Argument of type \"Repository | None\" cannot be assigned to parameter \"repo\" of type \"Repository\" in function \"__init__\"\n  Type \"Repository | None\" is not assignable to type \"Repository\"\n    \"None\" is not assignable to \"Repository\"",
+            "range": {
+                "start": {
+                    "line": 2410,
+                    "character": 41
+                },
+                "end": {
+                    "line": 2410,
+                    "character": 45
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/app.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 2786,
+                    "character": 38
+                },
+                "end": {
+                    "line": 2786,
+                    "character": 57
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/app.py",
+            "severity": "error",
+            "message": "\"result\" is possibly unbound",
+            "range": {
+                "start": {
+                    "line": 2867,
+                    "character": 24
+                },
+                "end": {
+                    "line": 2867,
+                    "character": 30
+                }
+            },
+            "rule": "reportPossiblyUnboundVariable"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/app.py",
+            "severity": "error",
+            "message": "\"result\" is possibly unbound",
+            "range": {
+                "start": {
+                    "line": 2869,
+                    "character": 31
+                },
+                "end": {
+                    "line": 2869,
+                    "character": 37
+                }
+            },
+            "rule": "reportPossiblyUnboundVariable"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/app.py",
+            "severity": "error",
+            "message": "Method \"action_quit\" overrides class \"App\" in an incompatible manner\n  Return type mismatch: base method returns type \"CoroutineType[Any, Any, None]\", override returns type \"None\"\n    \"None\" is not assignable to \"CoroutineType[Any, Any, None]\"",
+            "range": {
+                "start": {
+                    "line": 3299,
+                    "character": 8
+                },
+                "end": {
+                    "line": 3299,
+                    "character": 19
+                }
+            },
+            "rule": "reportIncompatibleMethodOverride"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "No overloads for \"run\" match the provided arguments",
+            "range": {
+                "start": {
+                    "line": 290,
+                    "character": 17
+                },
+                "end": {
+                    "line": 298,
+                    "character": 9
+                }
+            },
+            "rule": "reportCallIssue"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"bufsize\" of type \"int\" in function \"run\"\n  \"object\" is not assignable to \"int\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"executable\" of type \"StrOrBytesPath | None\" in function \"run\"\n  Type \"object\" is not assignable to type \"StrOrBytesPath | None\"\n    \"object\" is not assignable to \"str\"\n    \"object\" is not assignable to \"bytes\"\n    \"object\" is incompatible with protocol \"PathLike[str]\"\n      \"__fspath__\" is not present\n    \"object\" is incompatible with protocol \"PathLike[bytes]\"\n      \"__fspath__\" is not present\n    \"object\" is not assignable to \"None\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"stdin\" of type \"_FILE\" in function \"run\"\n  Type \"object\" is not assignable to type \"_FILE\"\n    \"object\" is not assignable to \"None\"\n    \"object\" is not assignable to \"int\"\n    \"object\" is not assignable to \"IO[Any]\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"stdout\" of type \"_FILE\" in function \"run\"\n  Type \"object\" is not assignable to type \"_FILE\"\n    \"object\" is not assignable to \"None\"\n    \"object\" is not assignable to \"int\"\n    \"object\" is not assignable to \"IO[Any]\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"stderr\" of type \"_FILE\" in function \"run\"\n  Type \"object\" is not assignable to type \"_FILE\"\n    \"object\" is not assignable to \"None\"\n    \"object\" is not assignable to \"int\"\n    \"object\" is not assignable to \"IO[Any]\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"preexec_fn\" of type \"(() -> Any) | None\" in function \"run\"\n  Type \"object\" is not assignable to type \"(() -> Any) | None\"\n    Type \"object\" is not assignable to type \"() -> Any\"\n    \"object\" is not assignable to \"None\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"close_fds\" of type \"bool\" in function \"run\"\n  \"object\" is not assignable to \"bool\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"shell\" of type \"bool\" in function \"run\"\n  \"object\" is not assignable to \"bool\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"universal_newlines\" of type \"bool | None\" in function \"run\"\n  Type \"object\" is not assignable to type \"bool | None\"\n    \"object\" is not assignable to \"bool\"\n    \"object\" is not assignable to \"None\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"creationflags\" of type \"int\" in function \"run\"\n  \"object\" is not assignable to \"int\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"restore_signals\" of type \"bool\" in function \"run\"\n  \"object\" is not assignable to \"bool\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"start_new_session\" of type \"bool\" in function \"run\"\n  \"object\" is not assignable to \"bool\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"pass_fds\" of type \"Collection[int]\" in function \"run\"\n  \"object\" is incompatible with protocol \"Collection[int]\"\n    \"__len__\" is not present\n    \"__iter__\" is not present\n    \"__contains__\" is not present",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"encoding\" of type \"str | None\" in function \"run\"\n  Type \"object\" is not assignable to type \"str | None\"\n    \"object\" is not assignable to \"str\"\n    \"object\" is not assignable to \"None\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"errors\" of type \"str | None\" in function \"run\"\n  Type \"object\" is not assignable to type \"str | None\"\n    \"object\" is not assignable to \"str\"\n    \"object\" is not assignable to \"None\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"input\" of type \"_InputString | None\" in function \"run\"\n  Type \"object\" is not assignable to type \"_InputString | None\"\n    \"object\" is incompatible with protocol \"Buffer\"\n      \"__buffer__\" is not present\n    \"object\" is not assignable to \"str\"\n    \"object\" is not assignable to \"None\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"text\" of type \"bool | None\" in function \"run\"\n  Type \"object\" is not assignable to type \"bool | None\"\n    \"object\" is not assignable to \"bool\"\n    \"object\" is not assignable to \"None\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"user\" of type \"str | int | None\" in function \"run\"\n  Type \"object\" is not assignable to type \"str | int | None\"\n    \"object\" is not assignable to \"str\"\n    \"object\" is not assignable to \"int\"\n    \"object\" is not assignable to \"None\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"group\" of type \"str | int | None\" in function \"run\"\n  Type \"object\" is not assignable to type \"str | int | None\"\n    \"object\" is not assignable to \"str\"\n    \"object\" is not assignable to \"int\"\n    \"object\" is not assignable to \"None\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"extra_groups\" of type \"Iterable[str | int] | None\" in function \"run\"\n  Type \"object\" is not assignable to type \"Iterable[str | int] | None\"\n    \"object\" is incompatible with protocol \"Iterable[str | int]\"\n      \"__iter__\" is not present\n    \"object\" is not assignable to \"None\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"umask\" of type \"int\" in function \"run\"\n  \"object\" is not assignable to \"int\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"pipesize\" of type \"int\" in function \"run\"\n  \"object\" is not assignable to \"int\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"object\" cannot be assigned to parameter \"process_group\" of type \"int | None\" in function \"run\"\n  Type \"object\" is not assignable to type \"int | None\"\n    \"object\" is not assignable to \"int\"\n    \"object\" is not assignable to \"None\"",
+            "range": {
+                "start": {
+                    "line": 297,
+                    "character": 14
+                },
+                "end": {
+                    "line": 297,
+                    "character": 23
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"int | None\" cannot be assigned to parameter \"fd\" of type \"int\" in function \"dup\"\n  Type \"int | None\" is not assignable to type \"int\"\n    \"None\" is not assignable to \"int\"",
+            "range": {
+                "start": {
+                    "line": 585,
+                    "character": 30
+                },
+                "end": {
+                    "line": 585,
+                    "character": 42
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"int | None\" cannot be assigned to parameter \"fd\" of type \"FileDescriptorLike\" in function \"fsync\"\n  Type \"int | None\" is not assignable to type \"FileDescriptorLike\"\n    Type \"None\" is not assignable to type \"FileDescriptorLike\"\n      \"None\" is not assignable to \"int\"\n      \"None\" is incompatible with protocol \"HasFileno\"\n        \"fileno\" is not present",
+            "range": {
+                "start": {
+                    "line": 594,
+                    "character": 17
+                },
+                "end": {
+                    "line": 594,
+                    "character": 34
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Argument of type \"int | None\" cannot be assigned to parameter \"fd\" of type \"FileDescriptorLike\" in function \"fsync\"\n  Type \"int | None\" is not assignable to type \"FileDescriptorLike\"\n    Type \"None\" is not assignable to type \"FileDescriptorLike\"\n      \"None\" is not assignable to \"int\"\n      \"None\" is incompatible with protocol \"HasFileno\"\n        \"fileno\" is not present",
+            "range": {
+                "start": {
+                    "line": 835,
+                    "character": 17
+                },
+                "end": {
+                    "line": 835,
+                    "character": 34
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "/tmp/rhizome-type-baseline.yN7Shi/src/rhizome/git.py",
+            "severity": "error",
+            "message": "Function with declared return type \"str\" must return value on all code paths\n  \"None\" is not assignable to \"str\"",
+            "range": {
+                "start": {
+                    "line": 1309,
+                    "character": 80
+                },
+                "end": {
+                    "line": 1309,
+                    "character": 83
+                }
+            },
+            "rule": "reportReturnType"
+        }
+    ],
+    "summary": {
+        "filesAnalyzed": 2,
+        "errorCount": 45,
+        "warningCount": 0,
+        "informationCount": 0,
+        "timeInSec": 1.354
+    }
+}
+

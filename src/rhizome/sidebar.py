@@ -21,6 +21,7 @@ from textual.widgets._tree import TreeNode
 
 from .models import Ref, Snapshot, Stash, Worktree
 from .pull_requests import PullRequest, PullRequestListing
+from .theme import LIGHT, Palette, theme_text
 
 _TREE_LINES = dict(Tree.LINES)
 _TREE_ICON_NODE = Tree.ICON_NODE
@@ -131,14 +132,14 @@ class ReferenceSidebar(Widget):
         width: 1fr;
         min-width: 0;
         height: 1fr;
-        background: #edf4f5;
+        background: $panel;
         layout: vertical;
     }
     ReferenceSidebar > #sidebar-actions {
         height: 2;
         layout: vertical;
         padding: 0 1;
-        background: #edf4f5;
+        background: $panel;
     }
     ReferenceSidebar > #sidebar-actions .worktree-actions {
         height: 1;
@@ -151,19 +152,19 @@ class ReferenceSidebar(Widget):
         min-height: 1;
         padding: 0;
         border: none;
-        background: #d8eeee;
-        color: #14232c;
+        background: $primary-muted;
+        color: $text;
     }
     ReferenceSidebar > Input {
         height: 1;
         min-height: 1;
         margin: 0;
         padding: 0 1;
-        background: #ffffff;
+        background: $surface;
         border: none;
-        color: #14232c;
+        color: $text;
     }
-    ReferenceSidebar > Input:focus { background: #f6fcfc; border: none; }
+    ReferenceSidebar > Input:focus { background: $surface; border: none; }
     ReferenceSidebar > #sidebar-state-scroll {
         /* Fixed detail space keeps the tree still between physical clicks. */
         height: 4;
@@ -171,30 +172,30 @@ class ReferenceSidebar(Widget):
         max-height: 4;
         margin: 0 1;
         padding: 0 1;
-        background: #fff8e8;
-        color: #5c4322;
+        background: $warning-muted;
+        color: $text;
         scrollbar-size-vertical: 1;
     }
     ReferenceSidebar #sidebar-state {
         height: auto;
-        color: #5c4322;
+        color: $text;
     }
     ReferenceSidebar > Tree {
         height: 1fr;
         margin: 1 0 0 0;
         padding: 0;
-        background: #edf4f5;
-        color: #14232c;
+        background: $panel;
+        color: $text;
         scrollbar-size-vertical: 1;
         scrollbar-size-horizontal: 1;
     }
-    ReferenceSidebar > Tree > .tree--guides { color: #8aa5ad; }
-    ReferenceSidebar > Tree > .tree--guides-hover { color: #48616c; }
-    ReferenceSidebar > Tree > .tree--guides-selected { color: #006d77; }
+    ReferenceSidebar > Tree > .tree--guides { color: $text-muted; }
+    ReferenceSidebar > Tree > .tree--guides-hover { color: $text; }
+    ReferenceSidebar > Tree > .tree--guides-selected { color: $primary; }
     ReferenceSidebar > Tree > .tree--cursor,
     ReferenceSidebar > Tree:focus > .tree--cursor {
-        background: #d8eeee;
-        color: #14232c;
+        background: $primary-muted;
+        color: $text;
         text-style: none;
     }
     """
@@ -258,10 +259,20 @@ class ReferenceSidebar(Widget):
         self._pull_requests_loading = False
         self._pull_requests: dict[str, PullRequest] = {}
         self._plain_glyphs = False
+        self._palette = LIGHT
 
     @property
     def _overflow(self) -> Literal["crop", "ellipsis"]:
         return "crop" if self._plain_glyphs else "ellipsis"
+
+    def set_palette(self, palette: Palette) -> None:
+        """Rerender labels for ``palette`` while retaining tree state."""
+        if palette == self._palette:
+            return
+        self._capture_expanded()
+        self._palette = palette
+        if self._snapshot is not None:
+            self._rebuild(self._snapshot)
 
     def compose(self) -> ComposeResult:
         placeholder = "Filter refs..." if self._plain_glyphs else "Filter refs…"
@@ -570,16 +581,21 @@ class ReferenceSidebar(Widget):
             return node.data.key
         return None
 
+    def _capture_expanded(self) -> None:
+        for node in self._tree_nodes.values():
+            if isinstance(node.data, _Group):
+                self._expanded[node.data.key] = node.is_expanded
+
     def _set_leaf_label(
         self, node: TreeNode[SidebarSelection | _Group], item: SidebarSelection, active: bool
     ) -> None:
         label = item.label.rsplit("/", 1)[-1] if item.kind == "local" else item.label
         text = Text(label, no_wrap=True, overflow=self._overflow)
         if getattr(node, "_sidebar_current", False):
-            text.stylize("bold #006d77")
+            text.stylize(f"bold {LIGHT.teal}")
         if active:
-            text.stylize("bold underline #14232c")
-        node.set_label(text)
+            text.stylize(f"bold underline {LIGHT.text}")
+        node.set_label(theme_text(text, self._palette))
 
     def _add_leaf(
         self, parent: TreeNode, item: SidebarSelection, *, current: bool = False
@@ -706,7 +722,15 @@ class ReferenceSidebar(Widget):
             )
             if worktree.bare or worktree.prunable:
                 node.set_label(
-                    Text(node.data.label, style="#7b5b4f", no_wrap=True, overflow=self._overflow)
+                    theme_text(
+                        Text(
+                            node.data.label,
+                            style=LIGHT.warning,
+                            no_wrap=True,
+                            overflow=self._overflow,
+                        ),
+                        self._palette,
+                    )
                 )
         if not worktrees:
             worktree_group.add_leaf(

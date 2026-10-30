@@ -13,6 +13,7 @@ from textual.message import Message
 from textual.widgets import Button, DataTable, Input, Static
 
 from .patches import PatchDocument, PatchLine
+from .theme import LIGHT, Palette, theme_text
 
 
 class _PatchTable(DataTable[str]):
@@ -52,32 +53,32 @@ class PrecisionDiff(Vertical):
     PrecisionDiff {
         height: 1fr;
         min-width: 0;
-        background: #ffffff;
-        color: #14232c;
-        border: round #a8c1c7;
+        background: $surface;
+        color: $text;
+        border: round $primary-muted;
     }
     PrecisionDiff .precision-heading {
         height: 1;
         padding: 0 1;
-        background: #e7f1f2;
-        color: #006d77;
+        background: $panel;
+        color: $primary;
         text-style: bold;
     }
     PrecisionDiff #precision-status {
         height: 1;
         padding: 0 1;
-        color: #36505b;
-        background: #f3f8f9;
+        color: $text-muted;
+        background: $panel;
     }
     PrecisionDiff.-stale #precision-status {
-        background: #fff3df;
-        color: #6b4300;
+        background: $warning-muted;
+        color: $text-warning;
         text-style: bold;
     }
     PrecisionDiff #precision-search-row, PrecisionDiff .precision-actions {
         height: 1;
         padding: 0 1;
-        background: #edf4f5;
+        background: $panel;
     }
     PrecisionDiff #precision-search {
         width: 1fr;
@@ -85,10 +86,10 @@ class PrecisionDiff(Vertical):
         min-width: 12;
         padding: 0 1;
         border: none;
-        background: #ffffff;
-        color: #14232c;
+        background: $surface;
+        color: $text;
     }
-    PrecisionDiff #precision-search:focus { background: #f6fcfc; }
+    PrecisionDiff #precision-search:focus { background: $surface; }
     PrecisionDiff .precision-search-button,
     PrecisionDiff .precision-action {
         height: 1;
@@ -96,47 +97,47 @@ class PrecisionDiff(Vertical):
         margin-left: 1;
         padding: 0 1;
         border: none;
-        background: #d8eeee;
-        color: #18323a;
+        background: $primary-muted;
+        color: $text;
     }
     PrecisionDiff .precision-action:hover, PrecisionDiff .precision-action:focus,
     PrecisionDiff .precision-search-button:hover, PrecisionDiff .precision-search-button:focus {
-        background: #b9dfe1;
-        color: #10242b;
+        background: $primary-muted;
+        color: $text;
     }
     PrecisionDiff .precision-primary {
-        background: #007c78;
-        color: #ffffff;
+        background: $primary;
+        color: $surface;
         text-style: bold;
     }
     PrecisionDiff .precision-primary:hover, PrecisionDiff .precision-primary:focus {
-        background: #006d77;
-        color: #ffffff;
+        background: $primary;
+        color: $surface;
     }
     PrecisionDiff .precision-action:disabled {
-        background: #e4ecee;
-        color: #71858b;
+        background: $panel;
+        color: $text-muted;
         text-style: none;
     }
     PrecisionDiff #precision-lines {
         height: 1fr;
         min-height: 4;
         border: none;
-        background: #ffffff;
-        color: #14232c;
+        background: $surface;
+        color: $text;
     }
     PrecisionDiff #precision-lines > .datatable--header { display: none; }
     PrecisionDiff #precision-lines > .datatable--cursor {
-        background: #d8eeee;
-        color: #14232c;
+        background: $primary-muted;
+        color: $text;
         text-style: bold underline;
     }
-    PrecisionDiff #precision-lines > .datatable--hover { background: #edf7f8; }
+    PrecisionDiff #precision-lines > .datatable--hover { background: $panel; }
     PrecisionDiff #precision-note {
         height: 1;
         padding: 0 1;
-        color: #48616c;
-        background: #f7fbfc;
+        color: $text-muted;
+        background: $background;
     }
     PrecisionDiff.-narrow { border-left: none; border-right: none; }
     PrecisionDiff.-narrow #precision-search-row { padding: 0; }
@@ -183,6 +184,7 @@ class PrecisionDiff(Vertical):
         self._cursor_id: int | None = None
         self._show_whitespace = False
         self._plain_glyphs = False
+        self._palette = LIGHT
         self._search_matches: list[_Match] = []
         self._search_index = -1
         self._base_lines: dict[int, Text] = {}
@@ -259,6 +261,19 @@ class PrecisionDiff(Vertical):
         self.set_class(stale, "-stale")
         self._refresh_chrome()
 
+    def set_palette(self, palette: Palette) -> None:
+        """Rerender cosmetic colors without changing the captured diff state."""
+        if palette == self._palette:
+            return
+        self._palette = palette
+        if not self.is_mounted or self._document is None:
+            return
+        table = self.query_one("#precision-lines", _PatchTable)
+        scroll = table.scroll_offset
+        self._render_lines()
+        self._refresh_chrome()
+        self.call_after_refresh(table.scroll_to, scroll.x, scroll.y, animate=False)
+
     def set_plain_glyphs(self, enabled: bool) -> None:
         """Use ASCII only for generated diff and whitespace chrome.
 
@@ -321,18 +336,18 @@ class PrecisionDiff(Vertical):
             # indicators, never a modification of captured patch source.
             tab, space = (">", ".") if self._plain_glyphs else ("⇥", "·")
             display = display.replace("\t", tab).replace(" ", space)
-        palette = {
-            "add": "#28733a",
-            "delete": "#b13a48",
-            "hunk": "#7049a8",
-            "meta": "#48616c",
-            "context": "#18323a",
-        }
-        text = Text(prefix + display, style=palette[line.kind], no_wrap=True, overflow="ellipsis")
+        color = {
+            "add": LIGHT.addition,
+            "delete": LIGHT.deletion,
+            "hunk": LIGHT.graph[1],
+            "meta": LIGHT.muted,
+            "context": LIGHT.text,
+        }[line.kind]
+        text = Text(prefix + display, style=color, no_wrap=True, overflow="ellipsis")
         if line.kind in {"add", "delete"} and not self._show_whitespace:
             for start, end in self._changed_words(line):
                 text.stylize("bold underline", len(prefix) + start, len(prefix) + end)
-        return text
+        return theme_text(text, self._palette)
 
     def _changed_words(self, line: PatchLine) -> list[tuple[int, int]]:
         """Emphasize changed token spans within an addition/deletion, cosmetically."""
@@ -410,7 +425,9 @@ class PrecisionDiff(Vertical):
             if line_id in marked:
                 # The fill makes scanning quick; the underline/bold marker keeps
                 # a selected range legible on monochrome or low-saturation terminals.
-                rendered.stylize("bold underline on #d8eeee")
+                rendered.stylize(
+                    f"bold underline {self._palette.text} on {self._palette.selection}"
+                )
             table.update_cell(str(line_id), "line", rendered)
         self._painted_selection = marked
         status = self.query_one("#precision-status", Static)

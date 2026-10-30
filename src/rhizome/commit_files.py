@@ -15,7 +15,7 @@ from textual.widgets import Tree
 from textual.widgets._tree import TreeNode
 
 from .models import FileChange
-from .theme import TEAL
+from .theme import LIGHT, TEAL, Palette, theme_text
 
 _TREE_LINES = dict(Tree.LINES)
 _TREE_ICON_NODE = Tree.ICON_NODE
@@ -64,6 +64,16 @@ class CommitFileTree(Tree[FileChange | _Directory]):
         self._files: dict[str, FileChange] = {}
         self._selected_key: str | None = None
         self._plain_glyphs = False
+        self._palette = LIGHT
+
+    def set_palette(self, palette: Palette) -> None:
+        """Rerender labels for ``palette`` while retaining tree state."""
+        if palette == self._palette:
+            return
+        self._capture_expanded()
+        self._palette = palette
+        if self._identity is not None:
+            self._rebuild(tuple(self._files.values()), reset_scroll=False)
 
     def set_plain_glyphs(self, enabled: bool) -> None:
         """Switch generated tree chrome without changing any file path text."""
@@ -199,12 +209,11 @@ class CommitFileTree(Tree[FileChange | _Directory]):
         # here so even unusual duplicate records keep an unambiguous selection.
         return f"file:{file.path}\0{file.original_path}"
 
-    @staticmethod
-    def _label(file: FileChange) -> Text:
+    def _label(self, file: FileChange) -> Text:
         name = file.path.rsplit("/", 1)[-1]
         text = Text(f"{file.index} {name}", no_wrap=True, overflow="ellipsis")
         text.stylize(f"bold {TEAL}", 0, len(file.index))
-        return text
+        return theme_text(text, self._palette)
 
     def _capture_expanded(self) -> None:
         """Synchronously retain folds even when a caller refreshes immediately."""

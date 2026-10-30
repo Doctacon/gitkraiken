@@ -1,11 +1,14 @@
 """Check actual light surfaces as well as Rich colors that bypass Textual CSS."""
 
+import pytest
 from rich.color import Color
 from rich.console import Console
+from rich.text import Text
 from textual.widgets import DataTable, Input, OptionList, TextArea, Tree
 
 from rhizome.app import RhizomeApp, patch_text
 from rhizome.dialogs import ActionPicker, BranchContextMenu, MessageDialog, PromptDialog
+from rhizome.persistence import WorkspaceStateStore
 from rhizome.theme import GRAPH_PALETTE, MUTED, PROVIDER_COLORS, SUBTLE_TEXT, TEAL, TEXT
 
 
@@ -28,7 +31,7 @@ async def test_workspace_defaults_to_light_with_readable_rich_colors(git_repo):
     async with app.run_test(size=(170, 48)) as pilot:
         await app.workers.wait_for_complete()
         await pilot.pause()
-        assert app.theme == "textual-light"
+        assert app.theme == "rhizome-light"
         assert not app.current_theme.dark
         for selector in (
             "Screen",
@@ -84,6 +87,37 @@ async def test_workspace_defaults_to_light_with_readable_rich_colors(git_repo):
             color = diff.get_style_at_offset(console, span.start).color
             assert color is not None
             assert contrast(color.get_truecolor().hex, background) >= 4.5
+
+
+@pytest.mark.parametrize("preference", ["dark", "high-contrast"])
+async def test_saved_dark_palettes_reach_actual_history_spans_and_editor(
+    git_repo, git_run, preference
+):
+    git_run(git_repo, "commit", "--allow-empty", "-m", "readable history")
+    WorkspaceStateStore().save("global", {"theme": preference})
+    app = RhizomeApp(git_repo)
+    async with app.run_test(size=(170, 48)) as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert app.theme == f"rhizome-{preference}"
+        assert app.current_theme.dark
+        table = app.query_one("#graph-table", DataTable)
+        backgrounds = (
+            table.styles.background.hex,
+            table.get_component_styles("datatable--cursor").background.hex,
+        )
+        assert luminance(backgrounds[0]) < 0.1
+        console = Console()
+        for row in table.rows:
+            for cell in table.get_row(row):
+                if not isinstance(cell, Text) or not cell:
+                    continue
+                for offset in {0, *(span.start for span in cell.spans)}:
+                    color = cell.get_style_at_offset(console, offset).color
+                    if color:
+                        for background in backgrounds:
+                            assert contrast(color.get_truecolor().hex, background) >= 4.5
+        assert app.query_one("#commit-message", TextArea).theme == "monokai"
 
 
 async def test_dialogs_and_editors_remain_light(git_repo):

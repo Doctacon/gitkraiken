@@ -9,7 +9,7 @@ from rich.text import Text
 
 from rhizome.graph import GraphRow, render_history
 from rhizome.models import Commit, HistoryLine
-from rhizome.theme import GRAPH_PALETTE
+from rhizome.theme import DARK, GRAPH_PALETTE
 
 
 def commit(oid: str, *parents: str) -> Commit:
@@ -113,6 +113,18 @@ def color_of(row: GraphRow, glyph: str, occurrence: int = 1) -> object:
 def test_empty_history_is_empty_for_both_styles() -> None:
     assert render_history(()) == ()
     assert render_history((), "compact") == ()
+
+
+def test_render_history_applies_palette_without_changing_geometry() -> None:
+    source = history(commit("a", "b"), commit("b"))
+
+    light = render_history(source)
+    dark = render_history(source, palette=DARK)
+
+    assert [row.graph.plain for row in dark] == [row.graph.plain for row in light]
+    assert [(row.width, row.height) for row in dark] == [(row.width, row.height) for row in light]
+    assert color_of(light[0], "●") == Color.parse(GRAPH_PALETTE[0])
+    assert color_of(dark[0], "●") == Color.parse(DARK.graph[0])
 
 
 def test_compact_preserves_every_native_line_ansi_and_glyph_translation() -> None:

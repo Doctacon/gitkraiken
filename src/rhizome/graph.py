@@ -9,7 +9,7 @@ from rich.cells import cell_len
 from rich.text import Text
 
 from .models import Commit, HistoryLine
-from .theme import GRAPH_PALETTE
+from .theme import LIGHT, Palette, theme_text
 
 GraphStyle = Literal["smooth", "compact"]
 
@@ -33,7 +33,7 @@ _PLAIN_GLYPHS = str.maketrans(
 )
 _PITCH = 4
 _INSET = 1
-_PALETTE = GRAPH_PALETTE
+_PALETTE = LIGHT.graph
 
 
 @dataclass(frozen=True)
@@ -331,6 +331,7 @@ def render_history(
     style: GraphStyle = "smooth",
     *,
     plain_glyphs: bool = False,
+    palette: Palette = LIGHT,
 ) -> tuple[GraphRow, ...]:
     """Render history without I/O or mutation of the supplied model values.
 
@@ -345,22 +346,24 @@ def render_history(
     if style not in {"smooth", "compact"}:
         raise ValueError(f"Unknown graph style: {style}")
     if style == "compact" and any(line.graph for line in history):
-        return _compact(history, plain_glyphs=plain_glyphs)
-
-    commits = tuple(line.commit for line in history if line.commit is not None)
-    if not commits:
-        return _compact(history, plain_glyphs=plain_glyphs)
-
-    renderer = _SmoothRenderer(spaced=style == "smooth", plain_glyphs=plain_glyphs)
-    rows = tuple(
-        renderer.render(commit, final=index == len(commits) - 1)
-        for index, commit in enumerate(commits)
-    )
-    if style == "smooth":
-        return rows
-    compact_rows: list[GraphRow] = []
-    for row in rows:
-        for index, line in enumerate(row.graph.split("\n", allow_blank=True)):
-            line.no_wrap = True  # Rich's split retains spans, but not this setting.
-            compact_rows.append(GraphRow(line, row.commit if index == 0 else None))
-    return tuple(compact_rows)
+        rows = _compact(history, plain_glyphs=plain_glyphs)
+    else:
+        commits = tuple(line.commit for line in history if line.commit is not None)
+        if not commits:
+            rows = _compact(history, plain_glyphs=plain_glyphs)
+        else:
+            renderer = _SmoothRenderer(spaced=style == "smooth", plain_glyphs=plain_glyphs)
+            rendered = tuple(
+                renderer.render(commit, final=index == len(commits) - 1)
+                for index, commit in enumerate(commits)
+            )
+            if style == "smooth":
+                rows = rendered
+            else:
+                compact_rows: list[GraphRow] = []
+                for row in rendered:
+                    for index, line in enumerate(row.graph.split("\n", allow_blank=True)):
+                        line.no_wrap = True  # Rich's split retains spans, but not this setting.
+                        compact_rows.append(GraphRow(line, row.commit if index == 0 else None))
+                rows = tuple(compact_rows)
+    return tuple(GraphRow(theme_text(row.graph, palette), row.commit) for row in rows)

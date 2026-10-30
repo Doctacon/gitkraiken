@@ -6,6 +6,8 @@ scroll-geometry invalidation it requires here rather than in the workspace.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from rich.segment import Segment
 from rich.style import Style
 from textual import events
@@ -16,6 +18,16 @@ from textual.widgets._data_table import ColumnKey
 
 class ResizableDataTable(DataTable):
     """Drag the right edge of a header to resize, without selecting a row."""
+
+    COMPONENT_CLASSES: ClassVar[set[str]] = DataTable.COMPONENT_CLASSES | {
+        "resizable-table--grip",
+        "resizable-table--grip-active",
+    }
+
+    DEFAULT_CSS = """
+    ResizableDataTable > .resizable-table--grip { color: $text-muted; }
+    ResizableDataTable > .resizable-table--grip-active { color: $primary; }
+    """
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -57,12 +69,13 @@ class ResizableDataTable(DataTable):
         if row_index != -1 or column_index < 0 or width < 1:
             return lines
         key = str(self.ordered_columns[column_index].key.value)
+        component = (
+            "resizable-table--grip-active" if key == self._resize_key else "resizable-table--grip"
+        )
         grip = Segment(
             "│",
-            Style(
-                color="#006d77" if key == self._resize_key else "#78939c",
-                meta={"row": -1, "column": column_index, "resize_column": key},
-            )
+            self.get_component_rich_style(component, partial=True)
+            + Style(meta={"row": -1, "column": column_index, "resize_column": key})
             + base_style.background_style,
         )
         # Replace only the last padding cell; leave DataTable's cached segments

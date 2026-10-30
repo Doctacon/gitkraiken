@@ -14,6 +14,8 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Select, Static, Switch
 
+from .settings import COMMANDS, validate_keymap
+
 
 @dataclass(frozen=True)
 class WorkspaceControlRequest:
@@ -28,7 +30,141 @@ _FIELDS = (
     "remote_refresh_interval",
     "plain_glyphs",
     "diagnostics_enabled",
+    "theme",
+    "graph_style",
+    "graph_order",
+    "diff_layout",
+    "keymap",
 )
+
+_DEFAULTS = {
+    "offline": False,
+    "remote_refresh_enabled": True,
+    "remote_refresh_interval": 60,
+    "plain_glyphs": False,
+    "diagnostics_enabled": False,
+    "theme": "auto",
+    "graph_style": "smooth",
+    "graph_order": "topo",
+    "diff_layout": "unified",
+    "keymap": {},
+}
+
+
+class KeymapDialog(ModalScreen[dict[str, str] | None]):
+    """Edit a candidate keymap only; persistence remains the caller's job."""
+
+    BINDINGS = [("escape", "close", "Close")]
+    DEFAULT_CSS = """
+    KeymapDialog { align: center middle; background: $text-muted 28%; }
+    KeymapDialog > #keymap-dialog { width: 70; max-width: 100%; height: 19; max-height: 100%; padding: 1 2; border: round $primary-muted; background: $surface; color: $text; }
+    KeymapDialog #keymap-intro, KeymapDialog #keymap-error { height: auto; margin: 1 0; }
+    KeymapDialog #keymap-intro { color: $text-muted; }
+    KeymapDialog #keymap-error { display: none; color: $error; text-style: bold; }
+    KeymapDialog #keymap-error.-visible { display: block; }
+    KeymapDialog #keymap-body { height: 1fr; min-height: 6; }
+    KeymapDialog .keymap-row { height: 3; min-height: 3; padding: 0 1; }
+    KeymapDialog .keymap-label { width: 16; content-align: left middle; }
+    KeymapDialog Select, KeymapDialog Input { width: 1fr; min-width: 16; }
+    KeymapDialog .keymap-actions, KeymapDialog .dialog-buttons { height: 3; }
+    KeymapDialog .keymap-actions Button { width: 1fr; min-width: 0; margin-right: 1; padding: 0 1; }
+    KeymapDialog .dialog-buttons { align: right middle; }
+    KeymapDialog .dialog-buttons Button { min-width: 10; margin-left: 1; }
+    """
+
+    def __init__(self, keymap: dict | None = None) -> None:
+        super().__init__()
+        self._keymap = dict(keymap or {})
+        self._commands = tuple({command.id: command for command in COMMANDS}.values())
+
+    def compose(self) -> ComposeResult:
+        options = [(f"{item.description} ({item.id})", item.id) for item in self._commands]
+        with Vertical(id="keymap-dialog"):
+            yield Label("EDIT KEY BINDINGS", classes="dialog-title")
+            yield Static(
+                "Use Textual key names, for example ctrl+shift+p. Commas assign more than one key. "
+                "Leave Keys blank to restore the displayed default.",
+                id="keymap-intro",
+            )
+            yield Static("", id="keymap-error")
+            with VerticalScroll(id="keymap-body"):
+                with Horizontal(classes="keymap-row"):
+                    yield Label("Command", classes="keymap-label")
+                    yield Select(
+                        options, value=self._commands[0].id, allow_blank=False, id="keymap-command"
+                    )
+                with Horizontal(classes="keymap-row"):
+                    yield Label("Keys", classes="keymap-label")
+                    yield Input(id="keymap-keys", placeholder="ctrl+shift+p")
+                with Horizontal(classes="keymap-actions"):
+                    yield Button("Assign", id="keymap-assign", variant="primary")
+                    yield Button("Reset selected", id="keymap-reset-selected")
+                    yield Button("Reset all", id="keymap-reset-all")
+            with Horizontal(classes="dialog-buttons"):
+                yield Button("Close", id="keymap-close")
+                yield Button("Apply", id="keymap-apply", variant="primary")
+
+    def on_mount(self) -> None:
+        self._show_selected()
+        self.query_one("#keymap-command", Select).focus()
+
+    def action_close(self) -> None:
+        self.dismiss(None)
+
+    def _selected(self) -> str:
+        return str(self.query_one("#keymap-command", Select).value)
+
+    def _show_selected(self) -> None:
+        command_id = self._selected()
+        command = next(command for command in self._commands if command.id == command_id)
+        keys = self.query_one("#keymap-keys", Input)
+        keys.value = self._keymap.get(command_id, "")
+        keys.placeholder = f"Default: {command.keys}"
+
+    def _error(self, message: str = "") -> None:
+        error = self.query_one("#keymap-error", Static)
+        error.update(message)
+        error.set_class(bool(message), "-visible")
+
+    def _assign(self) -> bool:
+        command_id, keys = self._selected(), self.query_one("#keymap-keys", Input).value.strip()
+        candidate = dict(self._keymap)
+        if keys:
+            candidate[command_id] = keys
+        else:
+            candidate.pop(command_id, None)
+        try:
+            self._keymap = validate_keymap(candidate)
+        except ValueError as error:
+            self._error(str(error))
+            self.query_one("#keymap-keys", Input).focus()
+            return False
+        self._error()
+        self._show_selected()
+        return True
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        if event.select.id == "keymap-command":
+            self._show_selected()
+            self._error()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        event.stop()
+        button_id = str(event.button.id)
+        if button_id == "keymap-close":
+            self.action_close()
+        elif button_id == "keymap-assign":
+            self._assign()
+        elif button_id == "keymap-reset-selected":
+            self._keymap.pop(self._selected(), None)
+            self._show_selected()
+            self._error()
+        elif button_id == "keymap-reset-all":
+            self._keymap = {}
+            self._show_selected()
+            self._error()
+        elif button_id == "keymap-apply" and self._assign():
+            self.dismiss(dict(self._keymap))
 
 
 class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
@@ -37,18 +173,18 @@ class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
     BINDINGS = [("escape", "close", "Close")]
 
     DEFAULT_CSS = """
-    WorkspaceControlsDialog { align: center middle; background: #36505b 28%; }
+    WorkspaceControlsDialog { align: center middle; background: $text-muted 28%; }
     WorkspaceControlsDialog > #workspace-controls-dialog {
         width: 70; max-width: 100%; height: 24; max-height: 100%;
-        padding: 1 2; border: round #4f8790; background: #ffffff; color: #14232c;
+        padding: 1 2; border: round $primary-muted; background: $surface; color: $text;
     }
     WorkspaceControlsDialog .dialog-title { height: 1; margin-bottom: 0; }
-    WorkspaceControlsDialog #controls-intro, WorkspaceControlsDialog #controls-offline-policy {
-        height: auto; margin: 1 0; color: #36505b;
-    }
-    WorkspaceControlsDialog #controls-error { display: none; color: #8d2635; text-style: bold; }
+    WorkspaceControlsDialog #controls-intro, WorkspaceControlsDialog #controls-offline-policy,
+    WorkspaceControlsDialog #settings-path { height: auto; margin: 1 0; color: $text-muted; }
+    WorkspaceControlsDialog #settings-path { border-left: tall $primary-muted; padding-left: 1; }
+    WorkspaceControlsDialog #controls-error { display: none; color: $error; text-style: bold; }
     WorkspaceControlsDialog #controls-error.-visible { display: block; height: auto; margin: 1 0; }
-    WorkspaceControlsDialog #controls-offline-policy { border-left: tall #4f8790; padding-left: 1; }
+    WorkspaceControlsDialog #controls-offline-policy { border-left: tall $primary-muted; padding-left: 1; }
     WorkspaceControlsDialog #controls-body { height: 1fr; min-height: 4; }
     /* Inputs use a tall border. Three rows prevent it being cut off at either edge. */
     WorkspaceControlsDialog .setting-row { height: 3; min-height: 3; padding: 0 1; }
@@ -57,8 +193,8 @@ class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
     WorkspaceControlsDialog Input { width: 10; min-width: 10; }
     WorkspaceControlsDialog Switch { width: 9; min-width: 9; }
     WorkspaceControlsDialog .exclusion-status {
-        height: auto; margin: 1 0; padding: 0 1; border-left: tall #c68a35;
-        background: #fff3df; color: #6b4300; text-style: bold;
+        height: auto; margin: 1 0; padding: 0 1; border-left: tall $warning;
+        background: $warning-muted; color: $text-warning; text-style: bold;
     }
     /* These are deliberate two-column groups, not a toolbar: all labels fit
        inside the 70-column dialog and remain tabbable in its scroll region. */
@@ -80,19 +216,14 @@ class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
         overrides: dict,
         excluded: bool,
         state_error: str = "",
+        settings_path: str = "",
     ) -> None:
         super().__init__()
-        defaults = {
-            "offline": False,
-            "remote_refresh_enabled": True,
-            "remote_refresh_interval": 60,
-            "plain_glyphs": False,
-            "diagnostics_enabled": False,
-        }
-        self._global = {name: global_settings.get(name, defaults[name]) for name in _FIELDS}
+        self._global = {name: global_settings.get(name, _DEFAULTS[name]) for name in _FIELDS}
         self._overrides = {name: overrides[name] for name in _FIELDS if name in overrides}
         self._excluded = excluded
         self._state_error = state_error
+        self._settings_path = settings_path
 
     def _values_for(self, scope: str) -> dict:
         values = self._global.copy()
@@ -115,6 +246,10 @@ class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
                 id="controls-error",
                 classes="-visible" if self._state_error else "",
             )
+            if self._settings_path:
+                yield Static(
+                    f"Editable user settings file: {self._settings_path}", id="settings-path"
+                )
             yield Static("", id="controls-offline-policy")
             with VerticalScroll(id="controls-body"):
                 with Horizontal(classes="setting-row"):
@@ -160,19 +295,55 @@ class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
                 )
                 with Vertical(classes="control-actions"):
                     with Horizontal(classes="control-action-row"):
+                        yield Button("Local diagnostics", id="diagnostics")
+                        yield Button("Reset global preferences", id="reset-global")
+                    with Horizontal(classes="control-action-row"):
                         yield Button("Reset workspace overrides", id="reset-overrides")
                         yield Button("Clear saved drafts", id="clear-drafts")
                     with Horizontal(classes="control-action-row"):
                         yield Button("Reset saved view", id="reset-view")
                         yield Button("Forget this workspace", id="forget-workspace")
-                    with Horizontal(classes="control-action-row"):
+                    with Horizontal(classes="control-action-row control-action-single"):
                         yield Button(
                             "Include workspace" if self._excluded else "Exclude workspace",
                             id="toggle-exclusion",
                         )
-                        yield Button("Local diagnostics", id="diagnostics")
-                    with Horizontal(classes="control-action-row control-action-single"):
-                        yield Button("Reset global preferences", id="reset-global")
+                    if self._settings_path:
+                        with Horizontal(classes="control-action-row control-action-single"):
+                            yield Button("Reload settings", id="reload-settings")
+                yield Label("Display and graph", classes="dialog-title")
+                yield self._select_row(
+                    "Theme",
+                    "theme",
+                    [
+                        ("Auto (hint / light fallback)", "auto"),
+                        ("Light", "light"),
+                        ("Dark", "dark"),
+                        ("High contrast", "high-contrast"),
+                    ],
+                    values["theme"],
+                )
+                yield self._select_row(
+                    "Graph style",
+                    "graph-style",
+                    [("Smooth", "smooth"), ("Compact", "compact")],
+                    values["graph_style"],
+                )
+                yield self._select_row(
+                    "Graph order",
+                    "graph-order",
+                    [("Topology", "topo"), ("Chronological", "chronological")],
+                    values["graph_order"],
+                )
+                yield self._select_row(
+                    "Diff layout",
+                    "diff-layout",
+                    [("Unified", "unified"), ("Split (read-only; narrow fallback)", "split")],
+                    values["diff_layout"],
+                )
+                with Horizontal(classes="setting-row"):
+                    yield Label("Keyboard shortcuts", classes="setting-label")
+                    yield Button("Edit key bindings", id="edit-keybindings")
             with Horizontal(classes="dialog-buttons"):
                 yield Button("Close", id="controls-close")
                 yield Button("Apply settings", id="controls-apply", variant="primary")
@@ -181,6 +352,15 @@ class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
         return Horizontal(
             Label(label, classes="setting-label"),
             Switch(value=value, id=control_id),
+            classes="setting-row",
+        )
+
+    def _select_row(
+        self, label: str, control_id: str, options: list[tuple[str, str]], value: str
+    ) -> Horizontal:
+        return Horizontal(
+            Label(label, classes="setting-label"),
+            Select(options, value=value, allow_blank=False, id=control_id),
             classes="setting-row",
         )
 
@@ -222,6 +402,13 @@ class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
         )
         self.query_one("#plain-glyphs", Switch).value = bool(values["plain_glyphs"])
         self.query_one("#diagnostics-enabled", Switch).value = bool(values["diagnostics_enabled"])
+        for control_id, name in (
+            ("#theme", "theme"),
+            ("#graph-style", "graph_style"),
+            ("#graph-order", "graph_order"),
+            ("#diff-layout", "diff_layout"),
+        ):
+            self.query_one(control_id, Select).value = values[name]
 
     def _settings(self) -> dict | None:
         try:
@@ -248,7 +435,23 @@ class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
             "remote_refresh_interval": interval,
             "plain_glyphs": self.query_one("#plain-glyphs", Switch).value,
             "diagnostics_enabled": self.query_one("#diagnostics-enabled", Switch).value,
+            "theme": str(self.query_one("#theme", Select).value),
+            "graph_style": str(self.query_one("#graph-style", Select).value),
+            "graph_order": str(self.query_one("#graph-order", Select).value),
+            "diff_layout": str(self.query_one("#diff-layout", Select).value),
+            "keymap": dict(self._values_for(scope)["keymap"]),
         }
+
+    def _edit_keybindings(self) -> None:
+        scope = str(self.query_one("#controls-scope", Select).value)
+        current = dict(self._values_for(scope)["keymap"])
+
+        def update(keymap: dict[str, str] | None) -> None:
+            if keymap is not None:
+                target = self._global if scope == "global" else self._overrides
+                target["keymap"] = keymap
+
+        self.app.push_screen(KeymapDialog(current), update)
 
     def action_close(self) -> None:
         self.dismiss(None)
@@ -263,6 +466,10 @@ class WorkspaceControlsDialog(ModalScreen[WorkspaceControlRequest | None]):
             if settings is not None:
                 scope = str(self.query_one("#controls-scope", Select).value)
                 self.dismiss(WorkspaceControlRequest("settings", scope, settings))
+        elif button_id == "edit-keybindings":
+            self._edit_keybindings()
+        elif button_id == "reload-settings":
+            self.dismiss(WorkspaceControlRequest("reload-settings"))
         elif button_id in {
             "reset-overrides",
             "clear-drafts",
@@ -281,15 +488,15 @@ class DiagnosticsDialog(ModalScreen[str | None]):
     BINDINGS = [("escape", "close", "Close")]
 
     DEFAULT_CSS = """
-    DiagnosticsDialog { align: center middle; background: #36505b 28%; }
+    DiagnosticsDialog { align: center middle; background: $text-muted 28%; }
     DiagnosticsDialog > #diagnostics-dialog {
         width: 76; max-width: 100%; height: 22; max-height: 100%;
-        padding: 1 2; border: round #4f8790; background: #ffffff; color: #14232c;
+        padding: 1 2; border: round $primary-muted; background: $surface; color: $text;
     }
-    DiagnosticsDialog #diagnostics-summary { height: auto; margin-bottom: 1; color: #36505b; }
-    DiagnosticsDialog #diagnostics-policy { height: auto; margin-bottom: 1; color: #36505b; }
-    DiagnosticsDialog #diagnostics-error { height: auto; color: #8d2635; text-style: bold; }
-    DiagnosticsDialog #diagnostics-preview { height: 1fr; min-height: 5; padding: 0 1; border: round #a8c1c7; background: #f5fafa; color: #14232c; }
+    DiagnosticsDialog #diagnostics-summary { height: auto; margin-bottom: 1; color: $text-muted; }
+    DiagnosticsDialog #diagnostics-policy { height: auto; margin-bottom: 1; color: $text-muted; }
+    DiagnosticsDialog #diagnostics-error { height: auto; color: $error; text-style: bold; }
+    DiagnosticsDialog #diagnostics-preview { height: 1fr; min-height: 5; padding: 0 1; border: round $primary-muted; background: $surface; color: $text; }
     DiagnosticsDialog .dialog-buttons { height: 3; align: right middle; }
     DiagnosticsDialog .dialog-buttons Button { min-width: 10; margin-left: 1; }
     """

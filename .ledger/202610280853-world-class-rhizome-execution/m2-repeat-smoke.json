@@ -1,0 +1,234 @@
+{
+  "app": {
+    "latency_semantics": "full RhizomeApp.run_test with Textual headless Pilot; startup and refresh are headless harness timings, not real-terminal or real-user latency",
+    "observed": {
+      "headless_size": [
+        170,
+        48
+      ],
+      "history_page_commit_rows_after_refresh": 300,
+      "history_page_commit_rows_startup": 300,
+      "history_page_limit": 300,
+      "history_widget_rows_after_refresh": 301,
+      "history_widget_rows_startup": 301,
+      "offline": true,
+      "remote_refresh_enabled": false,
+      "snapshot_history_rows_after_refresh": 300,
+      "snapshot_history_rows_startup": 300
+    },
+    "parent_observed_wall_seconds": 3.121906124986708,
+    "parent_timeout_seconds": 360,
+    "rss_bytes": {
+      "after_startup": 77348864,
+      "after_warm_refresh": 78610432,
+      "peak": 78610432
+    },
+    "startup": {
+      "cpu_seconds": 0.399175,
+      "wall_seconds": 1.1935325828380883
+    },
+    "status": "complete",
+    "warm_refresh": {
+      "cpu_seconds": 0.19140899999999994,
+      "rss_bytes_after": 78184448,
+      "wall_seconds": 0.8405746668577194
+    },
+    "warm_refresh_distribution": {
+      "count": 2,
+      "maximum_seconds": 0.8405746668577194,
+      "median_seconds": 0.8217029585503042,
+      "minimum_seconds": 0.8028312502428889,
+      "p95_method": "nearest rank; not reported for fewer than 20 samples",
+      "p95_seconds": null
+    },
+    "warm_refresh_samples": [
+      {
+        "cpu_seconds": 0.19140899999999994,
+        "rss_bytes_after": 78184448,
+        "wall_seconds": 0.8405746668577194
+      },
+      {
+        "cpu_seconds": 0.14673999999999998,
+        "rss_bytes_after": 78610432,
+        "wall_seconds": 0.8028312502428889
+      }
+    ]
+  },
+  "backend": {
+    "completed_stages": [
+      "repository_constructor",
+      "capture_unified_scope",
+      "topology_first_page",
+      "topology_next_page",
+      "author_time_first_page",
+      "known_hit_first_batch",
+      "full_scope_no_hit_search"
+    ],
+    "measurements": {
+      "author_time_first_page": {
+        "cpu_seconds": 0.03084300000000001,
+        "has_more": true,
+        "rows": 300,
+        "wall_seconds": 0.29318004194647074
+      },
+      "capture_unified_scope": {
+        "captured_refs": 20,
+        "cpu_seconds": 0.020152000000000003,
+        "distinct_root_oids": 1,
+        "wall_seconds": 0.20631429087370634
+      },
+      "full_scope_no_hit_search": {
+        "batches": 2,
+        "complete": true,
+        "cpu_seconds": 0.06945900000000002,
+        "examined_total": 1200,
+        "first_result_latency_seconds": null,
+        "first_result_reason": "deliberate no-hit query has no result",
+        "progress": [
+          {
+            "batch": 1,
+            "complete": false,
+            "examined": 1000,
+            "examined_total": 1000,
+            "hits": 0,
+            "wall_seconds": 0.3418307090178132
+          },
+          {
+            "batch": 2,
+            "complete": true,
+            "examined": 200,
+            "examined_total": 1200,
+            "hits": 0,
+            "wall_seconds": 0.35451879212632775
+          }
+        ],
+        "scan_limit": 1000,
+        "wall_seconds": 0.6963589172810316
+      },
+      "known_hit_first_batch": {
+        "cpu_seconds": 0.033999,
+        "examined": 1000,
+        "examined_total": 1000,
+        "hits": 1,
+        "latency_semantics": "service call until the first result-bearing batch returned; not streaming first-result paint and not real-user latency",
+        "wall_seconds": 0.33461762499064207
+      },
+      "repository_constructor": {
+        "cpu_seconds": 0.004059000000000007,
+        "wall_seconds": 0.031879458110779524
+      },
+      "topology_first_page": {
+        "cpu_seconds": 0.027032999999999988,
+        "has_more": true,
+        "rows": 300,
+        "wall_seconds": 0.30151470890268683
+      },
+      "topology_next_page": {
+        "cpu_seconds": 0.030503000000000002,
+        "has_more": true,
+        "omitted_before": 300,
+        "rows": 300,
+        "wall_seconds": 0.29454866610467434
+      }
+    },
+    "parent_observed_wall_seconds": 2.261556124780327,
+    "parent_timeout_seconds": 360,
+    "rss_bytes": {
+      "current_after_measurements": 50413568,
+      "peak": 50413568
+    },
+    "status": "complete"
+  },
+  "brief": "V04/V08 M2 graph, search, and application scale benchmark",
+  "command": "python scripts/benchmark_m2.py --smoke --output .ledger/202610280853-world-class-rhizome-execution/m2-repeat-smoke.json --warm-samples 2",
+  "construction": {
+    "changing_history_files": 1,
+    "immutable_files": 99,
+    "immutable_tree_oid": "2b4663865157a9dd2326abdf5838e5bd9cd50ab3",
+    "orchestrator_cpu_seconds": 0.016227999999999992,
+    "topology": "linear; immutable tracked subtree reused; history/tick.txt changes per commit",
+    "wall_seconds": 0.3558516250923276
+  },
+  "dimensions_requested": {
+    "changed_files": 10,
+    "commits": 1200,
+    "ordinary_diff_max_bytes": 65536,
+    "refs": 20,
+    "tracked_files": 100
+  },
+  "dimensions_verified": {
+    "changed_files": 10,
+    "commits": 1200,
+    "ordinary_diff_bytes": 62359,
+    "ordinary_diff_kib": 60.8974609375,
+    "ordinary_diff_path": "tracked/f00000.txt",
+    "refs": 20,
+    "remotes": 0,
+    "tracked_files": 100
+  },
+  "ended_utc": "2026-10-30T02:37:40Z",
+  "environment": {
+    "architecture": "arm64",
+    "cpu": "arm",
+    "cpu_model": "Apple M2 Pro",
+    "filesystem": {
+      "device_location": "Internal",
+      "media_type": "Generic",
+      "protocol": "Apple Fabric",
+      "solid_state": "Yes",
+      "type": "APFS"
+    },
+    "git": "git version 2.50.1 (Apple Git-155)",
+    "logical_cpus": 10,
+    "memory_bytes": 17179869184,
+    "os": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "python": "3.13.0",
+    "python_executable": "python",
+    "release": "25.6.0",
+    "storage_bytes": {
+      "free_at_measurement": 17444601856,
+      "total": 494384795648,
+      "used": 476940193792
+    },
+    "system": "Darwin",
+    "terminal": {
+      "dimensions": [
+        170,
+        48
+      ],
+      "invoking_COLORTERM": "truecolor",
+      "invoking_TERM": "xterm-ghostty",
+      "invoking_TMUX": false,
+      "measurement": "Textual headless driver"
+    },
+    "textual": "1.0.0"
+  },
+  "isolation": {
+    "app_offline_state_persisted_in_worker_before_launch": true,
+    "credentials_removed_from_worker_environment": true,
+    "fixture": "disposable temporary path removed at exit",
+    "fixture_construction_excluded_from_measured_worker_rss": true,
+    "git_allowed_protocols": "file only",
+    "home_xdg_git_config_app_state": "isolated below disposable root",
+    "network_remotes_verified": 0,
+    "operator_checkout_mutated": false
+  },
+  "profile": "smoke (not performance evidence)",
+  "sampling": {
+    "backend_and_startup_samples": 1,
+    "cache_state": "one fresh App process; successive explicit refreshes in that same App. OS/filesystem caches uncontrolled; no cold-cache claim",
+    "percentiles": "only explicit warm App refreshes; nearest-rank p95 when sample count >=20",
+    "warm_refresh_samples": 2
+  },
+  "schema": 2,
+  "started_utc": "2026-10-30T02:37:34Z",
+  "status": "complete",
+  "timing_semantics": {
+    "application": "full RhizomeApp.run_test under headless Pilot, distinct from real-user and real-terminal latency",
+    "backend": "synchronous service-call wall and process CPU time in a fresh child",
+    "cpu_rss": "Python worker only; excludes Git child CPU/RSS; no whole-process-tree resource claim",
+    "first_result": "known-hit latency is until a result-bearing 1,000-commit batch returns; the API does not stream an individual first result",
+    "full_search": "total service time through complete captured scope"
+  },
+  "worker_timeout_seconds": 360
+}

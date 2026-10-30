@@ -83,8 +83,10 @@ async def test_wip_node_tracks_changes_and_returns_to_head(clean_branch, git_run
         assert app.query_one("#wip-table", DataTable).row_count == 0
 
 
-@pytest.mark.parametrize("limit", [300, 1])
-async def test_clean_checkout_selects_head_not_newer_other_branch(clean_branch, git_run, limit):
+@pytest.mark.parametrize("head_in_page", [True, False])
+async def test_clean_checkout_selects_head_not_newer_other_branch(
+    clean_branch, git_run, head_in_page
+):
     head = git_run(clean_branch, "rev-parse", "HEAD").stdout.strip()
     git_run(clean_branch, "switch", "-c", "newer")
     git_run(
@@ -95,15 +97,17 @@ async def test_clean_checkout_selects_head_not_newer_other_branch(clean_branch, 
         "-m",
         "Newer commit on another branch",
     )
+    if not head_in_page:
+        for number in range(300):
+            git_run(clean_branch, "commit", "--allow-empty", "-m", f"Beyond page {number}")
     other = git_run(clean_branch, "rev-parse", "HEAD").stdout.strip()
     git_run(clean_branch, "switch", "test")
     app = RhizomeApp(clean_branch)
-    app.limit = limit
     async with app.run_test(size=(170, 45)) as pilot:
         await settle(app, pilot)
         table = app.query_one("#graph-table", DataTable)
         assert table.ordered_rows[0].key.value == other
-        expected = head if limit > 1 else other  # HEAD may be outside the loaded history.
+        expected = head if head_in_page else other  # HEAD may be outside the loaded page.
         assert app._history_key == expected
         assert app._selected_commit.oid == expected
         app.jump_to(other)

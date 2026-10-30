@@ -11,8 +11,8 @@ authentication.
 
 M1 is **complete and accepted for a full release**, with explicit validation
 [coverage and deferrals](docs/validation/m1-release-acceptance.md). This readiness
-record does not itself publish a GitHub release. Later investigation, integration,
-personalization and hosted-review milestones remain deferred.
+record does not itself publish a GitHub release. M2 investigation and personalization
+are in development; integration and hosted-review milestones remain deferred.
 
 Ordinary staged commits use a reviewed-index transaction and native Git hooks/signing.
 The workspace temporarily hands the terminal to Git and returns afterward; failures
@@ -35,6 +35,14 @@ Wide terminals show the three-panel workspace; narrow terminals summon one prima
 task panel. Platform, minimum-version, real-terminal, and human usability validation
 must not be inferred from the local headless tests.
 
+## M2 development: investigation and personalization
+
+The development checkout adds captured, paged history without a total commit ceiling,
+complete-scope search, explicit Focus, comparison/file investigation, split inspection,
+and curated themes/keymaps. See [semantics, controls and limitations](docs/investigation.md).
+M2 is not yet an accepted release: reference-scale refresh performance and remaining
+terminal/visual evidence are still being evaluated.
+
 ## Precision workflow
 
 1. **Files / F2** opens working changes. Activate a file to inspect its captured diff.
@@ -51,7 +59,7 @@ Browsing and double-clicking never check out a branch. Use an explicit **Checkou
 action. If a reviewed file changes externally, the captured review remains visible
 and becomes stale: refresh and select again before applying it.
 
-**Ctrl+P** opens actions, **Ctrl+L / Activity** shows queued/running/completed Git
+By default, **Ctrl+P** opens actions, **Ctrl+L / Activity** shows queued/running/completed Git
 work, **F4 / Workspace** opens core preferences, saved-state controls and local
 diagnostics, **?** shows help, and **Ctrl+Q** quits. Closing Activity does not cancel Git.
 See [workspace controls](docs/usage.md#drafts-and-core-preferences) for global offline,

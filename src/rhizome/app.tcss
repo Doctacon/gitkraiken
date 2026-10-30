@@ -1,78 +1,78 @@
 /* Rhizome — bright, quiet framing for high-contrast colored commit lanes. */
 Screen {
-    background: #f7fbfc;
-    color: #14232c;
+    background: $background;
+    color: $text;
 }
 
 /* Never let hover popups cover the workspace or dialogs. Textual toggles
    display inline, so hide visibility instead (also excludes mouse hit-testing). */
 Tooltip { visibility: hidden; }
 
-Static, Label { color: #14232c; }
-ModalScreen Input { background: #ffffff; color: #14232c; border: tall #a8c1c7; }
-ModalScreen Input:focus { border: tall #006d77; }
-Input > .input--placeholder, Input > .input--suggestion { color: #48616c; }
+Static, Label { color: $text; }
+ModalScreen Input { background: $surface; color: $text; border: tall $primary-muted; }
+ModalScreen Input:focus { border: tall $primary; }
+Input > .input--placeholder, Input > .input--suggestion { color: $text-muted; }
 Button { min-width: 0; border: none; }
 /* Focus is a shape and type treatment as well as a colour change. */
 Button:focus { text-style: bold underline; }
-Input:focus, TextArea:focus, Select:focus { border: tall #006d77; }
+Input:focus, TextArea:focus, Select:focus { border: tall $primary; }
 
 /* Repository identity is the calm topmost anchor, not another toolbar. */
 #repo-header, #brand {
     height: 2;
     padding: 0 2;
-    background: #e4f0f1;
-    color: #10242b;
+    background: $panel;
+    color: $text;
     content-align: left middle;
     text-style: bold;
 }
-#repo-path { color: #48616c; text-style: none; }
+#repo-path { color: $text-muted; text-style: none; }
 #toolbar {
     height: 3;
     padding: 1 1 0 1;
-    background: #edf4f5;
-    border-bottom: tall #b7cdd1;
+    background: $panel;
+    border-bottom: tall $primary-muted;
 }
 .tool, #open, #help, #refresh {
     height: 1;
     min-width: 7;
     margin-right: 1;
     padding: 0 1;
-    background: #dbecee;
-    color: #18323a;
+    background: $surface;
+    color: $text;
 }
 .tool:hover, .tool:focus, #open:hover, #open:focus, #help:hover, #help:focus,
 #refresh:hover, #refresh:focus {
-    background: #c4e2e4;
-    color: #10242b;
+    background: $primary-muted;
+    color: $text;
 }
 .tool.primary, #refresh {
-    background: #007c78;
-    color: #ffffff;
+    background: $primary;
+    color: $surface;
     text-style: bold;
 }
 #workspace-nav {
     height: 1;
     padding: 0 1;
-    background: #edf4f5;
+    background: $panel;
 }
 #workspace-nav Button {
     height: 1;
     margin-right: 1;
     padding: 0 1;
-    background: #dbecee;
-    color: #18323a;
+    background: $surface;
+    color: $text;
 }
 #workspace-nav Button:hover, #workspace-nav Button:focus {
-    background: #b9dfe1;
-    color: #10242b;
+    background: $primary-muted;
+    color: $text;
 }
 #workspace-settings {
-    background: #d8eeee;
-    color: #005f68;
+    background: $primary-muted;
+    color: $primary;
     text-style: bold;
 }
-#workspace-settings:hover, #workspace-settings:focus { background: #b9dfe1; color: #10242b; }
+#workspace-settings:hover, #workspace-settings:focus { background: $primary-muted; color: $text; }
 /* Horizontal containers otherwise consume the vertical free space in history-panel. */
 #search-bar { height: 1; min-height: 1; }
 #history-caption { height: 1; min-height: 1; }
@@ -81,18 +81,34 @@ Input:focus, TextArea:focus, Select:focus { border: tall #006d77; }
     height: 1;
     padding: 0 1;
     border: none;
-    background: #ffffff;
-    color: #14232c;
+    background: $surface;
+    color: $text;
 }
-#graph-filter:focus { background: #f6fcfc; border: none; }
+#graph-filter:focus { background: $surface; border: none; }
+#search-controls { height: 1; min-height: 1; }
+#search-controls Button {
+    width: 1fr;
+    height: 1;
+    background: $surface;
+    color: $primary;
+}
+#search-criteria {
+    width: 7;
+    min-width: 7;
+    height: 1;
+    margin-left: 1;
+    padding: 0;
+    background: $surface;
+    color: $primary;
+}
 #search-next, #clear-search {
     width: 6;
     min-width: 6;
     height: 1;
     margin-left: 1;
     padding: 0;
-    background: #dbecee;
-    color: #006d77;
+    background: $surface;
+    color: $primary;
 }
 
 #graph-style {
@@ -101,10 +117,10 @@ Input:focus, TextArea:focus, Select:focus { border: tall #006d77; }
     height: 1;
     margin-left: 1;
     padding: 0;
-    background: #dbecee;
-    color: #006d77;
+    background: $surface;
+    color: $primary;
 }
-#graph-style:hover, #graph-style:focus { background: #c4e2e4; color: #10242b; }
+#graph-style:hover, #graph-style:focus { background: $primary-muted; color: $text; }
 
 /* Pending work deserves colour, but never the entire screen. */
 #operation-banner {
@@ -112,9 +128,9 @@ Input:focus, TextArea:focus, Select:focus { border: tall #006d77; }
     display: none;
     height: 2;
     padding: 0 2;
-    background: #fff3df;
-    color: #6b4300;
-    border-bottom: tall #c68a35;
+    background: $warning-muted;
+    color: $text-warning;
+    border-bottom: tall $warning;
 }
 #operation-text { width: 1fr; content-align: left middle; text-style: bold; }
 .operation-button {
@@ -122,97 +138,101 @@ Input:focus, TextArea:focus, Select:focus { border: tall #006d77; }
     height: 1;
     margin: 0 0 0 1;
     padding: 0 1;
-    background: #f5d8a3;
-    color: #5c3900;
+    background: $warning-muted;
+    color: $text-warning;
 }
-.operation-button:hover, .operation-button:focus { background: #e7bd74; color: #432900; }
+.operation-button:hover, .operation-button:focus { background: $warning; color: $text-warning; }
 
 #workspace { height: 1fr; }
 #refs-panel {
     width: 25;
     min-width: 15;
     padding: 1;
-    background: #edf4f5;
+    background: $panel;
 }
 #history-panel {
     width: 1fr;
     min-width: 34;
     padding: 0;
-    background: #f8fbfb;
+    background: $background;
 }
 #inspector-panel {
     width: 46;
     min-width: 25;
     padding: 0;
-    background: #f3f8f9;
+    background: $panel;
 }
 #graph-workspace, #diff-workspace { height: 1fr; }
 #history-heading {
     height: 1;
     margin: 0;
     padding: 0 1;
-    color: #006d77;
+    color: $primary;
     text-style: bold;
-    background: #e7f1f2;
+    background: $panel;
 }
-#history-caption { height: 1; padding: 0 1; color: #48616c; background: #edf4f5; }
+#history-caption { height: 1; padding: 0 1; color: $text-muted; background: $panel; }
 
 /* A quiet canvas keeps lane colors readable, including on the selected row. */
 #graph-table {
     height: 1fr;
     border: none;
-    background: #f8fbfb;
+    background: $background;
 }
 #graph-table > .datatable--header {
-    background: #e7f2f3;
-    color: #36505b;
+    background: $panel;
+    color: $foreground-muted;
     text-style: bold;
 }
-#graph-table > .datatable--header-hover { background: #d8eeee; }
+#graph-table > .datatable--header-hover { background: $primary-muted; }
 #graph-table > .datatable--cursor {
-    background: #d8eeee;
-    color: #14232c;
+    background: $primary-muted;
+    color: $text;
     text-style: bold underline;
 }
-#graph-table > .datatable--hover { background: #edf7f8; }
-#load-more {
+#graph-table > .datatable--hover { background: $surface; }
+#history-navigation { height: 1; min-height: 1; }
+#history-navigation Button {
     width: 1fr;
-    height: 2;
+    height: 1;
     padding: 0 1;
-    background: #e2f1f2;
-    color: #006d77;
+    background: $panel;
+    color: $primary;
     text-style: bold;
 }
-#load-more:hover, #load-more:focus { background: #b9dfe1; color: #14232c; }
+#history-navigation Button:hover, #history-navigation Button:focus {
+    background: $primary-muted;
+    color: $text;
+}
 
 /* An explicit file activation temporarily replaces, but never rebuilds, the graph. */
 #diff-toolbar {
     height: 2;
     padding: 0 1;
-    background: #e7f1f2;
-    border-bottom: tall #b7cdd1;
+    background: $panel;
+    border-bottom: tall $primary-muted;
 }
 #back-to-graph {
     height: 1;
     margin-right: 1;
     padding: 0 1;
-    background: #d8eeee;
-    color: #005f68;
+    background: $primary-muted;
+    color: $primary;
 }
-#back-to-graph:hover, #back-to-graph:focus { background: #b9dfe1; color: #10242b; }
-#center-diff-title { width: 1fr; height: 1; color: #36505b; text-style: bold; }
+#back-to-graph:hover, #back-to-graph:focus { background: $primary-muted; color: $text; }
+#center-diff-title { width: 1fr; height: 1; color: $foreground-muted; text-style: bold; }
 #center-diff-scroll {
     height: 1fr;
     padding: 0 1;
     overflow-y: auto;
-    background: #ffffff;
-    border-left: tall #a8c1c7;
+    background: $surface;
+    border-left: tall $primary-muted;
 }
-#center-diff { height: auto; min-height: 1; color: #18323a; }
+#center-diff { height: auto; min-height: 1; color: $text; }
 
-TabbedContent { height: 1fr; background: #f3f8f9; }
-TabbedContent ContentTab { color: #48616c; background: #e4f0f1; }
-TabbedContent ContentTab.-active { color: #005f68; background: #d8eeee; text-style: bold; }
+TabbedContent { height: 1fr; background: $panel; }
+TabbedContent ContentTab { color: $text-muted; background: $panel; }
+TabbedContent ContentTab.-active { color: $primary; background: $primary-muted; text-style: bold; }
 #inspector-tabs > ContentSwitcher, TabPane { height: 1fr; }
 TabPane { padding: 1; }
 #commit-changes, #wip-changes { height: 1fr; min-height: 8; }
@@ -223,7 +243,7 @@ TabPane { padding: 1; }
     max-height: 4;
     overflow-y: hidden;
     padding: 0 1;
-    color: #14232c;
+    color: $text;
 }
 /* Changed files fill the space formerly occupied by the inline diff. */
 #commit-file-tree {
@@ -231,18 +251,18 @@ TabPane { padding: 1; }
     min-height: 5;
     margin-top: 1;
     padding: 0 1;
-    border: round #a8c1c7;
-    background: #ffffff;
-    color: #18323a;
+    border: round $primary-muted;
+    background: $surface;
+    color: $text;
     scrollbar-size-vertical: 1;
     scrollbar-size-horizontal: 1;
 }
-#commit-file-tree > .tree--guides { color: #8aa5ad; }
-#commit-file-tree > .tree--guides-hover { color: #48616c; }
-#commit-file-tree > .tree--guides-selected { color: #006d77; }
+#commit-file-tree > .tree--guides { color: $text-muted; }
+#commit-file-tree > .tree--guides-hover { color: $text-muted; }
+#commit-file-tree > .tree--guides-selected { color: $primary; }
 #commit-file-tree > .tree--cursor, #commit-file-tree:focus > .tree--cursor {
-    background: #d8eeee;
-    color: #14232c;
+    background: $primary-muted;
+    color: $text;
     text-style: bold underline;
 }
 /* Working copy keeps its staging controls and composer in the inspector. */
@@ -252,74 +272,74 @@ TabPane { padding: 1; }
     height: 1;
     margin-right: 1;
     padding: 0 1;
-    background: #d8eeee;
-    color: #18323a;
+    background: $primary-muted;
+    color: $text;
 }
 .wip-actions Button:hover, .wip-actions Button:focus, #stage-all:hover,
-#stage-all:focus, #unstage-all:hover, #unstage-all:focus { background: #b9dfe1; color: #10242b; }
-#discard { background: #fde8e8; color: #8d2635; }
-#discard:hover, #discard:focus { background: #f4caca; color: #651d28; }
+#stage-all:focus, #unstage-all:hover, #unstage-all:focus { background: $primary-muted; color: $text; }
+#discard { background: $error-muted; color: $text-error; }
+#discard:hover, #discard:focus { background: $error-muted; color: $text-error; }
 #wip-table {
     height: 1fr;
     min-height: 3;
-    border: round #a8c1c7;
-    background: #ffffff;
+    border: round $primary-muted;
+    background: $surface;
 }
 #wip-empty {
     height: auto;
     min-height: 3;
     padding: 0 1;
-    color: #48616c;
-    background: #ffffff;
-    border: round #a8c1c7;
+    color: $text-muted;
+    background: $surface;
+    border: round $primary-muted;
 }
 #wip-table > .datatable--header {
-    background: #e5eff1;
-    color: #36505b;
+    background: $panel;
+    color: $foreground-muted;
     text-style: bold;
 }
 #wip-table > .datatable--cursor {
-    background: #d8eeee;
-    color: #14232c;
+    background: $primary-muted;
+    color: $text;
     text-style: bold underline;
 }
-#staged-summary { height: 2; color: #36505b; }
+#staged-summary { height: 2; color: $foreground-muted; }
 #composer-guidance {
     height: auto;
     min-height: 1;
     margin-top: 1;
     padding: 0 1;
-    border-left: tall #a8c1c7;
-    background: #f5fafa;
-    color: #48616c;
+    border-left: tall $primary-muted;
+    background: $surface;
+    color: $text-muted;
 }
-#draft-status { height: 1; color: #48616c; }
-.composer-label { height: 1; margin-top: 1; color: #36505b; }
+#draft-status { height: 1; color: $text-muted; }
+.composer-label { height: 1; margin-top: 1; color: $foreground-muted; }
 #commit-message {
     height: 4;
     margin-top: 0;
-    border: round #8eabb2;
-    background: #ffffff;
-    color: #14232c;
+    border: round $primary-muted;
+    background: $surface;
+    color: $text;
 }
-#commit-message:focus { border: round #007c78; }
+#commit-message:focus { border: round $primary; }
 #commit {
     width: 1fr;
     height: 2;
     margin-top: 1;
-    background: #007c78;
-    color: #ffffff;
+    background: $primary;
+    color: $surface;
     text-style: bold;
 }
-#commit:hover, #commit:focus { background: #006d77; }
+#commit:hover, #commit:focus { background: $primary; }
 
 #status-line, #key-hint {
     height: 1;
     padding: 0 2;
-    background: #ffffff;
-    color: #48616c;
+    background: $surface;
+    color: $text-muted;
 }
-#status-line { color: #36505b; }
+#status-line { color: $foreground-muted; }
 .collapsed, .refs-hidden #refs-panel, .refs-hidden #refs-splitter,
 .inspector-hidden #inspector-panel, .inspector-hidden #inspector-splitter { display: none; }
 
@@ -372,7 +392,7 @@ TabPane { padding: 1; }
 .pane-tight #stash, .pane-tight #pop { display: none; }
 .pane-tight #actions { width: 9; min-width: 9; }
 
-ModalScreen { align: center middle; background: #36505b 28%; }
+ModalScreen { align: center middle; background: $foreground-muted 28%; }
 /* Branch and commit context menus are anchored dropdowns, not dimmed dialogs. */
 BranchContextMenu { align: left top; background: transparent; }
 #action-picker, #prompt-dialog {
@@ -380,11 +400,11 @@ BranchContextMenu { align: left top; background: transparent; }
     height: auto;
     max-height: 22;
     padding: 1 2;
-    border: round #4f8790;
-    background: #e7f2f3;
+    border: round $primary-muted;
+    background: $panel;
 }
-.dialog-title { margin-bottom: 1; color: #006d77; text-style: bold; }
-.dialog-detail { margin-bottom: 1; color: #36505b; }
-#action-options { height: auto; max-height: 14; border: round #a8c1c7; background: #f5fafa; }
+.dialog-title { margin-bottom: 1; color: $primary; text-style: bold; }
+.dialog-detail { margin-bottom: 1; color: $foreground-muted; }
+#action-options { height: auto; max-height: 14; border: round $primary-muted; background: $surface; }
 .dialog-buttons { height: 3; margin-top: 1; align: right middle; }
 .dialog-buttons Button { margin-left: 1; }

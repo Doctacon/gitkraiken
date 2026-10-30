@@ -1,0 +1,300 @@
+{
+  "dimensions": {
+    "commits": 5000,
+    "tracked_files": 100,
+    "refs": 100,
+    "changed_files": 10,
+    "ordinary_diff_max_bytes": 65536
+  },
+  "note": "Status durations include their nested Git calls; do not sum both categories. Temporary diagnostic instrumentation only.",
+  "stages": [
+    {
+      "stage": "capture",
+      "wall_seconds": 0.27294924994930625,
+      "operations": [
+        {
+          "runner": "captured",
+          "operation": "capture HEAD branch",
+          "calls": 1,
+          "seconds": 0.01599958399310708
+        },
+        {
+          "runner": "captured",
+          "operation": "check captured objects",
+          "calls": 1,
+          "seconds": 0.015932332957163453
+        },
+        {
+          "runner": "captured",
+          "operation": "command",
+          "calls": 5,
+          "seconds": 0.08116491883993149
+        },
+        {
+          "runner": "captured",
+          "operation": "inspect repository state",
+          "calls": 2,
+          "seconds": 0.032839249121025205
+        },
+        {
+          "runner": "captured",
+          "operation": "list worktrees",
+          "calls": 2,
+          "seconds": 0.043125584023073316
+        },
+        {
+          "runner": "captured",
+          "operation": "read HEAD",
+          "calls": 2,
+          "seconds": 0.03440066613256931
+        },
+        {
+          "runner": "spooled",
+          "operation": "capture refs",
+          "calls": 2,
+          "seconds": 0.04701529070734978
+        },
+        {
+          "runner": "status",
+          "operation": "full-status",
+          "calls": 1,
+          "seconds": 0.1525346669368446
+        }
+      ]
+    },
+    {
+      "stage": "snapshot-without-history",
+      "wall_seconds": 0.2676645000465214,
+      "operations": [
+        {
+          "runner": "captured",
+          "operation": "inspect repository state",
+          "calls": 6,
+          "seconds": 0.0966618328820914
+        },
+        {
+          "runner": "captured",
+          "operation": "list refs",
+          "calls": 1,
+          "seconds": 0.01974191702902317
+        },
+        {
+          "runner": "captured",
+          "operation": "list remotes",
+          "calls": 2,
+          "seconds": 0.032037540804594755
+        },
+        {
+          "runner": "captured",
+          "operation": "list stashes",
+          "calls": 1,
+          "seconds": 0.014159334124997258
+        },
+        {
+          "runner": "captured",
+          "operation": "list worktrees",
+          "calls": 1,
+          "seconds": 0.01659608306363225
+        },
+        {
+          "runner": "captured",
+          "operation": "read HEAD",
+          "calls": 1,
+          "seconds": 0.015554915880784392
+        },
+        {
+          "runner": "captured",
+          "operation": "read current branch",
+          "calls": 2,
+          "seconds": 0.03223016601987183
+        },
+        {
+          "runner": "captured",
+          "operation": "read status",
+          "calls": 1,
+          "seconds": 0.023648290894925594
+        },
+        {
+          "runner": "captured",
+          "operation": "read upstream",
+          "calls": 1,
+          "seconds": 0.015161207877099514
+        }
+      ]
+    },
+    {
+      "stage": "status-only",
+      "wall_seconds": 0.12703533400781453,
+      "operations": [
+        {
+          "runner": "captured",
+          "operation": "check captured objects",
+          "calls": 1,
+          "seconds": 0.015364832943305373
+        },
+        {
+          "runner": "captured",
+          "operation": "command",
+          "calls": 3,
+          "seconds": 0.04335158318281174
+        },
+        {
+          "runner": "captured",
+          "operation": "inspect repository state",
+          "calls": 1,
+          "seconds": 0.01271120784804225
+        },
+        {
+          "runner": "captured",
+          "operation": "list worktrees",
+          "calls": 1,
+          "seconds": 0.014605042058974504
+        },
+        {
+          "runner": "captured",
+          "operation": "read HEAD",
+          "calls": 1,
+          "seconds": 0.014345374889671803
+        },
+        {
+          "runner": "spooled",
+          "operation": "capture refs",
+          "calls": 1,
+          "seconds": 0.02575208293274045
+        },
+        {
+          "runner": "status",
+          "operation": "full-status",
+          "calls": 1,
+          "seconds": 0.12701620790176094
+        }
+      ]
+    },
+    {
+      "stage": "topology-page",
+      "wall_seconds": 0.45968654099851847,
+      "operations": [
+        {
+          "runner": "captured",
+          "operation": "check captured objects",
+          "calls": 3,
+          "seconds": 0.04184541595168412
+        },
+        {
+          "runner": "captured",
+          "operation": "command",
+          "calls": 9,
+          "seconds": 0.11726941750384867
+        },
+        {
+          "runner": "captured",
+          "operation": "inspect repository state",
+          "calls": 5,
+          "seconds": 0.06670108321122825
+        },
+        {
+          "runner": "captured",
+          "operation": "list worktrees",
+          "calls": 3,
+          "seconds": 0.0432013759855181
+        },
+        {
+          "runner": "captured",
+          "operation": "read HEAD",
+          "calls": 3,
+          "seconds": 0.039962208829820156
+        },
+        {
+          "runner": "spooled",
+          "operation": "capture refs",
+          "calls": 3,
+          "seconds": 0.07417708425782621
+        },
+        {
+          "runner": "spooled",
+          "operation": "read investigation metadata",
+          "calls": 1,
+          "seconds": 0.02583629102446139
+        },
+        {
+          "runner": "spooled",
+          "operation": "read topology page",
+          "calls": 1,
+          "seconds": 0.0469068749807775
+        },
+        {
+          "runner": "status",
+          "operation": "full-status",
+          "calls": 3,
+          "seconds": 0.3595234577078372
+        }
+      ]
+    },
+    {
+      "stage": "no-hit-batch",
+      "wall_seconds": 0.3748846659436822,
+      "operations": [
+        {
+          "runner": "captured",
+          "operation": "check captured objects",
+          "calls": 2,
+          "seconds": 0.027262957766652107
+        },
+        {
+          "runner": "captured",
+          "operation": "command",
+          "calls": 6,
+          "seconds": 0.0786239996086806
+        },
+        {
+          "runner": "captured",
+          "operation": "inspect repository state",
+          "calls": 5,
+          "seconds": 0.06814654194749892
+        },
+        {
+          "runner": "captured",
+          "operation": "list worktrees",
+          "calls": 2,
+          "seconds": 0.027579375077039003
+        },
+        {
+          "runner": "captured",
+          "operation": "read HEAD",
+          "calls": 2,
+          "seconds": 0.025795166147872806
+        },
+        {
+          "runner": "spooled",
+          "operation": "capture refs",
+          "calls": 2,
+          "seconds": 0.04772712499834597
+        },
+        {
+          "runner": "spooled",
+          "operation": "read investigation metadata",
+          "calls": 1,
+          "seconds": 0.020771041978150606
+        },
+        {
+          "runner": "spooled",
+          "operation": "read topology page",
+          "calls": 1,
+          "seconds": 0.05033154087141156
+        },
+        {
+          "runner": "spooled",
+          "operation": "search full commit messages",
+          "calls": 1,
+          "seconds": 0.021394750103354454
+        },
+        {
+          "runner": "status",
+          "operation": "full-status",
+          "calls": 2,
+          "seconds": 0.23470083298161626
+        }
+      ]
+    }
+  ]
+}
